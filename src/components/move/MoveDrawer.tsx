@@ -596,12 +596,60 @@ function ResearchView({ st, onStart }: { st?: ResearchState; onStart: () => void
 
 const mailto = (dr: ViewingDraft, body: string) => `mailto:${dr.to ?? ""}?subject=${encodeURIComponent(dr.subject)}&body=${encodeURIComponent(body)}`;
 
-function DraftView({ st, onLang, onOpened, onStart }: { st?: DraftState; onLang: (l: "en" | "fi") => void; onOpened: () => void; onStart: () => void }) {
+type MailCfg = { configured: boolean; testTo?: string; missing: string[] };
+type SendState = { busy?: boolean; sent?: { testTo: string; sentAt: string }; error?: string };
+
+/** Test send: the email goes to our own inbox (MAIL_TEST_TO), never to the landlord. */
+function TestSend({ dr, subject, body, listingUrl }: { dr: ViewingDraft; subject: string; body: string; listingUrl?: string }) {
+  const [cfg, setCfg] = useState<MailCfg | undefined>();
+  const [s, setS] = useState<SendState>({});
+  useEffect(() => {
+    let stop = false;
+    fetch("/api/move/send")
+      .then((r) => r.json())
+      .then((j: MailCfg) => !stop && setCfg(j))
+      .catch(() => !stop && setCfg({ configured: false, missing: ["RESEND_API_KEY", "MAIL_TEST_TO"] }));
+    return () => {
+      stop = true;
+    };
+  }, []);
+  if (!cfg) return null;
+  if (!cfg.configured) return <p className={x.noSrc}>Test sending is off: add {cfg.missing.join(" and ")} to .env.local.</p>;
+  const send = async () => {
+    setS({ busy: true });
+    try {
+      const r = await fetch("/api/move/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: dr.to, subject, body, listingUrl }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+      setS({ sent: { testTo: j.testTo, sentAt: j.sentAt } });
+    } catch (e) {
+      setS({ error: (e as Error).message });
+    }
+  };
+  return (
+    <div className={x.testSend}>
+      <button type="button" className={x.primaryBtn} onClick={() => void send()} disabled={s.busy}>
+        {s.busy ? "Sending…" : s.sent ? "Send test again" : `Approve and send test to ${cfg.testTo}`}
+      </button>
+      {s.sent ? (
+        <span className={x.okWord}>
+          <Check weight="bold" aria-hidden /> Sent to {s.sent.testTo} at {new Date(s.sent.sentAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })} · would have gone to {dr.to ?? "no address in the listing"}
+        </span>
+      ) : s.error ? (
+        <span className={x.errLine}>{s.error}</span>
+      ) : (
+        <span className={x.noSrc}>Test mode: goes to your inbox, not to {dr.to ?? "the landlord"}.</span>
+      )}
+    </div>
+  );
+}
+
+function DraftView({ st, onLang, onOpened, onStart, listingUrl }: { st?: DraftState; onLang: (l: "en" | "fi") => void; onOpened: () => void; onStart: () => void; listingUrl?: string }) {
   const [copied, setCopied] = useState(false);
   if (!st)
     return (
       <div className={x.researchIntro}>
-        <p>Drafts a short viewing request in Finnish and English from the listing{" "}and the research. You read it and send it yourself; nothing is sent automatically.</p>
+        <p>Drafts a short viewing request in Finnish and English from the listing{" "}and the research. You read it and approve it; nothing is sent without your click (test emails go to your own inbox).</p>
         <button type="button" className={x.ghostBtn} onClick={onStart}>
           Draft viewing request
         </button>
@@ -668,6 +716,7 @@ function DraftView({ st, onLang, onOpened, onStart }: { st?: DraftState; onLang:
           </ol>
         </div>
       )}
+      <TestSend dr={dr} subject={dr.subject} body={body} listingUrl={listingUrl} />
       <div className={x.draftActions}>
         {dr.to || !dr.formUrl ? (
           <a className={x.primaryBtn} href={href} onClick={onOpened}>
@@ -832,7 +881,7 @@ export function MoveDrawer({
         </section>
         <section className={`${d.section} ${x.anchor}`} ref={draftSec}>
           <h3 className={d.sh}>Viewing request</h3>
-          <DraftView st={drafts[l.url]} onLang={(lang) => onDraftLang(l.url, lang)} onOpened={() => onDraftOpened(l.url)} onStart={() => onDraft(l)} />
+          <DraftView listingUrl={l.url} st={drafts[l.url]} onLang={(lang) => onDraftLang(l.url, lang)} onOpened={() => onDraftOpened(l.url)} onStart={() => onDraft(l)} />
         </section>
       </>
     );

@@ -675,3 +675,6 @@
 .histList li a svg { width: 10px; height: 10px; }
 .histList li small { grid-column: 1 / -1; color: var(--faint); font-size: 11px; }
 @media (prefers-color-scheme: dark) { .lcChips .ft_good, .ft_good { color: #8fc9a8 !important; } }
+.testSend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0 4px; padding: 12px; border-radius: 12px; background: var(--accent-muted); }
+.testSend .primaryBtn:disabled { opacity: .6; cursor: default; }
+.testSend .okWord { display: inline-flex; align-items: center; gap: 6px; }
