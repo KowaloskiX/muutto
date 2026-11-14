@@ -67,10 +67,10 @@ export function SearchCard({ st, lang }: { st: SearchState; lang?: string }) {
             </button>
           )}
         </header>
+        {/* Screen readers still hear the active stage; sighted users see it highlighted in the list. */}
         {!st.finished && (
-          <p className={s.now} aria-live="polite">
-            <i aria-hidden />
-            <span>{active ? tr(active.label) : tr("sPreparing")}</span>
+          <p className="sr-only" aria-live="polite" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+            {active ? tr(active.label) : tr("sPreparing")}
           </p>
         )}
         <ol className={s.stages}>
