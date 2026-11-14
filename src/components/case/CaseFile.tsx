@@ -28,12 +28,15 @@ import {
 } from "./model";
 import type { Pin } from "./CaseMap";
 import s from "./Case.module.css";
+import m from "./Map.module.css";
 
 const CaseMap = dynamic(() => import("./CaseMap"), {
   ssr: false,
   loading: () => (
-    <div className={s.mapLoading}>
-      <CircleNotch className={s.spin} />
+    <div className={m.box}>
+      <div className={m.loading}>
+        <CircleNotch />
+      </div>
     </div>
   ),
 });
@@ -69,12 +72,7 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
   // A clicked matrix cell: open that company's drawer at that check (n re-triggers on a repeat click).
   const [focus, setFocus] = useState<{ id: string; n: number } | undefined>();
   const [geo, setGeo] = useState<Record<string, Geo | null>>({});
-  const [mapOpen, setMapOpen] = useState(true);
   const [noticeOpen, setNoticeOpen] = useState(false);
-  // Phones: the map stays folded until asked for; the matrix carries the distances.
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 1023px)").matches) setMapOpen(false);
-  }, []);
   const rows = useRef<Record<string, HTMLTableSectionElement | null>>({});
   const p = ctx.project;
 
@@ -138,6 +136,8 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
         rank: c.rank,
         verdict: verdict(c),
         sub: [VERDICT_LABEL[verdict(c)], c.fit != null ? `fit ${c.fit}` : "", d != null ? `${fmtKm(d)} from site` : ""].filter(Boolean).join(" · "),
+        fit: c.fit,
+        km: d,
       },
     ];
   });
@@ -223,7 +223,7 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
           </section>
         ) : (
         <>
-        <header className={`${s.project} ${showMap ? s.projectMap : ""}`}>
+        <header className={s.project}>
           <div className={s.projectText}>
             <h1 className={s.title}>
               {p ? p.scope || p.service || p.summary || "Subcontractor search" : cands.length ? "Subcontractor check" : "New project"}
@@ -257,21 +257,19 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
             )}
           </div>
 
-          {showMap && (
-            <div className={s.mapSlot}>
-              <button type="button" className={s.mapToggle} onClick={() => setMapOpen((x) => !x)} aria-expanded={mapOpen} aria-controls="case-map">
-                {mapOpen ? "Hide map" : "Show map"}
-                <CaretDown weight="bold" className={mapOpen ? s.caretUp : ""} aria-hidden />
-              </button>
-              {mapOpen && (
-                <div id="case-map" className={s.mapBox}>
-                  <CaseMap site={site} pins={pins} selected={selected} onSelect={(k) => select(k, true)} />
-                </div>
-              )}
-              {mapOpen && site?.source === "default" && <small className={s.hint}>No site given; centred on Espoo.</small>}
-            </div>
-          )}
         </header>
+
+        {showMap && (
+          <CaseMap
+            site={site}
+            pins={pins}
+            selected={selected}
+            active={open}
+            hint={site?.source === "default" ? "No site given; centred on Espoo." : undefined}
+            onSelect={(k) => select(k, true)}
+            onHover={setSelected}
+          />
+        )}
 
         {/* candidates: the comparison matrix */}
         <section className={s.section} aria-labelledby="case-cands">

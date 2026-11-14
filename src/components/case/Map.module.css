@@ -1,0 +1,73 @@
+/* The case map: a full-width band under the project header. Esri Canvas Light/Dark Gray tiles
+   (keyless), numbered verdict pins, the site as a black diamond, faint 10/25 km rings. */
+.band { display: flex; flex-direction: column; gap: 12px; min-width: 0; animation: fade .4s ease both; }
+@keyframes fade { from { opacity: 0; } }
+
+.head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.head h2 { margin: 0; font-size: 22px; font-weight: 400; line-height: 1.3; letter-spacing: -.01em; }
+.sum { color: var(--muted); font-size: 13px; }
+.toggle { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; padding: 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; }
+.toggle:hover { color: var(--ink); }
+.toggle svg { width: 10px; height: 10px; transition: transform .2s var(--ease-out); }
+.up { transform: rotate(180deg); }
+
+.box { position: relative; height: clamp(240px, 34vh, 320px); border-radius: 16px; overflow: hidden; background: var(--sand); isolation: isolate; box-shadow: 0 0 0 1px var(--line); }
+@media (max-width: 1023px) { .box { height: 196px; border-radius: 12px; } .head h2 { font-size: 20px; } }
+.loading { display: grid; place-items: center; height: 100%; color: var(--muted); }
+.loading svg { width: 16px; height: 16px; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.hint { color: var(--muted); font-size: 13px; }
+
+.leaflet { width: 100%; height: 100%; background: var(--sand); font-family: var(--font-sans); }
+/* warm the cool canvas greys a touch towards the paper colour */
+.leaflet :global(.leaflet-tile-pane) { filter: sepia(.18) saturate(.8) brightness(1.02); }
+/* place-name labels in their own isolated pane: Leaflet's plus-lighter tile blending must not
+   brighten the base map where label tiles meet */
+.labels { isolation: isolate; pointer-events: none; }
+/* the base is opaque: no plus-lighter blending, which leaves bright hairlines at tile edges under the filter */
+.leaflet :global(.leaflet-tile-pane img.leaflet-tile) { mix-blend-mode: normal; }
+@media (prefers-color-scheme: dark) { .leaflet :global(.leaflet-tile-pane) { filter: brightness(.95) contrast(.95); } }
+
+/* legend: top-left, on paper glass */
+.legend { position: absolute; top: 12px; left: 12px; z-index: 500; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; max-width: calc(100% - 24px); padding: 6px 12px; border-radius: 999px; background: var(--surface-glass); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 0 0 1px var(--line); color: var(--ink-soft); font-size: 12px; line-height: 1.3; pointer-events: none; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.lDot { width: 8px; height: 8px; border-radius: 50%; }
+.lSite { width: 8px; height: 8px; background: var(--site); transform: rotate(45deg); border-radius: 1px; }
+.lRing { width: 12px; height: 12px; border: 1px dashed var(--muted); border-radius: 50%; }
+@media (max-width: 560px) { .legend { padding: 4px 10px; gap: 2px 10px; font-size: 11px; } .legendRings { display: none !important; } }
+
+/* controls + attribution in the house style; attribution stays visible */
+.box .leaflet :global(.leaflet-control-attribution) { padding: 2px 8px; border-top-left-radius: 8px; background: var(--surface-glass); color: var(--muted); font-size: 10px; line-height: 1.5; }
+.box .leaflet :global(.leaflet-control-attribution a) { color: var(--ink-soft); }
+.box .leaflet :global(.leaflet-bar) { border: 0; border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--line), var(--shadow-floating); }
+.box .leaflet :global(.leaflet-bar a) { width: 30px; height: 30px; border-color: var(--line); background: var(--surface); color: var(--ink); font: 400 16px/30px var(--font-sans); }
+.box .leaflet :global(.leaflet-bar a:hover) { background: var(--page); }
+.box .leaflet :global(.leaflet-bar a.leaflet-disabled) { color: var(--faint); background: var(--surface); }
+@media (max-width: 1023px) { .box .leaflet :global(.leaflet-control-zoom) { display: none; } .box .leaflet :global(.leaflet-control-attribution) { font-size: 9px; } }
+
+/* tooltips: a small card, not Leaflet's default bubble */
+.tip { padding: 8px 12px !important; border: 0 !important; border-radius: 10px !important; background: var(--surface) !important; box-shadow: 0 0 0 1px var(--line), var(--shadow-floating) !important; color: var(--ink) !important; font: 400 13px/1.4 var(--font-sans) !important; white-space: nowrap; }
+.tip::before { display: none; }
+.tip b { display: block; font-weight: 500; font-size: 14px; }
+.tip small { display: block; color: var(--muted); font-size: 12px; }
+.tipV { display: inline-flex; align-items: center; gap: 6px; }
+.tipV i { width: 7px; height: 7px; border-radius: 50%; }
+
+/* markers */
+.icon { background: none !important; border: 0 !important; }
+.pin { --c: var(--faint); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--pin-ring); background: var(--c); color: #fff; font: 500 12px/1 var(--font-sans); font-variant-numeric: tabular-nums; box-shadow: 0 1px 2px rgb(13 16 22 / .25), 0 2px 8px rgb(13 16 22 / .12); transition: transform .2s var(--ease-out), box-shadow .2s ease; cursor: pointer; }
+.pin:hover { transform: scale(1.12); }
+.v_green { --c: var(--success); }
+.v_yellow { --c: var(--caution); }
+.v_red { --c: var(--destructive); }
+.v_grey { --c: var(--faint); }
+.on .pin { transform: scale(1.35); box-shadow: 0 0 0 2px var(--pin-ring), 0 0 0 4px var(--ink), 0 4px 12px rgb(13 16 22 / .3); }
+@media (prefers-reduced-motion: reduce) { .pin { transition: none; } }
+
+.site { display: flex; align-items: center; gap: 6px; width: max-content; pointer-events: none; }
+.site i { flex: none; width: 14px; height: 14px; margin: 4px; transform: rotate(45deg); background: var(--site); border: 2px solid var(--pin-ring); border-radius: 2px; box-shadow: 0 1px 4px rgb(13 16 22 / .35); }
+.site b { padding: 2px 8px; border-radius: 999px; background: var(--site); color: var(--site-ink); font: 500 11px/1.5 var(--font-sans); letter-spacing: .01em; box-shadow: 0 1px 3px rgb(13 16 22 / .2); }
+.ringLabel { width: max-content; transform: translate(-50%, -50%); padding: 0 6px; border-radius: 999px; background: var(--surface-glass); color: var(--muted); font: 400 11px/1.6 var(--font-sans); white-space: nowrap; pointer-events: none; }
+
+.vars { --site: #0d1016; --site-ink: #fff; --pin-ring: #fff; --ring: rgb(13 16 22 / .45); }
+@media (prefers-color-scheme: dark) { .vars { --site: #f2f1ed; --site-ink: #0d1016; --pin-ring: #0d1016; --ring: rgb(242 241 237 / .45); } }
