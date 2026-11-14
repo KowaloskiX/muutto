@@ -91,18 +91,48 @@ export type ListingResearch = {
   steps: { label: string; detail?: string; at: number }[]; // research trace for the live UI
 };
 
+  /** Key terms read off the listing page (rent, deposit, lease term, energy class, availability…), each quoted. */
+  facts?: { label: string; value: string; source: Source }[];
+  /** What we looked for and did not find: shown as "unknown", never filled in. */
+  unknowns?: string[];
+  /** Run stats for the trace footer. `agent`: whether the Exa Agent deep-research run was merged in time. */
+  meta?: { tookMs: number; exaCalls: number; llmCalls: number; agent: "merged" | "timeout" | "failed" | "off"; dropped: number; costDollars?: number };
 /** NDJSON from POST /api/move/research (body: { listing: Listing; intent: MoveIntent }). */
 export type ResearchEvent =
   | { type: "step"; label: string; detail?: string }
-  | { type: "finding"; section: "building" | "landlord" | "surroundings" | "risk"; text: string; source: Source }
+  | { type: "finding"; section: "building" | "landlord" | "surroundings" | "risk"; text: string; source: Source; tone?: "neutral" | "negative" | "positive"; severity?: "low" | "medium" | "high"; via?: "listing" | "search" | "agent" }
   | { type: "error"; message: string }
   | { type: "done"; research: ListingResearch };
 
 /** POST /api/move/draft (body: { listing, intent, research? }) → a viewing-request email the user approves. */
-export type ViewingDraft = { to?: string; formUrl?: string; subject: string; bodyEn: string; bodyFi: string; questions: string[] };
+export type ViewingDraft = {
+  to?: string;
+  formUrl?: string;
+  subject: string;
+  bodyEn: string;
+  bodyFi: string;
+  questions: string[];
+  /** Optional extras: who the draft greets, phone if the listing gives one, Finnish versions of the questions. */
+  contactName?: string;
+  phone?: string;
+  questionsFi?: string[];
+  mailto?: string;
+};
 
 /** POST /api/move/watch (body: { intent, areas: string[] }) → Exa Monitor for new listings in those areas. */
-export type WatchResult = { id: string; mode: "live" | "polling"; areas: string[] };
+export type WatchResult = { id: string; mode: "live" | "polling"; areas: string[]; query?: string; domains?: string[] };
+
+/** GET /api/move/watch?id= → the monitor's runs, summarised to listing pages. */
+export type WatchRuns = {
+  id: string;
+  runs: number;
+  latest: { id: string; status: string; at?: string } | null;
+  items: { url: string; title: string; date?: string; source: string; price?: number; overBudget?: boolean; area?: string; via?: "monitor" | "search" }[];
+  /** Set when the monitor returned nothing and `items` come from a crawl-date-filtered Exa search instead. */
+  note?: string;
+  /** Results that were not a single listing page (search pages, articles) — counted, not shown. */
+  skipped: number;
+};
 
 export type Place = { name: string; kind: "pharmacy" | "grocery" | "school" | "daycare" | "park" | "transit" | "cafe"; geo: LatLng; distanceM: number; url?: string };
 
