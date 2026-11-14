@@ -2,7 +2,7 @@
 // happens through Exa tools; the final message goes through the grounding guard;
 // actions are proposals the user approves in the UI.
 import OpenAI from "openai";
-import { MODEL } from "@/lib/llm";
+import { MODEL, assertLlmBudget, recordLlmUsage } from "@/lib/llm";
 import type { ExaTrace } from "@/lib/exa";
 import { EvidenceStore, groundText } from "./evidence";
 import { runTool, TOOL_DEFS, TOOL_LABEL, type ToolCtx } from "./tools";
@@ -97,6 +97,7 @@ export async function runAgent(opts: { messages: ChatMessage[]; state: AgentStat
     const overBudget = Date.now() > ctx.deadline - 8000 || rounds >= MAX_ROUNDS;
     // Always "required": the final message must go through the answer tool (citations + quotes).
     const toolChoice: any = overBudget ? { type: "function", name: "answer" } : "required";
+    assertLlmBudget();
     const res: any = await openai().responses.create(
       {
         model: MODEL,
@@ -110,6 +111,7 @@ export async function runAgent(opts: { messages: ChatMessage[]; state: AgentStat
       },
       { timeout: 45_000, signal: opts.signal },
     );
+    recordLlmUsage(res);
     prev = res.id;
     const calls: any[] = (res.output ?? []).filter((o: any) => o.type === "function_call");
 
