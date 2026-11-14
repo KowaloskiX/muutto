@@ -9,8 +9,8 @@
   --c-ink: var(--ink, #0d1016);
   --c-ink2: var(--ink-2, #68655e);
   --c-ink3: var(--faint, #9a968d);
-  --c-accent: var(--accent, #0084cc);
-  --c-link: var(--link, #0084cc);
+  --c-accent: var(--accent, #005032);
+  --c-link: var(--link, #005032);
   --c-accent-ink: var(--accent-ink, #fff);
   --c-ok: var(--ok, #008009);
   --c-warn: var(--warn, #b64400);

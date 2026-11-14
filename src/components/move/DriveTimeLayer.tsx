@@ -20,18 +20,18 @@ type AreaPt = { key: string; lat: number; lng: number; label: string };
 
 /** Bands, dark (close) to light (far). */
 export const DRIVE_BANDS = [
-  { max: 10, color: "#0b4f99" },
-  { max: 20, color: "#2f7fd6" },
-  { max: 30, color: "#6eaaf0" },
-  { max: 45, color: "#b5d4f7" },
+  { max: 10, color: "#0b5a3a" },
+  { max: 20, color: "#2f7d55" },
+  { max: 30, color: "#6fa77c" },
+  { max: 45, color: "#b4cf9f" },
 ] as const;
 /** Weekend reach: how far the car gets in a few hours (region scale). */
 const REGION_BANDS = [
-  { max: 30, color: "#0b4f99" },
-  { max: 60, color: "#2f7fd6" },
-  { max: 90, color: "#6eaaf0" },
-  { max: 120, color: "#b5d4f7" },
-  { max: 180, color: "#dce9f8" },
+  { max: 30, color: "#0b5a3a" },
+  { max: 60, color: "#2f7d55" },
+  { max: 90, color: "#6fa77c" },
+  { max: 120, color: "#b4cf9f" },
+  { max: 180, color: "#dcd8b8" },
 ] as const;
 type Band = { max: number; color: string };
 const BANDS: Record<HeatScale, readonly Band[]> = { city: DRIVE_BANDS, region: REGION_BANDS };
@@ -345,7 +345,7 @@ export default function DriveTimeLayer({
   const targets = useMemo(() => [...dots.map((d) => ({ key: d.key, lat: d.lat, lng: d.lng })), ...areas.map((a) => ({ key: `area:${a.key}`, lat: a.lat, lng: a.lng }))], [dots, areas]);
   const lm = useRoutedMinutes(targets, work, true);
   const line = dark ? "#e9e7e1" : "#0d1016";
-  const accent = dark ? "#8cc6fb" : "#0084cc";
+  const accent = dark ? "#8fc9a8" : "#005032";
 
   // The time slider: the reach zone for "within T minutes", recomputed live from the grid.
   const [t, setT] = useState<number>(ui.start);
