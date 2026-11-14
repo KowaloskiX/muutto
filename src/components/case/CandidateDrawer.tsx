@@ -1,69 +1,54 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  ArrowLeft,
-  ArrowSquareOut,
-  Bell,
-  CaretRight,
-  ChatCircleText,
-  CheckCircle,
-  Circle,
-  Info,
-  MinusCircle,
-  Question,
-  Warning,
-  WarningCircle,
-  X,
-  XCircle,
-} from "@phosphor-icons/react";
-import type { Check, Status } from "@/lib/verify";
+import { ArrowLeft, ArrowUpRight, Bell, ChatCircleText, Check, Minus, WarningCircle, X, XCircle } from "@phosphor-icons/react";
+import type { Check as CheckT, Status } from "@/lib/verify";
 import { withTextFragment } from "@/lib/textFragment";
 import { findingOf, firstSentence, fmtKm, hostOf, isDoc, isTv, publicRegisters, regName, verdict, VERDICT_LABEL, type Cand } from "./model";
 import s from "./Case.module.css";
 
-export function Dot({ status }: { status: Status }) {
-  const Icon = status === "green" ? CheckCircle : status === "red" ? XCircle : status === "yellow" ? Warning : Question;
-  return <Icon weight="fill" className={`${s.dot} ${s[`c_${status}`]}`} aria-hidden />;
-}
+const GLYPH = { green: Check, yellow: WarningCircle, red: XCircle, grey: Minus } as const;
+const GLYPH_WORD: Record<Status, string> = { green: "clear", yellow: "clarify", red: "failed", grey: "no data" };
 
-/** Register status as an SF-Symbols-like circle: check, exclamation, cross, dash. */
-export function StatusIcon({ status, className = "" }: { status: Status; className?: string }) {
-  const Icon = status === "green" ? CheckCircle : status === "red" ? XCircle : status === "yellow" ? WarningCircle : MinusCircle;
-  return <Icon weight="fill" className={`${s.sIcon} ${s[`c_${status}`]} ${className}`} aria-hidden />;
-}
-
-/** Verdict as a small soft pill: icon + label, so color never carries it alone. */
-export function VerdictBadge({ v }: { v: Status }) {
+/** Register status as a bare glyph: check, exclamation, cross, dash. Colour only here and on verdict words. */
+export function Glyph({ status }: { status: Status }) {
+  const Icon = GLYPH[status];
   return (
-    <span className={`${s.badge} ${s[`b_${v}`]}`}>
-      <Dot status={v} /> {VERDICT_LABEL[v]}
+    <span className={`${s.glyph} ${s[`g_${status}`]}`} role="img" aria-label={GLYPH_WORD[status]}>
+      <Icon weight={status === "yellow" || status === "red" ? "fill" : "bold"} aria-hidden />
     </span>
   );
 }
 
+/** The verdict as a coloured word. */
+export function VerdictWord({ v }: { v: Status }) {
+  return <span className={`${s.verdict} ${s[`t_${v}`]}`}>{VERDICT_LABEL[v]}</span>;
+}
+
 const ORDER: Status[] = ["red", "yellow", "green", "grey"];
-const byStatus = (a: Check, b: Check) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status);
+const byStatus = (a: CheckT, b: CheckT) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status);
 const clean = (q: string, n = 180) => {
   const t = q.replace(/[#*|`>]+/g, " ").replace(/\s+/g, " ").trim();
   return t.length > n ? `${t.slice(0, n).replace(/\s+\S*$/, "")}…` : t;
 };
-const SRC_LABEL: Record<string, string> = { registry: "Register", site: "Their site", web: "Web" };
 const STATUS_WORD: Record<Status, string> = { green: "Clear", yellow: "Clarify", red: "Failed", grey: "No data" };
-const statusWord = (c: Check) => (c.status === "grey" && c.action ? "Check" : STATUS_WORD[c.status]);
+const statusWord = (c: CheckT) => (c.status === "grey" && c.action ? "Check manually" : STATUS_WORD[c.status]);
 const shortLabel = (l: string) => l.replace(/^Tilaajavastuu:\s*(\S)/i, (_, ch: string) => ch.toUpperCase());
-const webEv = (c: Check) => c.evidence.filter((e) => e.url && /^https?:/i.test(e.url));
+const webEv = (c: CheckT) => c.evidence.filter((e) => e.url && /^https?:/i.test(e.url));
+const fiDate = (iso: string) => iso.split("-").reverse().join(".");
 
-function SourceLinks({ ev }: { ev: { url: string; quote?: string; source?: string; via?: string; asOf?: string }[] }) {
+type Ev = { url: string; quote?: string; via?: string; asOf?: string };
+function SourceLinks({ ev }: { ev: Ev[] }) {
   if (!ev.length) return null;
+  const seen = new Set<string>();
+  const uniq = ev.filter((e) => !seen.has(hostOf(e.url)) && !!seen.add(hostOf(e.url)));
   return (
     <span className={s.srcs}>
-      {ev.slice(0, 3).map((e, i) => (
+      {uniq.slice(0, 3).map((e, i) => (
         <a key={`${e.url}-${i}`} className={s.src} href={withTextFragment(e.url, e.quote)} target="_blank" rel="noopener noreferrer" title={e.via ?? e.url}>
-          {e.source && SRC_LABEL[e.source] ? `${SRC_LABEL[e.source]} · ` : ""}
           {hostOf(e.url)}
-          {e.asOf && ` · ${e.asOf}`}
-          <ArrowSquareOut weight="bold" aria-hidden />
+          {e.asOf && `, ${fiDate(e.asOf)}`}
+          <ArrowUpRight weight="bold" aria-hidden />
         </a>
       ))}
     </span>
@@ -71,60 +56,72 @@ function SourceLinks({ ev }: { ev: { url: string; quote?: string; source?: strin
 }
 
 /** Everything behind one check: the full detail, the law, the quote, the sources, the manual re-check. */
-function CheckDetail({ c }: { c: Check }) {
+function CheckDetail({ c }: { c: CheckT }) {
   const ev = webEv(c);
   const quote = ev.find((e) => e.quote && e.quote.trim().length > 12);
   return (
     <div className={s.detail}>
       <p>{c.detail}</p>
-      {c.law && <p className={s.law}>{c.law}</p>}
       {quote?.quote && (
         <a className={s.quote} href={withTextFragment(quote.url, quote.quote)} target="_blank" rel="noopener noreferrer" title="Opens the page at this sentence">
           “{clean(quote.quote)}”
         </a>
       )}
-      <SourceLinks ev={ev} />
-      {!ev.length && !c.action && <span className={s.noSrc}>{c.status === "grey" ? "Not confirmed from public data" : "Kilpi's own check"}</span>}
-      {c.action && (
-        <a className={s.textLink} href={c.action.url} target="_blank" rel="noopener noreferrer">
-          {c.action.label} <ArrowSquareOut weight="bold" aria-hidden />
-        </a>
-      )}
+      {c.law && <p className={s.law}>{c.law}</p>}
+      <span className={s.detailLinks}>
+        <SourceLinks ev={ev} />
+        {!ev.length && !c.action && <span className={s.noSrc}>{c.status === "grey" ? "Not confirmed from public data" : "Kilpi's own check"}</span>}
+        {c.action && (
+          <a className={s.src} href={c.action.url} target="_blank" rel="noopener noreferrer">
+            {c.action.label}
+            <ArrowUpRight weight="bold" aria-hidden />
+          </a>
+        )}
+      </span>
     </div>
   );
 }
 
-/** Inset grouped list row: icon, title, one-line summary, chevron; expands in place. */
-function CheckRow({ c }: { c: Check }) {
+/** One list line: glyph, title, short status or summary, source right-aligned; expands in place. */
+function CheckLine({ c, title, summary, showSource }: { c: CheckT; title: string; summary: string; showSource?: boolean }) {
   const [open, setOpen] = useState(false);
+  const ev = webEv(c);
+  const first = ev[0];
   return (
-    <li className={s.gRow}>
-      <button type="button" className={s.gHead} onClick={() => setOpen((x) => !x)} aria-expanded={open}>
-        <StatusIcon status={c.status} />
-        <span className={s.gText}>
-          <b>{shortLabel(c.label)}</b>
-          {!open && <small>{firstSentence(c.detail)}</small>}
-        </span>
-        <span className={`${s.gWord} ${s[`t_${c.status}`]}`}>{statusWord(c)}</span>
-        <CaretRight weight="bold" className={`${s.chev} ${open ? s.chevOpen : ""}`} aria-hidden />
-      </button>
+    <li className={`${s.line} ${open ? s.lineOpen : ""}`}>
+      <div className={s.lineHead}>
+        <button type="button" className={s.lineBtn} onClick={() => setOpen((x) => !x)} aria-expanded={open}>
+          <Glyph status={c.status} />
+          <span className={s.lineTitle}>{title}</span>
+          <span className={s.lineSum}>{summary}</span>
+        </button>
+        {showSource && first && (
+          <a className={s.lineSrc} href={withTextFragment(first.url, first.quote)} target="_blank" rel="noopener noreferrer" title={first.via ?? first.url}>
+            {hostOf(first.url)}
+          </a>
+        )}
+      </div>
       {open && <CheckDetail c={c} />}
     </li>
   );
 }
 
-function DocRow({ c }: { c: Check }) {
+function DocLine({ name, fi, law, action }: { name: string; fi?: string; law?: string; action?: { label: string; url: string } }) {
   return (
-    <li className={s.docRow}>
-      <Circle weight="regular" className={s.docIcon} aria-hidden />
-      <span className={s.docName}>
-        <b>{c.document?.en ?? shortLabel(c.label)}</b>
-        {c.document?.fi && <small>{c.document.fi}</small>}
+    <li className={s.doc}>
+      <span className={s.box} aria-hidden />
+      <span className={s.docText}>
+        <span className={s.docName}>{name}</span>
+        {fi && (
+          <span className={s.docFi} title={fi}>
+            {fi}
+          </span>
+        )}
       </span>
-      {c.law && <span className={s.docLaw}>{c.law.replace(/^1233\/2006\s*/, "")}</span>}
-      {c.action && (
-        <a className={s.docAction} href={c.action.url} target="_blank" rel="noopener noreferrer" title={c.action.label} aria-label={c.action.label}>
-          <ArrowSquareOut weight="bold" />
+      {law && <span className={s.docLaw}>{law.replace(/^1233\/2006\s*/, "")}</span>}
+      {action && (
+        <a className={s.lineSrc} href={action.url} target="_blank" rel="noopener noreferrer" title={action.label}>
+          {hostOf(action.url)}
         </a>
       )}
     </li>
@@ -135,7 +132,8 @@ function checkedAgo(iso: string): string {
   const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (min < 1) return "just now";
   if (min < 60) return `${min} min ago`;
-  return `${Math.round(min / 60)} h ago`;
+  if (min < 48 * 60) return `${Math.round(min / 60)} h ago`;
+  return `${Math.round(min / 1440)} days ago`;
 }
 
 export function CandidateDrawer({
@@ -157,7 +155,6 @@ export function CandidateDrawer({
   onWatch: () => void;
   onAsk: () => void;
 }) {
-  const [tile, setTile] = useState<string | undefined>();
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
@@ -169,118 +166,84 @@ export function CandidateDrawer({
   const key = findingOf(cand);
   const regs = publicRegisters(r);
   const clear = regs.filter((c) => c.status === "green").length;
-  const openTile = regs.find((c) => c.id === tile);
   const docs = r.checks.filter((c) => isTv(c) && isDoc(c));
   // A document named in `documents` without a matching check still has to be requested.
   const extraDocs = (r.documents ?? []).filter((d) => !docs.some((c) => c.document?.en === d.en || c.id === d.id));
   const capability = r.checks.filter((c) => c.group === "capability").sort(byStatus);
   const other = r.checks.filter((c) => !c.group).sort(byStatus);
-  const prof = r.profile;
-  const chips = [
-    r.businessId && { k: "Y-tunnus", v: r.businessId },
-    distance != null && { k: "From site", v: fmtKm(distance) },
-    prof?.employees && { k: "Staff", v: String(prof.employees) },
-    prof?.foundedYear && { k: "Founded", v: String(prof.foundedYear) },
-    cand.fit != null && { k: "Fit", v: `${cand.fit}/100` },
-  ].filter((x): x is { k: string; v: string } => !!x);
-  const keyEv = key?.sources ?? [];
+  const regSummary = (c: CheckT) => {
+    const asOf = webEv(c).find((e) => e.asOf)?.asOf;
+    return asOf ? `${statusWord(c)}, ${fiDate(asOf)}` : statusWord(c);
+  };
 
   return (
     <aside className={s.drawerWrap} role="dialog" aria-label={`${cand.name}: all checks`}>
       <button type="button" className={s.scrim} onClick={onClose} aria-label="Close" tabIndex={-1} />
       <div className={s.drawer}>
         <header className={s.dHead}>
+          <button type="button" className={s.back} onClick={onClose} aria-label="Back to the list">
+            <ArrowLeft weight="bold" aria-hidden /> List
+          </button>
           <div className={s.dTitle}>
-            <VerdictBadge v={v} />
+            <VerdictWord v={v} />
             <h2>{cand.name}</h2>
-            {r.registry?.mainBusinessLine && <p className={s.dSub}>{r.registry.mainBusinessLine}</p>}
-            <div className={s.factChips}>
-              {chips.map((c) => (
-                <span key={c.k} className={s.factChip}>
-                  <small>{c.k}</small>
-                  {c.v}
-                </span>
-              ))}
+            <p className={s.dMeta}>
+              {[r.businessId, distance != null ? fmtKm(distance) : "", cand.fit != null ? `fit ${cand.fit}` : ""].filter(Boolean).join(" · ")}
               {cand.site && (
-                <a className={`${s.factChip} ${s.factLink}`} href={cand.site} target="_blank" rel="noopener noreferrer">
-                  {hostOf(cand.site)} <ArrowSquareOut weight="bold" aria-hidden />
-                </a>
+                <>
+                  {" · "}
+                  <a href={cand.site} target="_blank" rel="noopener noreferrer">
+                    {hostOf(cand.site)}
+                  </a>
+                </>
               )}
-            </div>
-            {/* Honest freshness: cached reports are real earlier checks, say how old they are. */}
-            <p className={s.checkedAt}>Checked {r.cachedAt ? checkedAgo(r.cachedAt) : "just now"}</p>
+              {/* Honest freshness: cached reports are real earlier checks, say how old they are. */}
+              {" · "}
+              <span className={s.nowrap}>checked {r.cachedAt ? checkedAgo(r.cachedAt) : "just now"}</span>
+            </p>
           </div>
-          <button type="button" className={s.close} onClick={onClose} aria-label="Back to the list">
-            <X weight="bold" className={s.closeX} />
-            <span className={s.closeBack}>
-              <ArrowLeft weight="bold" /> List
-            </span>
+          <button type="button" className={s.close} onClick={onClose} aria-label="Close">
+            <X weight="bold" />
           </button>
         </header>
 
         <div className={s.dBody}>
           {key && (
-            <section className={`${s.callout} ${s[`k_${key.status}`]}`} aria-label="Key finding">
-              <p className={s.calloutHead}>
-                <StatusIcon status={key.status} />
-                <span>Key finding</span>
-              </p>
-              <p className={s.calloutText}>{key.text}</p>
-              {key.quote && <q className={s.keyQuote}>{key.quote}</q>}
-              <SourceLinks ev={keyEv} />
+            <section className={s.finding} aria-label="Key finding">
+              <p className={s.findingText}>{key.text}</p>
+              {key.quote && <q className={s.findingQuote}>{key.quote}</q>}
+              <SourceLinks ev={key.sources} />
             </section>
           )}
 
           {regs.length > 0 && (
             <section className={s.dSection}>
               <h3>
-                Compliance at a glance
-                <small>
+                Registers
+                <span>
                   {clear} of {regs.length} clear
-                </small>
+                </span>
               </h3>
-              <div className={s.tiles} role="list">
+              <ul className={s.lines}>
                 {regs.map((c) => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    role="listitem"
-                    className={`${s.tile} ${tile === c.id ? s.tileOn : ""}`}
-                    onClick={() => setTile((t) => (t === c.id ? undefined : c.id))}
-                    aria-expanded={tile === c.id}
-                    title={shortLabel(c.label)}
-                  >
-                    <StatusIcon status={c.status} className={s.tileIcon} />
-                    <b>{regName(c)}</b>
-                    <small className={s[`t_${c.status}`]}>{statusWord(c)}</small>
-                  </button>
+                  <CheckLine key={c.id} c={c} title={regName(c)} summary={regSummary(c)} showSource />
                 ))}
-              </div>
-              {openTile ? (
-                <div className={s.tileDetail}>
-                  <p className={s.tileDetailHead}>
-                    <StatusIcon status={openTile.status} />
-                    <b>{shortLabel(openTile.label)}</b>
-                  </p>
-                  <CheckDetail c={openTile} />
-                </div>
-              ) : (
-                <p className={s.hintLine}>Tap a register to see what it says and where.</p>
-              )}
+              </ul>
               {r.registrySource && (
                 <p className={s.footnote}>
-                  <Info weight="bold" aria-hidden />
-                  <span>
-                    Live trade register (PRH) unreachable: register facts from {r.registrySource.site}
-                    {r.registrySource.asOf ? ` (copy ${r.registrySource.asOf.split("-").reverse().join(".")})` : ""}.{" "}
-                    <a href={r.registrySource.url} target="_blank" rel="noopener noreferrer">Open copy</a>
-                    {r.businessId && (
-                      <>
-                        {" · "}
-                        <a href={`https://tietopalvelu.ytj.fi/yritys/${r.businessId}`} target="_blank" rel="noopener noreferrer">Re-check in YTJ</a>
-                      </>
-                    )}
-                  </span>
+                  Live PRH register unreachable; facts from {r.registrySource.site.replace(/\s*\(.*\)\s*$/, "")}
+                  {r.registrySource.asOf ? ` copy of ${fiDate(r.registrySource.asOf)}` : ""}.{" "}
+                  <a href={r.registrySource.url} target="_blank" rel="noopener noreferrer">
+                    Open copy
+                  </a>
+                  {r.businessId && (
+                    <>
+                      {", "}
+                      <a href={`https://tietopalvelu.ytj.fi/yritys/${r.businessId}`} target="_blank" rel="noopener noreferrer">
+                        re-check in YTJ
+                      </a>
+                    </>
+                  )}
                 </p>
               )}
             </section>
@@ -289,41 +252,51 @@ export function CandidateDrawer({
           {(docs.length > 0 || extraDocs.length > 0) && (
             <section className={s.dSection}>
               <h3>
-                Documents to request<small>{docs.length + extraDocs.length}</small>
+                Documents to request<span>{docs.length + extraDocs.length}</span>
               </h3>
-              <ul className={s.group}>
-                {docs.map((c) => <DocRow key={c.id} c={c} />)}
-                {extraDocs.map((d) => <DocRow key={d.id} c={{ id: d.id, label: d.en, status: "grey", detail: "", evidence: [], needsDocument: true, document: { fi: d.fi, en: d.en }, law: d.law }} />)}
+              <ul className={s.lines}>
+                {docs.map((c) => (
+                  <DocLine key={c.id} name={c.document?.en ?? shortLabel(c.label)} fi={c.document?.fi} law={c.law} action={c.action} />
+                ))}
+                {extraDocs.map((d) => (
+                  <DocLine key={d.id} name={d.en} fi={d.fi} law={d.law} />
+                ))}
               </ul>
-              <p className={s.hintLine}>Registers can&apos;t show these. Collect them before signing, none older than 3 months.</p>
             </section>
           )}
 
           {capability.length > 0 && (
             <section className={s.dSection}>
               <h3>Capability</h3>
-              <ul className={s.group}>{capability.map((c) => <CheckRow key={c.id} c={c} />)}</ul>
-              <p className={s.hintLine}>What registers can&apos;t show: references, licences, capacity.</p>
+              <ul className={s.lines}>
+                {capability.map((c) => (
+                  <CheckLine key={c.id} c={c} title={shortLabel(c.label)} summary={firstSentence(c.detail)} />
+                ))}
+              </ul>
             </section>
           )}
 
           {other.length > 0 && (
             <section className={s.dSection}>
-              <h3>{regs.length || capability.length ? "Other checks" : "All checks"}</h3>
-              <ul className={s.group}>{other.map((c) => <CheckRow key={c.id} c={c} />)}</ul>
+              <h3>{regs.length || capability.length ? "Other checks" : "Checks"}</h3>
+              <ul className={s.lines}>
+                {other.map((c) => (
+                  <CheckLine key={c.id} c={c} title={shortLabel(c.label)} summary={firstSentence(c.detail)} />
+                ))}
+              </ul>
             </section>
           )}
         </div>
 
         <footer className={s.dFoot}>
           <button type="button" className={s.primary} onClick={onDraft} disabled={busy}>
-            Draft RFQ + documents
+            Draft RFQ and documents
           </button>
-          <button type="button" className={s.ghostBtn} onClick={onWatch} disabled={busy || watching}>
-            <Bell weight="bold" /> {watching ? "Watching" : "Watch"}
+          <button type="button" className={s.quiet} onClick={onWatch} disabled={busy || watching}>
+            <Bell weight="bold" aria-hidden /> {watching ? "Watching" : "Watch"}
           </button>
-          <button type="button" className={s.ghostBtn} onClick={onAsk} disabled={busy} aria-label="Ask about this company">
-            <ChatCircleText weight="bold" /> <span className={s.btnText}>Ask</span>
+          <button type="button" className={s.quiet} onClick={onAsk} disabled={busy} aria-label="Ask about this company">
+            <ChatCircleText weight="bold" aria-hidden /> Ask
           </button>
         </footer>
       </div>

@@ -283,9 +283,10 @@ export default function ChatApp() {
               break;
             }
             setCtx((c) => ({ ...c, ranked, selected: [], lastQuery: query, job: found.job ?? c.job, city: found.city ?? c.city }));
-            const flagged = ranked.slice(0, 4).filter((r) => r.why.some((w) => w.status === "red" || w.status === "yellow")).length;
-            sayT(flagged ? "resultsFlags" : "results", { name: nameOf(ranked[0]), n: Math.min(4, ranked.length), flagged });
-            ranked.slice(0, 4).forEach((item, i) => push({ role: "bot", kind: "company", item, rank: i + 1 }));
+            // The candidates live in the case file; the chat only summarises them.
+            const shown = ranked.slice(0, 8);
+            const flagged = shown.filter((r) => r.why.some((w) => w.status === "red" || w.status === "yellow")).length;
+            sayT(flagged ? "resultsFlags" : "results", { name: nameOf(ranked[0]), n: shown.length, flagged });
             const n = Math.min(3, ranked.length);
             const top = ranked.slice(0, n);
             const names = top.map(nameOf).join(", ");
@@ -810,7 +811,11 @@ export default function ChatApp() {
       return work(() => runFind(q, /^Verify the company /.test(q) ? "company" : "job", table));
     }
     if (act === "ask_top3") return work(() => runDrafts(c.ranked.slice(0, 3), table));
-    if (act === "pick_myself") return void sayT("pickMyself", undefined, { chips: [{ label: tr("chipDraftPicks"), action: "draft_selected", primary: true }] });
+    if (act === "pick_myself") {
+      // Picking happens in the case file's matrix: on phones, open it.
+      if (window.matchMedia("(max-width: 1023px)").matches) setSheet(true);
+      return void sayT("pickMyself", undefined, { chips: [{ label: tr("chipDraftPicks"), action: "draft_selected", primary: true }] });
+    }
     if (act === "draft_selected") {
       const picks = c.ranked.filter((r) => c.selected.includes(companyKey(r)));
       if (!picks.length) return void sayT("noPicks", undefined, { chips: [{ label: tr("chipDraftPicks"), action: "draft_selected", primary: true }] });
@@ -1085,6 +1090,8 @@ export default function ChatApp() {
           outbox={outbox}
           compare={lastCompare ? { rows: lastCompare.rows, recommendation: lastCompare.recommendation } : undefined}
           busy={busy}
+          picked={ctx.selected}
+          onTogglePick={togglePick}
           onDraft={(r) => caseFromPanel(() => runDrafts([r], loadTable(ctxRef.current.lang ?? "en")))}
           onWatch={(target) => caseFromPanel(() => runWatch(target))}
           onDraftChange={(id, d) => patch(id, (x) => ({ ...x, draft: d }) as Msg)}

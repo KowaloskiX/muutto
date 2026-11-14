@@ -8,8 +8,8 @@ export const EN = {
   foundNone: "Exa found no subcontractor websites for that yet.",
   noneTrusted: "I couldn't find a subcontractor I'd trust for that. Could you describe the trade a bit differently, or widen the area around the site?",
   ranking: "Ranking by trust…",
-  results: "Top {n}, best fit first. {name} looks strongest. Each card leads with the finding that matters most.",
-  resultsFlags: "Top {n}, best fit first. {name} looks strongest. Something to clarify at {flagged} of them, shown on each card. The full checklist is in the case file.",
+  results: "{n} candidates are in the case file. {name} looks strongest, and none has a warning.",
+  resultsFlags: "{n} candidates are in the case file. {name} looks strongest; {flagged} need clarifying before you sign.",
   askTop: "Draft quote requests and document requests for the top {n}? Nothing is sent until you approve.",
   askTopFlags: "Draft quote requests and document requests for the top {n}, with a question on each of the {asks} warnings? Nothing is sent until you approve.",
   chipAskTop: "Yes, draft RFQs for the top {n}",
@@ -53,9 +53,9 @@ export const EN = {
   askNoAnswer: "I couldn't find a reliable source for that. Could you rephrase it, or ask something more specific?",
   askPartial: "The sources I found only partly cover this.",
   askError: "I couldn't look that up right now: {msg}",
-  pickMyself: "Sure. Tap Pick on the companies above, then let me know.",
+  pickMyself: "Sure. Tick the companies in the case file, then let me know.",
   chipDraftPicks: "Draft for my picks",
-  noPicks: "You haven't picked anyone yet. Tap Pick on a card first.",
+  noPicks: "You haven't picked anyone yet. Tick a company in the case file first.",
   notNow: "No problem, the shortlist stays in the case file. When quotes arrive, paste them in and I'll compare them.",
   notYet: "Okay, I'll hold off. Ask me any time, or paste another quote to add it to the comparison.",
   fallback: "I help Finnish main contractors find and vet subcontractors: tilaajavastuu documents, registers, references, licences, quotes and subcontract terms (YSE 1998). Try one of these:",
@@ -97,7 +97,7 @@ export function format(tpl: string, vars: Record<string, string | number> = {}) 
   return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-const STORE = "kilpi-chat-i18n-b2b-v3";
+const STORE = "kilpi-chat-i18n-b2b-v4";
 const cache: Record<string, Table> = {};
 const pending: Record<string, Promise<Table>> = {};
 
