@@ -9,7 +9,7 @@ export const EN = {
   noneTrusted: "I couldn't find a subcontractor I'd trust for that. Could you describe the trade a bit differently, or widen the area around the site?",
   ranking: "Ranking by trust…",
   results: "{n} candidates are in the case file. {name} looks strongest, and none has a warning.",
-  resultsFlags: "{n} candidates are in the case file. {name} looks strongest; {flagged} need clarifying before you sign.",
+  resultsFlags: "{n} candidates are in the case file. {name} ranks first; {flagged} need clarifying before you sign.",
   askTop: "Draft quote requests and document requests for the top {n}? Nothing is sent until you approve.",
   askTopFlags: "Draft quote requests and document requests for the top {n}, with a question on each of the {asks} warnings? Nothing is sent until you approve.",
   chipAskTop: "Yes, draft RFQs for the top {n}",
@@ -97,7 +97,7 @@ export function format(tpl: string, vars: Record<string, string | number> = {}) 
   return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-const STORE = "kilpi-chat-i18n-b2b-v4";
+const STORE = "kilpi-chat-i18n-b2b-v5";
 const cache: Record<string, Table> = {};
 const pending: Record<string, Promise<Table>> = {};
 
