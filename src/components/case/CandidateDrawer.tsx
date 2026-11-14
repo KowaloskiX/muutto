@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUpRight, Bell, ChatCircleText, Check, Minus, WarningCircle, X, XCircle } from "@phosphor-icons/react";
 import type { Check as CheckT, Status } from "@/lib/verify";
 import { withTextFragment } from "@/lib/textFragment";
@@ -83,12 +83,20 @@ function CheckDetail({ c }: { c: CheckT }) {
 }
 
 /** One list line: glyph, title, short status or summary, source right-aligned; expands in place. */
-function CheckLine({ c, title, summary, showSource }: { c: CheckT; title: string; summary: string; showSource?: boolean }) {
-  const [open, setOpen] = useState(false);
+function CheckLine({ c, title, summary, showSource, focus }: { c: CheckT; title: string; summary: string; showSource?: boolean; focus?: number }) {
+  const [open, setOpen] = useState(!!focus);
+  const ref = useRef<HTMLLIElement>(null);
   const ev = webEv(c);
   const first = ev[0];
+  // Opened from a matrix cell: expand this check and bring it into view.
+  useEffect(() => {
+    if (!focus) return;
+    setOpen(true);
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() => ref.current?.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" }));
+  }, [focus]);
   return (
-    <li className={`${s.line} ${open ? s.lineOpen : ""}`}>
+    <li ref={ref} className={`${s.line} ${open ? s.lineOpen : ""} ${focus ? s.lineFocus : ""}`}>
       <div className={s.lineHead}>
         <button type="button" className={s.lineBtn} onClick={() => setOpen((x) => !x)} aria-expanded={open}>
           <Glyph status={c.status} />
@@ -138,6 +146,7 @@ function checkedAgo(iso: string): string {
 
 export function CandidateDrawer({
   cand,
+  focus,
   distance,
   busy,
   watching,
@@ -147,6 +156,8 @@ export function CandidateDrawer({
   onAsk,
 }: {
   cand: Cand;
+  /** The check to open and scroll to (from a clicked matrix cell). */
+  focus?: { id: string; n: number };
   distance?: number;
   busy: boolean;
   watching: boolean;
@@ -226,7 +237,7 @@ export function CandidateDrawer({
               </h3>
               <ul className={s.lines}>
                 {regs.map((c) => (
-                  <CheckLine key={c.id} c={c} title={regName(c)} summary={regSummary(c)} showSource />
+                  <CheckLine key={c.id} c={c} title={regName(c)} summary={regSummary(c)} showSource focus={focus?.id === c.id ? focus.n : undefined} />
                 ))}
               </ul>
               {r.registrySource && (

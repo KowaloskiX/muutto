@@ -67,10 +67,14 @@ const REG_SHORT: Record<string, string> = {
   "tv-reliable-partner": "Partner",
 };
 const STATUS_TITLE = { green: "clear", yellow: "clarify", red: "failed", grey: "no data" } as const;
+/** A check backed by a web source the drawer can cite. */
+const sourced = (c: Check) => c.evidence.some((e) => !!e.url && /^https?:/i.test(e.url));
 
 export default function CaseFile({ ctx, outbox, compare, busy, picked, onTogglePick, onDraft, onWatch, onDraftChange, onPrefill }: Props) {
   const [selected, setSelected] = useState<string | undefined>();
   const [open, setOpen] = useState<string | undefined>();
+  // A clicked matrix cell: open that company's drawer at that check (n re-triggers on a repeat click).
+  const [focus, setFocus] = useState<{ id: string; n: number } | undefined>();
   const [geo, setGeo] = useState<Record<string, Geo | null>>({});
   const [mapOpen, setMapOpen] = useState(true);
   const [noticeOpen, setNoticeOpen] = useState(false);
@@ -184,7 +188,30 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
 
   return (
     <div className={`${s.case} ${openCand ? s.caseOpen : ""}`}>
-      <div className={s.scroller}>
+      <div className={`${s.scroller} ${empty ? s.scrollerEmpty : ""}`}>
+        {empty ? (
+          <section className={s.hero} aria-labelledby="case-hero">
+            <h1 id="case-hero" className={s.heroTitle}>
+              Vet subcontractors before you sign.
+            </h1>
+            <p className={s.heroSub}>Describe the trade, the project and the site in the chat. Candidates, their register checks and your drafted requests collect here. Nothing is sent without your OK.</p>
+            <ol className={s.heroSteps}>
+              <li>
+                <strong>Candidates</strong>
+                <p>Ranked by fit and distance to the site.</p>
+              </li>
+              <li>
+                <strong>Register checks</strong>
+                <p>Every tilaajavastuu check, cited to its source.</p>
+              </li>
+              <li>
+                <strong>Outbox</strong>
+                <p>Quote and document requests, drafted for your OK.</p>
+              </li>
+            </ol>
+          </section>
+        ) : (
+        <>
         <header className={`${s.project} ${showMap ? s.projectMap : ""}`}>
           <div className={s.projectText}>
             <h1 className={s.title}>
@@ -217,7 +244,6 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                 <CircleNotch className={s.spin} aria-hidden /> Checking {done.length} of {cands.length}
               </p>
             )}
-            {empty && <p className={s.lead}>Describe the trade, the project and the site in the chat. Candidates, their register checks and your drafted requests collect here.</p>}
           </div>
 
           {showMap && (
@@ -281,9 +307,11 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                   const pickable = c.origin === "ranked" && !!ranked;
                   const pk = ranked ? companyKey(ranked) : "";
                   const isPicked = pickable && picked.includes(pk);
-                  const go = () => {
+                  const go = (checkId?: string) => {
                     select(c.key);
-                    if (can) setOpen(c.key);
+                    if (!can) return;
+                    setOpen(c.key);
+                    setFocus(checkId ? { id: checkId, n: Date.now() } : undefined);
                   };
                   return (
                     <tbody
@@ -293,7 +321,7 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                       }}
                       className={`${s.cand} ${can ? s.candLink : ""} ${open === c.key ? s.candOpen : selected === c.key ? s.candHover : ""}`}
                       onMouseEnter={() => setSelected(c.key)}
-                      onClick={go}
+                      onClick={() => go()}
                     >
                       <tr>
                         <td className={s.cCompany}>
@@ -337,7 +365,24 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                           const x = regs.find((r) => r.id === col.id);
                           return (
                             <td key={col.id} className={`${s.cReg} ${i === 0 ? s.cRegFirst : ""}`} title={x ? `${regName(x)}: ${STATUS_TITLE[x.status]}` : undefined}>
-                              {x ? <Glyph status={x.status} /> : c.status === "scanning" ? <span className={s.pending} aria-hidden /> : null}
+                              {x && can ? (
+                                <button
+                                  type="button"
+                                  className={`${s.cell} ${open === c.key && focus?.id === x.id ? s.cellOn : ""}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    go(x.id);
+                                  }}
+                                  aria-label={`${c.name}, ${regName(x)}: ${STATUS_TITLE[x.status]}. Show the source`}
+                                >
+                                  <Glyph status={x.status} />
+                                  {sourced(x) && <i className={s.citeMark} aria-hidden />}
+                                </button>
+                              ) : x ? (
+                                <Glyph status={x.status} />
+                              ) : c.status === "scanning" ? (
+                                <span className={s.pending} aria-hidden />
+                              ) : null}
                             </td>
                           );
                         })}
@@ -348,7 +393,23 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                                 const x = regs.find((r) => r.id === col.id);
                                 return (
                                   <span key={col.id} title={x ? `${regName(x)}: ${STATUS_TITLE[x.status]}` : regName(col)}>
-                                    {x ? <Glyph status={x.status} /> : c.status === "scanning" ? <span className={s.pending} aria-hidden /> : null}
+                                    {x && can ? (
+                                      <button
+                                        type="button"
+                                        className={`${s.cell} ${s.cellSm} ${open === c.key && focus?.id === x.id ? s.cellOn : ""}`}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          go(x.id);
+                                        }}
+                                        aria-label={`${c.name}, ${regName(x)}: ${STATUS_TITLE[x.status]}. Show the source`}
+                                      >
+                                        <Glyph status={x.status} />
+                                      </button>
+                                    ) : x ? (
+                                      <Glyph status={x.status} />
+                                    ) : c.status === "scanning" ? (
+                                      <span className={s.pending} aria-hidden />
+                                    ) : null}
                                   </span>
                                 );
                               })}
@@ -468,12 +529,15 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
             </ul>
           </section>
         )}
+        </>
+        )}
       </div>
 
       {openCand && (
         <CandidateDrawer
           key={openCand.key}
           cand={openCand}
+          focus={focus}
           distance={dist(openCand)}
           busy={busy}
           watching={ctx.watched.some((w) => w.name === openCand.name)}
