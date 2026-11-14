@@ -9,10 +9,10 @@ export const INTENTS = [
   "compare_quotes",
   "watch",
   "unwatch",
-  "errand", // any other real-life task or question: streamed from /api/agent (Exa research + proposed actions)
+  "errand", // an in-scope question/task (deposits, contracts, complaints, tax credit...): streamed from /api/agent
   "start_over",
   "smalltalk",
-  "out_of_scope", // true nonsense only (gibberish, harmful requests)
+  "out_of_scope", // anything not about hiring/paying a contractor: friendly redirect + examples
 ] as const;
 export type ChatIntent = (typeof INTENTS)[number];
 

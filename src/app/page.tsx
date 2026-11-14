@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowSquareOut,
   ArrowUp,
+  ChatCircleDots,
   Bell,
   Check,
   EnvelopeSimple,
@@ -25,6 +26,7 @@ import {
   Warning,
   XCircle,
 } from "@phosphor-icons/react";
+import Link from "next/link";
 import type { FindEvent } from "./api/find/route";
 import type { ExaTrace, Place } from "@/lib/exa";
 import type { Check as VerifyCheck, CompanyReport, Evidence, Status } from "@/lib/verify";
@@ -612,10 +614,11 @@ export default function Home() {
   if (view === "home") {
     return (
       <main className="home-shell">
-        <header className="app-header"><Brand /></header>
+        <header className="app-header"><Brand /><Link href="/chat" className="kp-chat-pill"><ChatCircleDots weight="fill" />Chat</Link></header>
         <section className="search-hero">
-          <h1>Who should do the job?</h1>
-          <p className="kp-sub">Tell me what you need. I find local contractors, check every claim against the trade register and their own site, and show you the sources.</p>
+          <h1>Check before you pay.</h1>
+          <p className="kp-sub">Hiring someone for your home in Finland? I&apos;ll find them, check them, and get you safe quotes — with proof. Every finding links to its source.</p>
+          <Link href="/chat" className="kp-chat-cta"><ChatCircleDots weight="fill" />Open Kilpi chat<ArrowRight weight="bold" /></Link>
           <div className="search-composer">
             <div className="composer-entry">
               <textarea

@@ -58,7 +58,7 @@
 .headBtn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink-soft); font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .headBtn:hover:not(:disabled) { color: var(--accent-deep); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
 .headBtn svg { width: 15px; height: 15px; }
-@media (max-width: 380px) { .headBtn span { display: none; } }
+@media (max-width: 430px) { .headBtn span { display: none; } .headBtn { width: 36px; padding: 0; justify-content: center; } }
 
 /* ---- conversation ---- */
 .scroll { flex: 1; overflow-y: auto; padding: 16px 12px 20px; display: flex; flex-direction: column; gap: 4px; overscroll-behavior: contain; }
@@ -255,3 +255,23 @@ a.meta:hover { color: var(--accent-deep); }
 .foldHint { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 600; text-decoration: underline dotted; }
 .srcN { margin-left: 2px; padding: 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, var(--surface)); font-size: 10px; }
 .inlineLink { color: var(--accent-deep); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---- shortlist: the one finding that matters, first ---- */
+.finding { margin: 10px 0 0; padding: 9px 11px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface-strong); }
+.f_red { background: color-mix(in srgb, var(--danger) 10%, var(--surface)); border-color: color-mix(in srgb, var(--danger) 35%, var(--line)); }
+.f_yellow { background: color-mix(in srgb, var(--warning) 11%, var(--surface)); border-color: color-mix(in srgb, var(--warning) 35%, var(--line)); }
+.f_green { background: color-mix(in srgb, var(--ok) 9%, var(--surface)); border-color: color-mix(in srgb, var(--ok) 30%, var(--line)); }
+.findingHead { display: flex; align-items: center; gap: 5px; }
+.findingHead small { font-size: 10.5px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.f_red .findingHead small { color: var(--danger); }
+.f_yellow .findingHead small { color: var(--warning); }
+.f_green .findingHead small { color: var(--ok); }
+.findingText { margin: 4px 0 0; color: var(--ink); font-size: 14px; font-weight: 600; line-height: 1.35; }
+.findingQuote { display: block; margin: 6px 0 6px; padding-left: 9px; border-left: 2px solid var(--line-strong); color: var(--ink-soft); font-size: 12.5px; font-style: italic; line-height: 1.4; quotes: "\201C" "\201D"; }
+.finding .srcRow { margin-left: 0; }
+.whyCompact { gap: 5px; margin-top: 8px; font-size: 12.5px; }
+.whyCompact .dot { width: 14px; height: 14px; }
+.howList { margin: 2px 0 0; padding-left: 20px; color: var(--ink-soft); font-size: 13px; line-height: 1.45; }
+.howList li + li { margin-top: 3px; }
+.howList b { color: var(--ink); }
+.flagship .flagTop strong { font-size: 17px; letter-spacing: -.01em; }

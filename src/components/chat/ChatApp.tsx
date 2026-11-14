@@ -13,18 +13,19 @@ import { loadTable, t, type Key, type Table } from "./i18n";
 import { EMPTY_CTX, type Action, type AgentAction, type Chip, type Ctx, type Draft, type Evidence, type Msg, type NewMsg, type PlanStep, type Source } from "./types";
 import s from "./Chat.module.css";
 
-const STORE = "kilpi-chat-v2";
+const STORE = "kilpi-chat-v3";
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const EXAMPLE = "Need someone to reline the pipes in my Espoo flat, English speaking";
+const EXAMPLE = "I need the bathroom pipes relined in my flat in Espoo, English-speaking company please";
 
 const welcomeChips = (): Chip[] => [
-  { label: "My flight landed 4 hours late", action: "example", payload: "My Finnair flight from Helsinki to Berlin last Friday landed 4 hours late. Am I owed compensation, and can you help me claim it?" },
-  { label: "Cancel a subscription", action: "example", payload: "I want to cancel my gym membership at Elixia in Helsinki. How do I do it, what's the notice period, and can you draft the cancellation?" },
-  { label: "Book a table for 4 on Friday", action: "example", payload: "Find a good restaurant in central Helsinki for 4 people this Friday at 19:00 and help me book a table." },
+  { label: "Bathroom pipes relined in Espoo, English-speaking", action: "example", payload: EXAMPLE, primary: true },
+  { label: "Is this company legit? <paste name>", action: "prefill", payload: "Is this company legit? " },
+  { label: "My contractor wants 100% upfront — is that OK?", action: "example", payload: "My contractor wants 100% of the price upfront before starting the renovation. Is that OK in Finland, and what should I do?" },
 ];
 
-const WELCOME_TEXT = "Hi, I'm Kilpi, your personal butler. Tell me what you need done: a claim, a cancellation, a booking, a complaint. I research it with Exa, show you where every fact comes from, and prepare the next step. Nothing goes out without your OK.";
+
+const WELCOME_TEXT = "Hiring someone for your home in Finland? I'll find them, check them, and get you safe quotes — with proof.";
 
 const welcome = (text = WELCOME_TEXT): Msg => ({
   id: uid(),
@@ -184,9 +185,11 @@ export default function ChatApp() {
     let found: { job?: string; city?: string } = {};
     const checking: { name: string; domain: string; status: "scanning" | "done" | "failed" }[] = [];
     const retry: Chip[] = [{ label: tr("chipRetry"), action: "find_again", payload: query }];
+    // Say something the moment the search starts; the first stream event refines it in place.
+    const progressId = sayT(mode === "company" ? "checkingCompany" : "starting", { name: label || query.replace(/^Verify the company /, "") }, { tone: "progress", exa: true });
+    const progress = (text: string) => patch(progressId, (m) => (m.kind === "text" ? { ...m, text } : m));
     try {
       const resP = fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
-      await table;
       const res = await resP;
       if (!res.ok || !res.body) throw new Error(`search failed (${res.status})`);
       const reader = res.body.getReader();
@@ -203,9 +206,10 @@ export default function ChatApp() {
           if (!line.trim()) continue;
           const e = JSON.parse(line);
           if (e.type === "intent") {
+            await table;
             kind = e.kind === "company" ? "company" : "job";
-            if (kind === "company") sayT("checkingCompany", { name: label || query }, { tone: "progress", exa: true });
-            else sayT("looking", { service: label || e.service, city: e.city }, { tone: "progress", exa: true });
+            if (kind === "company") progress(tr("checkingCompany", { name: label || query.replace(/^Verify the company /, "") }));
+            else progress(tr("looking", { service: label || e.service, city: e.city }));
             if (kind === "job") found = { job: e.service, city: e.city };
           } else if (e.type === "notice") {
             say(e.message, { tone: e.level === "warning" ? "error" : "progress" });
@@ -221,8 +225,11 @@ export default function ChatApp() {
             const items = [...checking];
             if (!checkingId) checkingId = push({ role: "bot", kind: "checking", items });
             else patch(checkingId, (m) => ({ ...m, items }) as Msg);
+          } else if (e.type === "stage" && e.id === "rank" && e.status === "active" && kind === "job") {
+            sayT("ranking", undefined, { tone: "progress" });
           } else if (e.type === "done") {
             finished = true;
+            await table;
             const ranked = (e.ranked as Ranked[]).map(slimRanked);
             if (kind === "company") {
               const item = ranked[0];
@@ -241,10 +248,14 @@ export default function ChatApp() {
               break;
             }
             setCtx((c) => ({ ...c, ranked, selected: [], lastQuery: query, job: found.job ?? c.job, city: found.city ?? c.city }));
-            sayT("results", { name: nameOf(ranked[0]) });
+            const flagged = ranked.slice(0, 4).filter((r) => r.why.some((w) => w.status === "red" || w.status === "yellow")).length;
+            sayT(flagged ? "resultsFlags" : "results", { name: nameOf(ranked[0]), n: Math.min(4, ranked.length), flagged });
             ranked.slice(0, 4).forEach((item, i) => push({ role: "bot", kind: "company", item, rank: i + 1 }));
             const n = Math.min(3, ranked.length);
-            sayT("askTop", { n }, {
+            const top = ranked.slice(0, n);
+            const names = top.map(nameOf).join(", ");
+            const asks = top.filter((r) => r.why.some((w) => w.status === "red" || w.status === "yellow")).length;
+            sayT(asks ? "askTopFlags" : "askTop", { n, names, asks }, {
               chips: [
                 { label: tr("chipAskTop", { n }), action: "ask_top3", primary: true },
                 { label: tr("chipPick"), action: "pick_myself" },
@@ -269,6 +280,8 @@ export default function ChatApp() {
     }
     const c = ctxRef.current;
     const job = [c.job, c.city && `in ${c.city}`].filter(Boolean).join(" ") || c.lastQuery || "home repair job";
+    await table;
+    sayT("drafting", { names: companies.map(nameOf).join(", ") }, { tone: "progress" });
     try {
       const [{ drafts }] = await Promise.all([
         postJson<{ drafts: Omit<Draft, "lang">[] }>("/api/draft", {
@@ -376,6 +389,7 @@ export default function ChatApp() {
       sayT("alreadyWatching", { name: target.name });
       return;
     }
+    sayT("startingWatch", { name: target.name }, { tone: "progress", exa: true });
     try {
       const out = await postJson<{ id: string; webhook: string }>("/api/watch", { name: target.name, domain: target.domain });
       setCtx((x) => ({ ...x, hired: target.name, watched: [...x.watched, { name: target.name, domain: target.domain, monitorId: out.id }] }));
@@ -691,21 +705,37 @@ export default function ChatApp() {
           ctxRef.current = { ...EMPTY_CTX, lang: r.lang };
           setCtxState(ctxRef.current);
           setMsgs(() => []);
-          push(welcome(r.reply || WELCOME_TEXT));
+          push(welcome(WELCOME_TEXT));
           return;
         default:
           // Generated replies are already in the user's language: no need to wait for the UI strings.
-          if (r.reply) return void say(r.reply);
-          await table;
-          sayT("fallback");
+          {
+            // Two in-scope suggestions, in the conversation's language.
+            await table;
+            const chips: Chip[] = (["exScope1", "exScope2"] as const).map((k) => ({ label: tr(k), action: "example", payload: tr(k) }));
+            if (r.reply) return void say(r.reply, { chips });
+            sayT("fallback", undefined, { chips });
+          }
       }
     });
   }
 
   async function onChip(msgId: string, chip: Chip) {
     if (busy) return;
-    patch(msgId, (m) => ({ ...m, chipsUsed: true }));
     const act: Action = chip.action;
+    if (act === "prefill") {
+      // Fill the composer and let the user finish the sentence (e.g. paste a company name).
+      setInput(chip.payload ?? "");
+      requestAnimationFrame(() => {
+        const el = inputRef.current;
+        if (el) {
+          el.focus();
+          el.setSelectionRange(el.value.length, el.value.length);
+        }
+      });
+      return;
+    }
+    patch(msgId, (m) => ({ ...m, chipsUsed: true }));
     const c = ctxRef.current;
     const table = loadTable(c.lang ?? "en");
     if (act === "example") return send(chip.payload ?? EXAMPLE);
@@ -816,25 +846,20 @@ export default function ChatApp() {
       case "welcome":
         return (
           <>
-            <div className={`${s.bubble} ${s.bot}`}>
-              <span className={s.text}>{m.text}</span>
-            </div>
             <div className={`${s.card} ${s.flagship}`}>
               <div className={s.flagTop}>
                 <ShieldCheck weight="fill" />
                 <div>
-                  <small>What I do best</small>
-                  <strong>Hiring someone? I&apos;ll check them before you pay.</strong>
+                  <small>Kilpi · check before you pay</small>
+                  <strong>{m.text}</strong>
                 </div>
               </div>
-              <ul>
-                <li>Finds local companies and checks the trade and tax registers, their site and reviews</li>
-                <li>Drafts your quote requests, then checks and compares the quotes</li>
-                <li>Keeps an eye on whoever you hire</li>
-              </ul>
-              <button type="button" className={s.approve} onClick={() => send(EXAMPLE)} disabled={busy}>
-                Find and vet a plumber in Espoo
-              </button>
+              <ol className={s.howList}>
+                <li><b>Find</b> local firms that do your exact job</li>
+                <li><b>Check</b> each one against the trade and tax registers, their own site and reviews, with a source for every finding</li>
+                <li><b>Quote safely</b>: I draft the requests, then check and compare the quotes and the payment terms</li>
+              </ol>
+              <small className={s.muted}>Nothing is sent without your OK.</small>
             </div>
           </>
         );
@@ -861,8 +886,8 @@ export default function ChatApp() {
     <div className={s.stage}>
       <aside className={s.aside}>
         <span className={s.asideMark}><ShieldCheck weight="fill" /></span>
-        <h1>Tell Kilpi what you need done. It does the legwork.</h1>
-        <p>A personal butler for real-life errands: flight compensation, cancellations, bookings, complaints. It researches with Exa, cites every fact, and prepares the email, booking or reminder for you to approve. Hiring a contractor? It checks them against the Finnish registers before you pay.</p>
+        <h1>Hiring someone for your home? Check before you pay.</h1>
+        <p>Kilpi finds contractors in Finland, checks each one against the trade and tax registers, their own site and reviews, and gets you safe quotes. Every finding links to its source, found with Exa. Nothing is sent without your OK.</p>
         <Link href="/" className={s.asideLink}><SquaresFour weight="bold" /> Open the classic view</Link>
       </aside>
 
@@ -871,7 +896,7 @@ export default function ChatApp() {
           <span className={s.avatar} aria-hidden><ShieldCheck weight="fill" /></span>
           <div className={s.who}>
             <strong>Kilpi</strong>
-            <small>{busy ? "working on it…" : "your personal butler"}</small>
+            <small>{busy ? "working on it…" : "check before you pay"}</small>
           </div>
           <Link href="/" className={s.headBtn} title="Classic view"><SquaresFour weight="bold" /><span>Classic</span></Link>
           <button type="button" className={s.headBtn} onClick={newChat} disabled={busy} title="New chat"><NotePencil weight="bold" /><span>New chat</span></button>
@@ -921,7 +946,7 @@ export default function ChatApp() {
             ref={inputRef}
             value={input}
             rows={1}
-            placeholder={ctx.ranked.length ? "Message Kilpi, or paste a quote…" : "Tell me what you need done…"}
+            placeholder={ctx.ranked.length ? "Message Kilpi, or paste a quote…" : "What needs doing, and where?"}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

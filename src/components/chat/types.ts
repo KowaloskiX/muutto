@@ -6,6 +6,7 @@ export type Source = { url: string; quote?: string; n?: number; title?: string }
 
 export type Action =
   | "example"
+  | "prefill"
   | "ask_top3"
   | "pick_myself"
   | "draft_selected"

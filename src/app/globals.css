@@ -920,3 +920,11 @@ a:focus-visible, summary:focus-visible { outline: 3px solid color-mix(in srgb, v
 .kp-notice { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 14px; border-radius: 14px; background: var(--surface-glass); color: var(--ink); font-size: 13px; }
 .kp-notice svg { width: 16px; height: 16px; flex: none; color: var(--accent-deep); }
 .kp-notice.warning svg { color: var(--warn); }
+
+/* home: entry to the chat (/chat) */
+.kp-chat-pill { grid-column: 3; justify-self: end; display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border-radius: var(--pill-radius); background: rgba(255,255,255,.92); color: #0068a8; font-size: 13.5px; font-weight: 700; text-decoration: none; box-shadow: 0 8px 22px rgba(0,40,90,.16); }
+.kp-chat-pill svg { width: 17px; height: 17px; }
+.kp-chat-cta { display: inline-flex; align-items: center; gap: 9px; min-height: 52px; margin-top: 26px; padding: 0 24px; border-radius: var(--pill-radius); background: #fff; color: #0068a8; font-size: 16px; font-weight: 720; text-decoration: none; box-shadow: 0 16px 40px rgba(0,40,90,.22); transition: transform .15s ease, box-shadow .15s ease; }
+.kp-chat-cta:hover { transform: translateY(-1px); box-shadow: 0 20px 48px rgba(0,40,90,.28); }
+.kp-chat-cta svg { width: 20px; height: 20px; }
+.kp-chat-cta svg:last-child { width: 16px; height: 16px; }

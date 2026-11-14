@@ -65,11 +65,61 @@ export function CheckingCard({ items }: { items: { name: string; domain: string;
 
 export const companyKey = (r: Ranked) => r.report.domain ?? host(r.place.website) ?? r.report.name;
 
+type Finding = { status: Status; label: string; text: string; quote?: string; sources: Source[] };
+const toSources = (ev: { url: string; quote?: string }[]) => ev.filter((e) => e.url && /^https?:/i.test(e.url)).map((e) => ({ url: e.url, quote: e.quote }));
+/** A readable excerpt of a verbatim quote: markdown noise removed, centred on `needle` when given. */
+const clip = (q: string, needle?: string, n = needle ? 90 : 130) => {
+  const t = q.replace(/[#*|`>]+/g, " ").replace(/\s+/g, " ").trim();
+  let a = 0;
+  let b = t.length;
+  const i = needle ? t.toLowerCase().indexOf(needle.toLowerCase()) : -1;
+  if (i >= 0 && t.length > n) {
+    a = Math.max(0, i - Math.floor((n - needle!.length) / 2));
+    b = Math.min(t.length, a + n);
+    a = Math.max(0, b - n);
+  } else b = Math.min(t.length, n);
+  // Page excerpts often start or end mid-word: drop the broken word at either end.
+  if (a > 0 || /^[a-zäö]/.test(t)) a = t.indexOf(" ", a) + 1 || a;
+  if (b < t.length || /[(\[:,@-]$/.test(t)) b = t.lastIndexOf(" ", b) > a ? t.lastIndexOf(" ", b) : b;
+  return `${a > 0 ? "…" : ""}${t.slice(a, b).trim()}${b < t.length ? "…" : ""}`;
+};
+const FINDING_LABEL: Record<Status, string> = { red: "Red flag", yellow: "Ask first", green: "Verified", grey: "Note" };
+
+/** The one finding a customer should see first: a sourced red/yellow flag, else proof of identity, else the strongest sourced reason. */
+export function keyFinding(item: Ranked): Finding | null {
+  const sourced = item.why.filter((w) => toSources(w.evidence).length);
+  const fromWhy = (w: Ranked["why"][number]): Finding => {
+    const src = toSources(w.evidence);
+    const q = w.evidence.find((e) => e.quote && e.quote.trim().length > 12)?.quote;
+    return { status: w.status, label: FINDING_LABEL[w.status], text: w.sentence, quote: q ? clip(q) : undefined, sources: src };
+  };
+  const red = sourced.find((w) => w.status === "red");
+  if (red) return fromWhy(red);
+  const redCheck = item.report.checks.find((c) => c.status === "red" && toSources(c.evidence).length);
+  if (redCheck) {
+    const q = redCheck.evidence.find((e) => e.quote && e.quote.trim().length > 12)?.quote;
+    return { status: "red", label: FINDING_LABEL.red, text: redCheck.detail, quote: q ? clip(q) : undefined, sources: toSources(redCheck.evidence) };
+  }
+  const yellow = sourced.find((w) => w.status === "yellow");
+  if (yellow) return fromWhy(yellow);
+  const id = item.report.checks.find((c) => c.id === "identity" && c.status === "green" && toSources(c.evidence).length);
+  if (id && item.report.businessId) {
+    const q = id.evidence.find((e) => e.source === "site" && e.quote)?.quote ?? id.evidence.find((e) => e.quote)?.quote;
+    return { status: "green", label: FINDING_LABEL.green, text: `Business ID ${item.report.businessId} on their site matches the trade register`, quote: q ? clip(q, item.report.businessId) : undefined, sources: toSources(id.evidence) };
+  }
+  const green = sourced.find((w) => w.status === "green");
+  return green ? fromWhy(green) : null;
+}
+
 export function CompanyCard({ item, rank, selected, onToggle }: { item: Ranked; rank: number; selected?: boolean; onToggle?: () => void }) {
   const name = item.report.name || item.place.name;
   const phone = item.place.phone ?? item.report.contact.phones[0];
   const site = item.place.website ?? item.report.website;
   const fitCls = item.fit >= 70 ? s.fitHigh : item.fit >= 45 ? s.fitMid : s.fitLow;
+  const key = keyFinding(item);
+  const keyUrls = new Set(key?.sources.map((x) => x.url));
+  // Only lines with evidence are shown; the key finding isn't repeated.
+  const rest = item.why.filter((w) => w.sentence !== key?.text && toSources(w.evidence).length && !toSources(w.evidence).every((x) => keyUrls.has(x.url))).slice(0, 2);
   return (
     <div className={s.card}>
       <div className={s.cardHead}>
@@ -80,16 +130,29 @@ export function CompanyCard({ item, rank, selected, onToggle }: { item: Ranked; 
         </div>
         <span className={`${s.fit} ${fitCls}`} title="Fit score: service proof, register, reputation, rating">{item.fit}<small>/100</small></span>
       </div>
-      <ul className={s.why}>
-        {item.why.slice(0, 2).map((w, i) => (
-          <li key={i}>
-            <Dot status={w.status} />
-            <span>
-              {w.sentence} <Sources list={w.evidence.map((e) => ({ url: e.url, quote: e.quote }))} />
-            </span>
-          </li>
-        ))}
-      </ul>
+      {key && (
+        <div className={`${s.finding} ${s[`f_${key.status}`]}`}>
+          <div className={s.findingHead}>
+            <Dot status={key.status} />
+            <small>{key.label}</small>
+          </div>
+          <p className={s.findingText}>{key.text}</p>
+          {key.quote && <q className={s.findingQuote}>{key.quote}</q>}
+          <Sources list={key.sources} />
+        </div>
+      )}
+      {rest.length > 0 && (
+        <ul className={`${s.why} ${s.whyCompact}`}>
+          {rest.map((w, i) => (
+            <li key={i}>
+              <Dot status={w.status} />
+              <span>
+                {w.sentence} <Sources list={toSources(w.evidence)} />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
       <div className={s.cardFoot}>
         {phone && (
           <a href={`tel:${phone.replace(/\s/g, "")}`} className={s.meta}>
@@ -180,7 +243,7 @@ export function QuoteCheckCard({ company, report }: { company: string; report: Q
           <li key={c.id}>
             <Dot status={c.status} />
             <span>
-              <b>{c.label}.</b> {c.detail} <Sources list={checkSources(c)} />
+              <b>{c.label}.</b> {c.detail} {checkSources(c).length ? <Sources list={checkSources(c)} /> : <span className={s.inQuote} title="Read from the quote text you pasted">in the quote</span>}
             </span>
           </li>
         ))}
@@ -310,7 +373,12 @@ export function CompanyDetailCard({ item, rank }: { item: Ranked; rank?: number 
           <li key={c.id}>
             <Dot status={c.status} />
             <span>
-              <b>{c.label}.</b> {c.detail} <Sources list={c.evidence.map((e) => ({ url: e.url, quote: e.quote }))} />
+              <b>{c.label}.</b> {c.detail}{" "}
+              {toSources(c.evidence).length ? (
+                <Sources list={toSources(c.evidence)} />
+              ) : (
+                <span className={s.inQuote} title={c.status === "grey" ? "Searched, nothing found" : "Kilpi's own check"}>{c.status === "grey" ? "nothing found" : "Kilpi's check"}</span>
+              )}
             </span>
           </li>
         ))}

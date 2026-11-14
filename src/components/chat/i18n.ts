@@ -1,14 +1,18 @@
 // Kilpi's own chat lines. English is the source; any other language is translated
 // once by /api/chat-route (mode "translate") and cached in localStorage.
 export const EN = {
+  starting: "On it. Working out the job and searching for local companies with Exa…",
   looking: "Looking for {service} companies in {city}…",
   checkingCompany: "Checking {name}: business ID, trade register, their own site and reviews…",
   found: "Found {found} candidates. Checking {n} companies against the trade register and their own sites…",
   foundNone: "Exa found no company websites for that yet.",
   noneTrusted: "I couldn't find anyone I'd trust for that. Could you describe the job a bit differently, or try a nearby city?",
-  results: "Here's who I'd trust, best fit first. {name} looks strongest.",
-  askTop: "Want me to ask the top {n} for quotes?",
-  chipAskTop: "Yes, ask top {n}",
+  ranking: "Ranking them by trust…",
+  results: "Here are the top {n}, best fit first. {name} looks strongest. The first line on each card is the finding that matters most, with its source.",
+  resultsFlags: "Here are the top {n}, best fit first. {name} looks strongest. I found something to watch out for at {flagged} of them: it's the first line on each card, with its source.",
+  askTop: "Next step: I'll draft quote requests to {names}, asking for an itemised price and a staged payment schedule. Nothing is sent until you approve. Draft them?",
+  askTopFlags: "Next step: I'll draft quote requests to {names}, asking for an itemised price and a staged payment schedule, plus a question about each warning I found ({asks} of them). Nothing is sent until you approve. Draft them?",
+  chipAskTop: "Yes, draft for the top {n}",
   chipPick: "Pick myself",
   chipNotNow: "Not now",
   chipRetry: "Try again",
@@ -16,6 +20,7 @@ export const EN = {
   companyResult: "That's everything I checked for {name}. Want me to keep an eye on them while you decide?",
   companyFailed: "I couldn't verify that company: {msg}",
   chipWatchIt: "Watch {name}",
+  drafting: "Drafting quote requests to {names}…",
   drafts: "Here are the drafts ({n}). I added questions about anything that looked off. Nothing is sent until you tap Approve and send.",
   afterDrafts: "When quotes come back, paste them here and I'll check and compare them.",
   chipPasteQuote: "I'll paste one",
@@ -34,6 +39,7 @@ export const EN = {
   chipHire: "Hire {name} and keep watching them",
   chipNotYet: "Not yet",
   compareError: "I couldn't compare the quotes: {msg}",
+  startingWatch: "Setting up a daily Exa Monitor on {name}…",
   watchWho: "Who should I keep an eye on? Name the company, or find a contractor first.",
   watching: "Done. I'll keep an eye on {name} until the job's done (Exa Monitor). If anything worrying shows up, you'll hear from me first.",
   alreadyWatching: "I'm already watching {name}.",
@@ -52,7 +58,9 @@ export const EN = {
   noPicks: "You haven't picked anyone yet. Tap Pick on a card first.",
   notNow: "No problem, your shortlist stays right here. When you have quotes, paste them in and I'll compare them.",
   notYet: "Okay, I'll hold off. Ask me any time, or paste another quote to add it to the comparison.",
-  fallback: "I'm here. Tell me what you need done: a claim, a cancellation, a booking, or someone to hire. I'll research it and prepare the next step for your OK.",
+  fallback: "I specialise in hiring contractors for your home in Finland: finding and checking firms, quotes, deposits and complaints. Try one of these:",
+  exScope1: "Find an English-speaking plumber in Espoo",
+  exScope2: "My contractor wants 100% upfront. Is that OK?",
   explainError: "I couldn't answer that from what I have: {msg}",
   agentError: "I got stuck on that one: {msg}",
   agentNoAnswer: "I couldn't finish that. Could you tell me a bit more about what you need?",
@@ -89,7 +97,7 @@ export function format(tpl: string, vars: Record<string, string | number> = {}) 
   return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-const STORE = "kilpi-chat-i18n-v1";
+const STORE = "kilpi-chat-i18n-v2";
 const cache: Record<string, Table> = {};
 const pending: Record<string, Promise<Table>> = {};
 
