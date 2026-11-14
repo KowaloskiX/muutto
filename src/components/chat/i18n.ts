@@ -13,7 +13,7 @@ export const EN = {
   chipNotNow: "Not now",
   chipRetry: "Try again",
   searchError: "Something went wrong while searching: {msg}",
-  companyResult: "Here's everything I checked for {name}.",
+  companyResult: "That's everything I checked for {name}. Want me to keep an eye on them while you decide?",
   companyFailed: "I couldn't verify that company: {msg}",
   chipWatchIt: "Watch {name}",
   drafts: "Here are the drafts ({n}). I added questions about anything that looked off. Nothing is sent until you tap Approve and send.",

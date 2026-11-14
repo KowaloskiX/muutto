@@ -18,6 +18,8 @@ export type ChatIntent = (typeof INTENTS)[number];
 
 export type RouteArgs = {
   query?: string;
+  /** The job in a few words, in the user's language (for progress messages). */
+  jobLabel?: string;
   company?: string;
   refs?: number[];
   target?: string;

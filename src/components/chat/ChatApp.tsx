@@ -171,7 +171,7 @@ export default function ChatApp() {
 
   // ---- tools -------------------------------------------------------------
   /** Contractor search (job) or single-company verification (company), both via /api/find. */
-  async function runFind(query: string, mode: "job" | "company", table: Promise<Table>) {
+  async function runFind(query: string, mode: "job" | "company", table: Promise<Table>, label?: string) {
     let checkingId: string | null = null;
     let kind: "job" | "company" = mode;
     let found: { job?: string; city?: string } = {};
@@ -197,8 +197,8 @@ export default function ChatApp() {
           const e = JSON.parse(line);
           if (e.type === "intent") {
             kind = e.kind === "company" ? "company" : "job";
-            if (kind === "company") sayT("checkingCompany", { name: e.summary?.replace(/^(check|verify)\s+/i, "") || query }, { tone: "progress", exa: true });
-            else sayT("looking", { service: e.service, city: e.city }, { tone: "progress", exa: true });
+            if (kind === "company") sayT("checkingCompany", { name: label || query }, { tone: "progress", exa: true });
+            else sayT("looking", { service: label || e.service, city: e.city }, { tone: "progress", exa: true });
             if (kind === "job") found = { job: e.service, city: e.city };
           } else if (e.type === "notice") {
             say(e.message, { tone: e.level === "warning" ? "error" : "progress" });
@@ -224,9 +224,8 @@ export default function ChatApp() {
                 break;
               }
               setCtx((c) => ({ ...c, checked: item }));
-              sayT("companyResult", { name: nameOf(item) });
               push({ role: "bot", kind: "detail", item });
-              say("", { chips: [{ label: tr("chipWatchIt", { name: nameOf(item) }), action: "watch_name", payload: nameOf(item) }] });
+              sayT("companyResult", { name: nameOf(item) }, { chips: [{ label: tr("chipWatchIt", { name: nameOf(item) }), action: "watch_name", payload: nameOf(item) }] });
               break;
             }
             if (!ranked.length) {
@@ -470,23 +469,27 @@ export default function ChatApp() {
 
       switch (r.intent) {
         case "find_contractor":
-          return runFind(a.query || text, "job", table);
+          return runFind(a.query || text, "job", table, r.lang !== "en" ? a.jobLabel : undefined);
         case "check_company": {
           const raw = a.company || text;
           // A URL is looked up by its bare domain ("vesiniitty.fi"); names and Y-tunnus as given.
           const company = /^(https?:\/\/|www\.)|^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(\/|$)/i.test(raw) ? host(raw) : raw;
-          return runFind(`Verify the company ${company}`, "company", table);
+          return runFind(`Verify the company ${company}`, "company", table, company);
         }
         case "company_detail": {
           await table;
-          const items = refItems.length ? refItems : a.target && c.checked && sameName(nameOf(c.checked), a.target) ? [c.checked] : [];
-          if (!items.length) return void sayT("whichCompany");
+          const named = a.target || a.company;
+          const byName = named ? [...c.ranked, ...(c.checked ? [c.checked] : [])].filter((x) => sameName(nameOf(x), named)).slice(0, 1) : [];
+          // No reference at all: the company checked on its own, or the only one listed.
+          const implicit = c.checked ? [c.checked] : c.ranked.length === 1 ? c.ranked : [];
+          const items = refItems.length ? refItems : byName.length ? byName : named ? [] : implicit;
+          if (!items.length) return void sayT(c.ranked.length || c.checked ? "whichCompany" : "noShortlist");
           items.forEach((item) => push({ role: "bot", kind: "detail", item, rank: c.ranked.indexOf(item) + 1 || undefined }));
           return;
         }
         case "about_shortlist":
           await table;
-          if (!r.answer) return void sayT("explainError", { msg: "no answer" }, { tone: "error" });
+          if (!r.answer) return void (c.ranked.length || c.checked || c.comparison ? sayT("explainError", { msg: "no answer" }, { tone: "error" }) : sayT("noShortlist"));
           return void say(r.answer, { sources: r.sources ?? [] });
         case "request_quotes": {
           const picks = c.ranked.filter((x) => c.selected.includes(companyKey(x)));
@@ -519,9 +522,10 @@ export default function ChatApp() {
           push({ role: "bot", kind: "text", text: r.reply || WELCOME_TEXT, chips: welcomeChips() });
           return;
         default:
+          // Generated replies are already in the user's language: no need to wait for the UI strings.
+          if (r.reply) return void say(r.reply);
           await table;
-          if (r.reply) say(r.reply);
-          else sayT("fallback");
+          sayT("fallback");
       }
     });
   }

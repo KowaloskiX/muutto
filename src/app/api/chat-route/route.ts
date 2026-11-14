@@ -42,6 +42,7 @@ const Route = z.object({
     .describe(
       "find_contractor only: a complete, self-contained job description in English for the contractor search, e.g. 'pipe relining for a flat in Tampere, English speaking'. For follow-ups ('what about Tampere instead?', 'only English-speaking ones') rewrite the previous job with the change applied. Else null.",
     ),
+  jobLabel: z.string().nullable().describe("find_contractor only: the job in 2-5 words in the user's language, e.g. 'kiukaan asennus', 'pipe relining'. Else null."),
   company: z.string().nullable().describe("check_company only: the company name, website/URL or Finnish business ID (Y-tunnus) exactly as the user gave it. Else null."),
   refs: z
     .array(z.number().int())
@@ -66,8 +67,8 @@ const ROUTER_SYSTEM = [
   "Pick ONE intent for the latest user message, using the recent turns and the current state:",
   "find_contractor: a job needing companies, or a change to the last search (other city, language, kind of work, 'more options').",
   "check_company: verify one specific company by name, URL or Y-tunnus ('is X legit?', 'check this company: ...').",
-  "company_detail: 'tell me more about #2 / <name>', 'show all checks for ...'.",
-  "about_shortlist: a question answerable from data already on screen: why a company ranked higher/lower, what a check means for a listed company, which has the best reviews, prices or 'cheaper options' (answer what is known), what the comparison said.",
+  "company_detail: 'tell me more about #2 / <name>', 'show all checks / details for ...' (a request to SEE the details).",
+  "about_shortlist: a question answerable from data already on screen (shortlist or the company checked on its own): why a company ranked higher/lower or why its score is what it is, what a check means for a listed company, which has the best reviews, prices or 'cheaper options' (answer what is known), what the comparison said.",
   "request_quotes: 'ask #1 and #3 for quotes', 'contact them', 'yes ask the top 3' (refs empty = top 3, or the picked ones if any).",
   "check_quote: the user pasted a contractor quote or asks to check one. compare_quotes: asks to compare the quotes they pasted.",
   "watch: monitor a company (refs or target; empty = the one they picked/hired). unwatch: stop watching one (target = a watched name).",
@@ -127,6 +128,7 @@ async function explain(text: string, state: ChatState, lang: string, refs: numbe
   const out = await askJson({
     system: [
       "You are Kilpi, a contractor-vetting assistant in Finland. Answer the user's question about the companies/quotes below using ONLY this data.",
+      "Speak as Kilpi in the first person about what you checked ('I found', 'my checks show'); never say 'the data' or 'what you pasted'. If two companies have the same fit score, say so and explain the order from the details.",
       "Fit score weights: proof they do this exact service 35, identity/register 15, tax prepayment register 15, reputation 15, map rating 10, company age 5.",
       "Cite a [n] marker only if it appears on the same line as the fact you state; facts from lines without a marker get no marker. Never invent prices, reviews or facts that are not listed.",
       "If you suggest a next step, only suggest things Kilpi can do: ask companies for quotes, check another company, search again (other city/criteria), check or compare pasted quotes, watch a company.",
@@ -194,6 +196,7 @@ export async function POST(req: Request) {
       lang,
       args: {
         query: r.query ?? undefined,
+        jobLabel: r.jobLabel ?? undefined,
         company: r.company ?? undefined,
         refs: r.refs?.filter((n) => n >= 1) ?? undefined,
         target: r.target ?? undefined,
@@ -205,8 +208,9 @@ export async function POST(req: Request) {
     };
     // Questions about the on-screen shortlist are answered here, from its own evidence.
     if (out.intent === "about_shortlist") {
-      if (!state.shortlist?.length && !state.comparison && !state.checked) out.intent = "ask";
-      else Object.assign(out, await withTimeout(explain(text, state, lang, r.refs), 20000, "explain"));
+      // Nothing on screen to answer from: the client says so instead of guessing.
+      if (state.shortlist?.length || state.comparison || state.checked)
+        Object.assign(out, await withTimeout(explain(text, state, lang, r.refs), 20000, "explain").catch(() => ({})));
     }
     return NextResponse.json(out);
   } catch {

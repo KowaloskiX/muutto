@@ -75,9 +75,11 @@ export async function groundedAnswer(question: string, opts: { query?: string; l
       .filter((n) => n >= 1 && n <= docs.length)
       .map((n) => {
         if (!order.includes(n)) order.push(n);
-        return `[${order.indexOf(n) + 1}]`;
+        return order.indexOf(n) + 1;
       })
       .filter((m, i, a) => a.indexOf(m) === i)
+      .sort((a, b) => a - b)
+      .map((m) => `[${m}]`)
       .join(""),
   );
   const sources: AskSource[] = order.map((orig, i) => {
