@@ -1,7 +1,7 @@
 "use client";
 
-// Calendar from the move file: the viewing (the listing's own viewing time, or one the user sets after
-// the landlord replies) with when to leave work, and the moving checklist with DVV's deadline. We never
+// Calendar from the move file: a viewing whose time we actually know (an open viewing the listing
+// announces, or the time in the landlord's pasted reply) with when to leave work, and the moving checklist with DVV's deadline. We never
 // write to anyone's calendar: the user downloads an .ics file or opens a prefilled Google Calendar event.
 import { useState } from "react";
 import { CalendarPlus, GoogleLogo } from "@phosphor-icons/react";
@@ -39,59 +39,117 @@ async function addEvents(events: Ev[], name: string, google: boolean) {
   setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
-function nextWeekday1730() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
-  d.setHours(17, 30, 0, 0);
-  return d;
-}
+type Reply = { found: boolean; status?: "confirmed" | "proposed"; start?: string; end?: string; place?: string; contact?: string; quote?: string; reason?: string; error?: string };
 
+/**
+ * A viewing goes to the calendar only when we actually know its time: an open viewing the listing
+ * announces (Finnish "esittely": anyone can come, no booking), or a time the landlord's reply
+ * proposes or confirms (pasted here; the time must match a sentence in the reply).
+ */
 export function ViewingCalendar({ l, area, intent, questions }: { l: Listing; area?: Area; intent?: MoveIntent; questions?: string[] }) {
   const listed = viewingTime(l);
-  const [when, setWhen] = useState(() => local(listed?.start ?? nextWeekday1730()));
+  const [reply, setReply] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [got, setGot] = useState<Reply | undefined>();
   const [state, setState] = useState<{ done?: string; error?: string }>({});
-  const start = listed?.start ?? new Date(when);
-  const end = listed?.end ?? new Date(start.getTime() + 30 * 60000);
+  const fromReply = got?.found && got.start ? { start: new Date(got.start), end: got.end ? new Date(got.end) : undefined } : null;
+  const slot = listed ?? fromReply;
   const c = l.commute ?? area?.commute;
   const travel = c?.transitMin ?? null;
-  const leave = travel != null ? new Date(start.getTime() - (travel + 5) * 60000) : null;
   const work = intent?.work?.label || intent?.workAddress;
-  const contact = l.contact;
-  const notes = [
-    `Viewing: ${l.address || l.title}`,
-    listed ? `Viewing time as the listing states it: “${listed.quote}”` : "Viewing time set by you (agree it with the landlord).",
-    leave && travel != null ? `Leave ${work ? `work (${work})` : "work"} by ${leave.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}: ${c?.estimate ? "≈" : ""}${travel} min by public transport${c?.estimate ? " (distance-based estimate)" : ""}${l.commute ? "" : ", measured from the area centre"} + 5 min.` : null,
-    contact ? `Contact: ${[contact.name, contact.company, contact.phone, contact.email].filter(Boolean).join(" · ")}` : null,
-    questions?.length ? `Ask at the viewing:\n${questions.map((q) => `- ${q}`).join("\n")}` : null,
-    `Listing: ${l.url}`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-  const ev: Ev = { title: `Viewing: ${l.address?.split(",")[0] || l.title}`, start: local(start), end: local(end), location: l.address, notes, url: l.url, reminderMin: travel != null ? travel + 20 : 60 };
+  const hhmm = (d: Date) => d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+
+  const read = async () => {
+    setBusy(true);
+    setGot(undefined);
+    try {
+      const r = await fetch("/api/move/reply", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: reply, address: l.address, today: day(new Date()) }) });
+      const j = (await r.json()) as Reply;
+      setGot(r.ok ? j : { found: false, error: j.error ?? `HTTP ${r.status}` });
+    } catch (e) {
+      setGot({ found: false, error: (e as Error).message });
+    }
+    setBusy(false);
+  };
+
+  let event: Ev | null = null;
+  let leave: Date | null = null;
+  if (slot) {
+    const end = slot.end ?? new Date(slot.start.getTime() + 30 * 60000);
+    leave = travel != null ? new Date(slot.start.getTime() - (travel + 5) * 60000) : null;
+    const why = listed ? `Open viewing announced in the listing (no booking needed): “${listed.quote}”` : `${got?.status === "confirmed" ? "Confirmed" : "Proposed"} by the landlord: “${got?.quote}”`;
+    const notes = [
+      why,
+      got?.place ? `Meet: ${got.place}` : null,
+      got?.contact ? `Person: ${got.contact}` : l.contact ? `Contact: ${[l.contact.name, l.contact.company, l.contact.phone, l.contact.email].filter(Boolean).join(" · ")}` : null,
+      leave && travel != null ? `Leave ${work ? `work (${work})` : "work"} by ${hhmm(leave)}: ${c?.estimate ? "≈" : ""}${travel} min by public transport${c?.estimate ? " (distance-based estimate)" : ""}${l.commute ? "" : ", measured from the area centre"} + 5 min.` : null,
+      questions?.length ? `Ask at the viewing:\n${questions.map((q) => `- ${q}`).join("\n")}` : null,
+      `Listing: ${l.url}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    event = { title: `Viewing: ${l.address?.split(",")[0] || l.title}`, start: local(slot.start), end: local(end), location: l.address || got?.place, notes, url: l.url, reminderMin: travel != null ? travel + 20 : 60 };
+  }
   const go = (google: boolean) =>
-    addEvents([ev], "viewing", google)
+    event &&
+    addEvents([event], "viewing", google)
       .then(() => setState({ done: google ? "Opened in Google Calendar" : "Calendar file downloaded" }))
       .catch((e: Error) => setState({ error: e.message }));
+
   return (
     <div className={x.cal}>
       <div className={x.calHead}>
         <CalendarPlus aria-hidden />
         <div>
-          <strong>{listed ? `Viewing ${fmt(start)}–${end.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : "Plan the viewing"}</strong>
-          <small>{listed ? "Time from the listing" : "Set the time you agree with the landlord"}{leave ? ` · leave work by ${leave.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}` : ""}</small>
+          {slot ? (
+            <>
+              <strong>
+                {listed ? "Open viewing" : got?.status === "confirmed" ? "Viewing confirmed" : "Viewing proposed"} {fmt(slot.start)}
+                {slot.end ? `–${hhmm(slot.end)}` : ""}
+              </strong>
+              <small>
+                {listed ? "Announced in the listing · no booking needed" : `From the landlord's reply`}
+                {leave ? ` · leave work by ${hhmm(leave)}` : ""}
+              </small>
+            </>
+          ) : (
+            <>
+              <strong>No viewing time yet</strong>
+              <small>The listing announces none. Send the request; when the landlord replies, paste the reply here.</small>
+            </>
+          )}
         </div>
       </div>
-      {!listed && <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} aria-label="Viewing time" className={x.calInput} />}
-      <div className={x.calBtns}>
-        <button type="button" className={x.lcPrimary} onClick={() => void go(false)}>
-          <CalendarPlus aria-hidden /> Add to calendar (.ics)
-        </button>
-        <button type="button" className={x.ghostBtn} onClick={() => void go(true)}>
-          <GoogleLogo aria-hidden /> Google Calendar
-        </button>
-      </div>
-      {state.done ? <small className={x.okWord}>{state.done}</small> : state.error ? <small className={x.errLine}>{state.error}</small> : <small className={x.noSrc}>Reminder {travel != null ? `${travel + 20} min` : "1 h"} before, with the address, contact and questions.</small>}
+      {fromReply && got?.quote && <blockquote className={x.newsQuote}>{got.quote}</blockquote>}
+      {!listed && !fromReply && (
+        <>
+          <textarea className={x.calReply} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Paste the landlord's reply, e.g. “Esittely onnistuu tiistaina klo 17.30, tavataan ulko-ovella.”" rows={3} aria-label="Landlord's reply" />
+          <div className={x.calBtns}>
+            <button type="button" className={x.ghostBtn} onClick={() => void read()} disabled={busy || reply.trim().length < 15}>
+              {busy ? "Reading…" : "Find the viewing time"}
+            </button>
+          </div>
+          {got && !got.found && <small className={got.error ? x.errLine : x.noSrc}>{got.error ?? got.reason}</small>}
+        </>
+      )}
+      {event && (
+        <>
+          <div className={x.calBtns}>
+            <button type="button" className={x.lcPrimary} onClick={() => void go(false)}>
+              <CalendarPlus aria-hidden /> Add to calendar (.ics)
+            </button>
+            <button type="button" className={x.ghostBtn} onClick={() => void go(true)}>
+              <GoogleLogo aria-hidden /> Google Calendar
+            </button>
+            {fromReply && (
+              <button type="button" className={x.ghostBtn} onClick={() => (setGot(undefined), setState({}))}>
+                Use another reply
+              </button>
+            )}
+          </div>
+          {state.done ? <small className={x.okWord}>{state.done}</small> : state.error ? <small className={x.errLine}>{state.error}</small> : <small className={x.noSrc}>Reminder {travel != null ? `${travel + 20} min` : "1 h"} before, with the address, contact and questions.</small>}
+        </>
+      )}
     </div>
   );
 }

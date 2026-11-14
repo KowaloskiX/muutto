@@ -752,3 +752,6 @@
 .calList b { display: inline-block; min-width: 92px; color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
 .calList a { color: var(--ink-soft); }
 @media (prefers-color-scheme: dark) { .calHead > svg { color: #8fc9a8; } }
+.calReply { width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--page); color: var(--ink); font: inherit; font-size: 13px; line-height: 1.45; resize: vertical; box-sizing: border-box; }
+.calReply:focus { outline: 2px solid var(--accent-deep); outline-offset: -1px; }
+.calBtns .ghostBtn:disabled { opacity: .5; cursor: default; }
