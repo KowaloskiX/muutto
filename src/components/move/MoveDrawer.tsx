@@ -311,7 +311,17 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
                           ) : (
                             <span>{p.name}</span>
                           )}
-                          <span className={x.num}>{meters(p.distanceM) ?? DASH}</span>
+                          <span className={x.placeLinks}>
+                            <span className={x.num}>{meters(p.distanceM) ?? DASH}</span>
+                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.name}, ${a.municipality}`)}`} target="_blank" rel="noreferrer" title="Open in Google Maps">
+                              Maps
+                            </a>
+                            {p.url && isHttp(p.url) && (
+                              <a href={p.url} target="_blank" rel="noreferrer" title="Where this place comes from">
+                                {/openstreetmap/.test(p.url) ? "OSM" : /palvelukartta|servicemap/.test(p.url) ? "City" : /exa\.ai/.test(p.url) ? "Exa" : host(p.url)}
+                              </a>
+                            )}
+                          </span>
                         </li>
                       ))}
                   </ul>

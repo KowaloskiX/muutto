@@ -771,3 +771,9 @@
 .tourGoatFull { display: block; width: 100%; height: 260px; object-fit: cover; object-position: 50% 18%; margin-bottom: 10px; border-radius: 16px 16px 0 0; animation: goatIn .5s ease both; }
 .tourHero .tourTop { padding-top: 2px; }
 @media (prefers-reduced-motion: reduce) { .tourGoat, .tourGoatFull { animation: none; } }
+.noiseScale { display: inline-flex; gap: 0; border-radius: 4px; overflow: hidden; box-shadow: inset 0 0 0 1px rgb(13 16 22 / .08); }
+.noiseScale span { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 26px; font-size: 10px; font-variant-numeric: tabular-nums; }
+.noiseScale i { display: block; width: 100%; height: 8px; opacity: .8; }
+.placeLinks { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.placeLinks a { padding: 1px 6px; border-radius: 999px; background: var(--surface-strong); color: var(--ink-soft) !important; font-size: 10.5px; text-decoration: none !important; }
+.placeLinks a:hover { background: var(--line-strong); color: var(--ink) !important; }

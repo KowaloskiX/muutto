@@ -48,15 +48,24 @@ const TILES = {
 };
 const ATTRIBUTION = 'Tiles &copy; Esri &mdash; Esri, HERE, Garmin, &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const NOISE_WMS = "https://kartta.hel.fi/ws/geoserver/avoindata/wms";
-const NOISE_LAYER = "avoindata:Meluselvitys_2022_Helsinki_kadut_ja_maantiet_Lden";
-const NOISE_LEGEND = `${NOISE_WMS}?service=WMS&request=GetLegendGraphic&format=image/png&layer=${NOISE_LAYER}`;
+const NOISE_LAYER = "avoindata:Meluselvitys_2022_Helsinki_kadut_ja_maantiet_LAeq_7-22_NPM,avoindata:Meluselvitys_2022_Helsinki_juna_LAeq_7-22_NPM";
 const NOISE_ATTR = 'Noise: <a href="https://kartta.hel.fi/">City of Helsinki</a> noise survey 2022 (CC BY 4.0)';
 // Rest of the region: Finnish Transport Infrastructure Agency EU noise-directive maps 2022 (state roads
 // + railways, daytime LAeq, CC BY 4.0), drawn under the Helsinki survey.
 const VAYLA_WMS = "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows";
 const VAYLA_LAYERS = "tiestotiedot:melu_paiva_maankad_22,ratatiedot:melu_paiva_rautatiet_22";
-const VAYLA_LEGEND = `${VAYLA_WMS}?service=WMS&request=GetLegendGraphic&format=image/png&layer=tiestotiedot:melu_paiva_maankad_22`;
 const VAYLA_ATTR = 'Noise: <a href="https://vayla.fi/">Väylävirasto</a> noise maps 2022 (CC BY 4.0)';
+// The surveys' shared 5 dB classes, colours sampled from the city's own legend (Väylävirasto's matches).
+const NOISE_BANDS = [
+  { label: "40", color: "#d4ff7a" },
+  { label: "45", color: "#aaff26" },
+  { label: "50", color: "#26aa26" },
+  { label: "55", color: "#ffff26" },
+  { label: "60", color: "#ffdd7a" },
+  { label: "65", color: "#ffaa26" },
+  { label: "70", color: "#ff2626" },
+  { label: "75+", color: "#a826ff" },
+];
 const PAD = { paddingTopLeft: [48, 72] as L.PointTuple, paddingBottomRight: [48, 48] as L.PointTuple, maxZoom: 14 };
 const TONE_VAR: Record<Tone, string> = { green: "success", yellow: "caution", red: "destructive", grey: "faint" };
 // SVG paths can't read CSS variables from attributes: the same status colours as globals.css, per theme.
@@ -343,23 +352,19 @@ export default function MoveMap({
   } else if (layer === "noise") {
     legend = (
       <>
-        <span className={x.lgTitle}>Traffic noise, dB</span>
-        <span className={x.lgPair}>
-          <span>
-            <small>Helsinki, Lden</small>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={x.lgImg} src={NOISE_LEGEND} alt="Helsinki noise classes 40 to 75 dB" />
-          </span>
-          <span>
-            <small>Region, day LAeq</small>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className={x.lgImg} src={VAYLA_LEGEND} alt="Regional noise classes 40 to over 75 dB" />
-          </span>
+        <span className={x.lgTitle}>Traffic noise, daytime dB</span>
+        <span className={x.noiseScale}>
+          {NOISE_BANDS.map((b) => (
+            <span key={b.label}>
+              <i style={{ background: b.color }} />
+              {b.label}
+            </span>
+          ))}
         </span>
       </>
     );
     caption =
-      "Helsinki: City of Helsinki noise survey 2022, streets and roads, Lden (day-evening-night). Espoo, Vantaa and the commuter belt: Väylävirasto noise maps 2022 for state roads and railways, daytime LAeq; smaller city streets there are not mapped. The two surveys use different measures, so compare within one city.";
+      "One measure everywhere: daytime average LAeq 7–22, 2022 surveys. Helsinki: the city's survey, every street and railway. Espoo, Vantaa and the commuter belt: Väylävirasto, state roads and railways (smaller city streets there are not mapped).";
   } else if (layer === "daily") {
     legend = kinds.length ? (
       <>

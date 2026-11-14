@@ -1,6 +1,6 @@
 // Traffic noise at an area, from official noise surveys queried point-by-point (WFS + CQL
 // INTERSECTS, keyless):
-//  - Helsinki: City of Helsinki noise survey 2022, streets + highways Lden and railways Lden
+//  - Helsinki: City of Helsinki noise survey 2022, streets + highways and railways, daytime LAeq 7–22
 //    (kartta.hel.fi avoindata, CC BY 4.0). Full street coverage: no polygon = below 45 dB.
 //  - Espoo / Vantaa / Kauniainen: Finnish Transport Infrastructure Agency (Väylävirasto) EU
 //    noise-directive maps 2022 for state roads and railways, daytime LAeq (CC BY 4.0). City
@@ -14,8 +14,9 @@ const VAYLA = "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows";
 const gate = limiter(6);
 
 type Layer = { url: string; type: string; label: string; field: "db_lo" | "melu_db"; metric: string };
-const HEL_ROAD: Layer = { url: HEL, type: "avoindata:Meluselvitys_2022_Helsinki_kadut_ja_maantiet_Lden", label: "City of Helsinki noise survey 2022 (streets, Lden)", field: "db_lo", metric: "Lden" };
-const HEL_RAIL: Layer = { url: HEL, type: "avoindata:Meluselvitys_2022_Helsinki_rautatiet_Lden", label: "City of Helsinki noise survey 2022 (railways, Lden)", field: "db_lo", metric: "Lden" };
+// Daytime LAeq 7–22 everywhere, so Helsinki and the rest of the region share one measure and one scale.
+const HEL_ROAD: Layer = { url: HEL, type: "avoindata:Meluselvitys_2022_Helsinki_kadut_ja_maantiet_LAeq_7-22_NPM", label: "City of Helsinki noise survey 2022 (streets, day LAeq 7–22)", field: "db_lo", metric: "LAeq,day" };
+const HEL_RAIL: Layer = { url: HEL, type: "avoindata:Meluselvitys_2022_Helsinki_juna_LAeq_7-22_NPM", label: "City of Helsinki noise survey 2022 (railways, day LAeq 7–22)", field: "db_lo", metric: "LAeq,day" };
 const VAYLA_ROAD: Layer = { url: VAYLA, type: "tiestotiedot:melu_paiva_maankad_22", label: "Väylävirasto noise map 2022 (state roads, day LAeq)", field: "melu_db", metric: "LAeq,day" };
 const VAYLA_RAIL: Layer = { url: VAYLA, type: "ratatiedot:melu_paiva_rautatiet_22", label: "Väylävirasto noise map 2022 (railways, day LAeq)", field: "melu_db", metric: "LAeq,day" };
 
