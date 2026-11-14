@@ -3,7 +3,8 @@ import { askJson } from "./llm";
 import { cacheGet, cacheSet, HOUR } from "./cache";
 import { contents, search, type ExaTrace } from "./exa";
 import { groundedReputation, groundedServiceProof, priceHistory, withTimeout, type Confidence } from "./exa-grounded";
-import { domainOf, prhByBusinessId, prhByName, prhFailedSince, type PrhCompany } from "./prh";
+import { domainOf, prhByBusinessId, prhByName, prhFailedSince, prhOkSince, type PrhCompany } from "./prh";
+import { fallbackNote, type RegistryFallback } from "./registry-fallback";
 import { extractYTunnukset, isValidYTunnus, normalizeYTunnus } from "./ytunnus";
 import { b2bChecks, type DocRequest } from "./tilaajavastuu";
 import type { CompanyProfile } from "./exa";
@@ -69,10 +70,22 @@ export type CompanyReport = {
    * business, registered street/postal municipality, distance, service area on their site).
    */
   siteFit?: SiteFit;
+  /**
+   * Set when the live register (PRH) was unreachable and register facts come from a public
+   * copy of the register page instead: the page, its publisher and the copy's date.
+   */
+  registrySource?: RegistryFallback;
 };
 
 const POINTS: Record<Status, number> = { green: 2, yellow: 0, grey: 0, red: -4 };
 const PRH_URL = (id: string) => `https://tietopalvelu.ytj.fi/yritys/${id}`;
+/** Evidence for a register fact: the live register, or the fallback page it was read from. */
+const regEvidence = (prh: PrhCompany, quote?: string): Evidence =>
+  prh.fallback
+    ? { url: prh.fallback.url, quote, source: "registry", via: `${prh.fallback.site}; live register unreachable`, ...(prh.fallback.asOf ? { asOf: prh.fallback.asOf } : {}) }
+    : { url: PRH_URL(prh.businessId), quote, source: "registry" };
+/** " From YTJ company page (…, copy dated …): the live register … was unreachable." or "". */
+const fbNote = (prh: PrhCompany) => (prh.fallback ? ` ${fallbackNote(prh.fallback)}` : "");
 
 // Anti-bot interstitials ("One moment, please…") are not evidence of anything.
 const isBotWall = (t: string) =>
@@ -195,11 +208,11 @@ function identityChecks(pages: Page[], domain: string | null, prh: PrhCompany | 
   const idOnSite = siteIds.get(prh.businessId);
   const prhDomain = domainOf(prh.website);
   const domainMatch = !!domain && !!prhDomain && (prhDomain === domain || domain.endsWith(`.${prhDomain}`) || prhDomain.endsWith(`.${domain}`));
-  const ev: Evidence[] = [{ url: PRH_URL(prh.businessId), quote: `${prh.name} · ${prh.businessId}${prh.website ? ` · ${prh.website}` : ""}`, source: "registry" }];
+  const ev: Evidence[] = [regEvidence(prh, `${prh.name} · ${prh.businessId}${prh.website ? ` · ${prh.website}` : ""}`)];
   if (idOnSite) ev.unshift({ url: idOnSite.url, quote: lineAround(idOnSite.text, prh.businessId), source: "site" });
 
   const line = prh.mainBusinessLine ? ` Registered line of business: ${prh.mainBusinessLine}.` : "";
-  const aka = prh.otherNames.length ? ` Also registered as: ${prh.otherNames.slice(0, 3).join(", ")}.` : "";
+  const aka = `${prh.otherNames.length ? ` Also registered as: ${prh.otherNames.slice(0, 3).join(", ")}.` : ""}${fbNote(prh)}`;
   if (idOnSite && domainMatch) {
     checks.push({ id: "identity", label: "Who is behind this site", status: "green", detail: `Business ID ${prh.businessId} is printed on their own site and the trade register lists the same website for ${prh.name}.${line}${aka}`, evidence: ev });
   } else if (idOnSite && !prhDomain) {
@@ -210,20 +223,21 @@ function identityChecks(pages: Page[], domain: string | null, prh: PrhCompany | 
   } else if (domainMatch) {
     checks.push({ id: "identity", label: "Who is behind this site", status: "green", detail: `The trade register lists this website for ${prh.name} (${prh.businessId}), so the site belongs to that registered company. The ID is not printed on the pages we read.${line}${aka}`, evidence: ev });
   } else {
-    checks.push({ id: "identity", label: "Who is behind this site", status: "yellow", detail: `Matched ${prh.name} (${prh.businessId}) in the register${domainMatch ? " with the same website" : ""}, but their site does not show the business ID.`, evidence: ev });
+    checks.push({ id: "identity", label: "Who is behind this site", status: "yellow", detail: `Matched ${prh.name} (${prh.businessId}) in the register${domainMatch ? " with the same website" : ""}, but their site does not show the business ID.${fbNote(prh)}`, evidence: ev });
   }
   return checks;
 }
 
 function registryChecks(prh: PrhCompany | null, householdWork: boolean, b2b = false): Check[] {
   if (!prh) return [];
-  const ev = [{ url: PRH_URL(prh.businessId), source: "registry" as const }];
+  const ev = [regEvidence(prh)];
+  const note = fbNote(prh);
   const checks: Check[] = [];
   // B2B: the registers are part of the tilaajavastuu checklist (tv-*); keep only company age here.
   if (b2b) {
     if (prh.registrationDate) {
       const ageYears = (Date.now() - new Date(prh.registrationDate).getTime()) / (365.25 * 24 * 3600 * 1000);
-      checks.push({ id: "age", label: "Company age", status: ageYears < 2 ? "yellow" : "green", detail: `Registered ${prh.registrationDate} (${ageYears < 1 ? "less than a year ago" : `${Math.floor(ageYears)} year${Math.floor(ageYears) === 1 ? "" : "s"} ago`}).${ageYears < 2 ? " A young company: weigh references and guarantees more." : ""}`, evidence: ev });
+      checks.push({ id: "age", label: "Company age", status: ageYears < 2 ? "yellow" : "green", detail: `Registered ${prh.registrationDate} (${ageYears < 1 ? "less than a year ago" : `${Math.floor(ageYears)} year${Math.floor(ageYears) === 1 ? "" : "s"} ago`}).${ageYears < 2 ? " A young company: weigh references and guarantees more." : ""}${note}`, evidence: ev });
     }
     return checks;
   }
@@ -233,14 +247,16 @@ function registryChecks(prh: PrhCompany | null, householdWork: boolean, b2b = fa
   checks.push(
     householdWork
       ? prh.inPrepaymentRegister
-        ? { id: "prepayment", label: "Household tax credit", status: "green", detail: "In the prepayment register (ennakkoperintärekisteri), so you can claim the household tax credit (kotitalousvähennys) on the labour cost.", evidence: ev }
-        : { id: "prepayment", label: "Household tax credit", status: "red", detail: "NOT in the prepayment register. You would have to withhold tax yourself, and the household tax credit (up to €2,100) can be refused.", evidence: ev }
+        ? { id: "prepayment", label: "Household tax credit", status: "green", detail: `In the prepayment register (ennakkoperintärekisteri), so you can claim the household tax credit (kotitalousvähennys) on the labour cost.${note}`, evidence: ev }
+        : prh.fallback
+          ? { id: "prepayment", label: "Household tax credit", status: "yellow", detail: `The prepayment register is not listed on the copy of the register page we could read. Check YTJ before paying: without it you would have to withhold tax yourself.${note}`, evidence: ev, action: { label: "Check in YTJ", url: PRH_URL(prh.businessId) } }
+          : { id: "prepayment", label: "Household tax credit", status: "red", detail: "NOT in the prepayment register. You would have to withhold tax yourself, and the household tax credit (up to €2,100) can be refused.", evidence: ev }
       : prh.inPrepaymentRegister
-        ? { id: "prepayment", label: "Prepayment register", status: "green", detail: "In the prepayment register (ennakkoperintärekisteri): a registered business that handles its own tax prepayments.", evidence: ev }
-        : { id: "prepayment", label: "Prepayment register", status: "yellow", detail: "Not in the prepayment register (ennakkoperintärekisteri). Unusual for an active business; ask them why before paying in advance.", evidence: ev },
+        ? { id: "prepayment", label: "Prepayment register", status: "green", detail: `In the prepayment register (ennakkoperintärekisteri): a registered business that handles its own tax prepayments.${note}`, evidence: ev }
+        : { id: "prepayment", label: "Prepayment register", status: "yellow", detail: prh.fallback ? `The prepayment register is not listed on the copy of the register page we could read; check YTJ.${note}` : "Not in the prepayment register (ennakkoperintärekisteri). Unusual for an active business; ask them why before paying in advance.", evidence: ev },
   );
   if (prh.situations.length) {
-    checks.push({ id: "situation", label: "Company status", status: "red", detail: `Registry shows an active situation: ${prh.situations.join(", ")} (e.g. bankruptcy or liquidation).`, evidence: ev });
+    checks.push({ id: "situation", label: "Company status", status: "red", detail: `Registry shows an active situation: ${prh.situations.join(", ")} (e.g. bankruptcy or liquidation).${note}`, evidence: ev });
   }
   if (prh.registrationDate) {
     const ageYears = (Date.now() - new Date(prh.registrationDate).getTime()) / (365.25 * 24 * 3600 * 1000);
@@ -248,7 +264,7 @@ function registryChecks(prh: PrhCompany | null, householdWork: boolean, b2b = fa
       id: "age",
       label: "Company age",
       status: ageYears < 1 ? "yellow" : "green",
-      detail: `Registered ${prh.registrationDate} (${ageYears < 1 ? "less than a year ago" : `${Math.floor(ageYears)} year${Math.floor(ageYears) === 1 ? "" : "s"} ago`}).`,
+      detail: `Registered ${prh.registrationDate} (${ageYears < 1 ? "less than a year ago" : `${Math.floor(ageYears)} year${Math.floor(ageYears) === 1 ? "" : "s"} ago`}).${note}`,
       evidence: ev,
     });
   }
@@ -464,7 +480,7 @@ export async function verifyCompany(input: {
   let website = input.website;
   let preId: PrhCompany | null = null;
   if (!website && claimedId && isValidYTunnus(claimedId)) {
-    preId = await prhByBusinessId(claimedId).catch(() => null);
+    preId = await prhByBusinessId(claimedId, trace).catch(() => null);
     if (preId?.website) website = preId.website.startsWith("http") ? preId.website : `https://${preId.website}`;
   }
   input = { ...input, website, name: input.name ?? preId?.name };
@@ -483,13 +499,13 @@ export async function verifyCompany(input: {
 
   let prh: PrhCompany | null = preId;
   const lookupId = claimedId && isValidYTunnus(claimedId) ? claimedId : [...siteIds.keys()][0];
-  if (!prh && lookupId) prh = await prhByBusinessId(lookupId).catch(() => null);
+  if (!prh && lookupId) prh = await prhByBusinessId(lookupId, trace).catch(() => null);
   const legalNames = prh ? [] : legalNamesOnSite(pages, domain);
   if (!prh) {
     // Try the listing name, then legal names printed on the site; accept a match only if
     // the register has the same website, or it is the single hit for an exact legal name.
     for (const [i, n] of [input.name, ...legalNames].filter((x): x is string => !!x).entries()) {
-      const byName = await prhByName(n, i === 0 ? input.city : undefined).catch(() => [] as PrhCompany[]);
+      const byName = await prhByName(n, i === 0 ? input.city : undefined, trace).catch(() => [] as PrhCompany[]);
       prh =
         byName.find((c) => domain && domainOf(c.website) === domain) ??
         (byName.length === 1 && (i === 0 || flatName(byName[0].name) === flatName(n)) ? byName[0] : null);
@@ -504,7 +520,7 @@ export async function verifyCompany(input: {
       const core = (x: string) => flatName(x.replace(/\b(Oy|Oyj|Ab|Ky|Tmi|Ay)\b/gi, ""));
       const variants = [...new Set([`${bare} Oy`, bare.replace(/\s+/, "-"), `${bare.replace(/\s+/, "-")} Oy`, bare.replace(/-/g, " ")])].filter((v) => v !== input.name && v.length >= 3);
       for (const v of variants.slice(0, 3)) {
-        const byName = await prhByName(v).catch(() => [] as PrhCompany[]);
+        const byName = await prhByName(v, undefined, trace).catch(() => [] as PrhCompany[]);
         const same = byName.filter((c) => core(c.name) === core(bare));
         prh = byName.find((c) => domain && domainOf(c.website) === domain) ?? (same.length === 1 ? same[0] : null);
         if (prh) break;
@@ -536,6 +552,7 @@ export async function verifyCompany(input: {
     businessId: prh?.businessId ?? claimedId,
     registry: prh ? { name: prh.name, registrationDate: prh.registrationDate, website: prh.website, mainBusinessLine: prh.mainBusinessLine, mainBusinessLineCode: prh.mainBusinessLineCode, addresses: prh.addresses } : undefined,
     checks,
+    ...(prh?.fallback ? { registrySource: prh.fallback } : {}),
     householdWork,
     ...(b2b ? { audience: "b2b" as const, profile: sub?.profile, documents: sub?.documents ?? [] } : {}),
     contact: extractContact(pages, domain),
@@ -554,6 +571,8 @@ type VerifyInput = Parameters<typeof verifyCompany>[0];
 /** Younger than this: served without re-checking. Older (up to 24 h): shown at once, then re-checked. */
 export const REPORT_FRESH_MS = Number(process.env.REPORT_CACHE_TTL_MS ?? 6 * HOUR);
 export const REPORT_STALE_MS = 24 * HOUR;
+/** Reports whose register facts came from the fallback (registry-fallback.ts) count as fresh this long. */
+export const FALLBACK_FRESH_MS = HOUR;
 
 const reportKey = (i: VerifyInput) =>
   JSON.stringify([
@@ -569,8 +588,11 @@ const reportKey = (i: VerifyInput) =>
 export function cachedReport(input: VerifyInput, maxAgeMs = REPORT_STALE_MS): { report: CompanyReport; ageMs: number } | undefined {
   const hit = cacheGet<CompanyReport>("report", reportKey(input), maxAgeMs);
   if (!hit) return undefined;
+  // Built on fallback register data (PRH was down): fresh for an hour at most, and stale as
+  // soon as PRH has answered again, so callers show it and then redo it from the live register.
+  const fallbackStale = !!hit.value.registrySource && (hit.ageMs > FALLBACK_FRESH_MS || prhOkSince(hit.at));
   return {
-    ageMs: hit.ageMs,
+    ageMs: fallbackStale ? Math.max(hit.ageMs, REPORT_FRESH_MS + 1) : hit.ageMs,
     report: { ...hit.value, cachedAt: new Date(hit.at).toISOString(), trace: hit.value.trace.map((t) => ({ ...t, cached: true })) },
   };
 }
@@ -579,7 +601,9 @@ export function cachedReport(input: VerifyInput, maxAgeMs = REPORT_STALE_MS): { 
 export async function verifyCompanyCached(input: VerifyInput): Promise<CompanyReport> {
   const t0 = Date.now();
   const report = await verifyCompany(input);
-  // A register outage leaves the tilaajavastuu checks empty: show the report, don't keep it.
+  // A register outage with no fallback leaves the tilaajavastuu checks empty: show the report,
+  // don't keep it. One built on fallback register data is kept (marked `registrySource`) and
+  // cachedReport treats it as fresh for FALLBACK_FRESH_MS only, or until PRH answers again.
   const degraded =
     report.trace.some((t) => !t.ok && !t.summary.includes("[beta")) ||
     report.checks.some((c) => c.id === "reputation" && /search failed/i.test(c.detail)) ||

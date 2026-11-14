@@ -10,6 +10,7 @@ import { askJson } from "./llm";
 import { companyProfile, contents, search, type CompanyProfile, type ExaTrace } from "./exa";
 import { nameKey, withTimeout } from "./exa-grounded";
 import type { PrhCompany } from "./prh";
+import { fallbackNote } from "./registry-fallback";
 import type { Check, Evidence } from "./verify";
 
 // ---- official sources -------------------------------------------------------
@@ -44,7 +45,11 @@ const Q = {
 } as const;
 
 const guideEv = (quote: string): Evidence => ({ url: TV_SOURCES.guide, quote, source: "web", via: "Työsuojeluhallinto: Tilaajavastuulaki guide" });
-const regEv = (prh: PrhCompany, quote?: string): Evidence => ({ url: YTJ(prh.businessId), quote: quote ?? `${prh.name} · ${prh.businessId}`, source: "registry", via: "PRH open data (YTJ)" });
+// When PRH was unreachable the facts come from a public copy of the register page: cite that page.
+const regEv = (prh: PrhCompany, quote?: string): Evidence =>
+  prh.fallback
+    ? { url: prh.fallback.url, quote: quote ?? `${prh.name} · ${prh.businessId}`, source: "registry", via: `${prh.fallback.site}; live register unreachable`, ...(prh.fallback.asOf ? { asOf: prh.fallback.asOf } : {}) }
+    : { url: YTJ(prh.businessId), quote: quote ?? `${prh.name} · ${prh.businessId}`, source: "registry", via: "PRH open data (YTJ)" };
 
 /** A document the main contractor must collect before signing (≤ 3 months old). */
 export type DocRequest = { id: string; fi: string; en: string; law: string };
@@ -324,36 +329,49 @@ function complianceChecks(prh: PrhCompany | null, pages: Page[], kind: TradeKind
     });
   } else {
     const law1 = "1233/2006 5 § 1 kohta";
+    // Fallback data (PRH unreachable): a register the copy lists as active stays green, with the
+    // copy's date and a re-check link; one it doesn't list is "not listed" (yellow), never red.
+    const fb = prh.fallback;
+    const note = fb ? ` ${fallbackNote(fb)}` : "";
+    const recheck = fb ? { action: { label: "Re-check in YTJ", url: YTJ(prh.businessId) } } : {};
+    const notListed = (reg: string) => `${reg} is not listed as active on the copy of the register page we could read. Check YTJ before signing.${note}`;
     add(
       prh.inPrepaymentRegister
-        ? { id: "tv-prepayment", label: `${L}: prepayment register`, status: "green", detail: "In the prepayment register (ennakkoperintärekisteri).", evidence: [regEv(prh), guideEv(Q.item1)], law: law1 }
-        : { id: "tv-prepayment", label: `${L}: prepayment register`, status: "red", detail: "NOT in the prepayment register (ennakkoperintärekisteri). As the main contractor you would have to withhold tax from payments; a working subcontractor is normally registered. Do not sign until this is explained.", evidence: [regEv(prh), guideEv(Q.item1)], law: law1 },
+        ? { id: "tv-prepayment", label: `${L}: prepayment register`, status: "green", detail: `In the prepayment register (ennakkoperintärekisteri).${note}`, evidence: [regEv(prh), guideEv(Q.item1)], law: law1, ...recheck }
+        : fb
+          ? { id: "tv-prepayment", label: `${L}: prepayment register`, status: "yellow", detail: notListed("The prepayment register (ennakkoperintärekisteri)"), evidence: [regEv(prh), guideEv(Q.item1)], law: law1, ...recheck }
+          : { id: "tv-prepayment", label: `${L}: prepayment register`, status: "red", detail: "NOT in the prepayment register (ennakkoperintärekisteri). As the main contractor you would have to withhold tax from payments; a working subcontractor is normally registered. Do not sign until this is explained.", evidence: [regEv(prh), guideEv(Q.item1)], law: law1 },
     );
     add(
       prh.employerRegister
-        ? { id: "tv-employer", label: `${L}: employer register`, status: "green", detail: "In the employer register (työnantajarekisteri): has salaried staff on payroll.", evidence: [regEv(prh), guideEv(Q.item1)], law: law1 }
+        ? { id: "tv-employer", label: `${L}: employer register`, status: "green", detail: `In the employer register (työnantajarekisteri): has salaried staff on payroll.${note}`, evidence: [regEv(prh), guideEv(Q.item1)], law: law1, ...recheck }
         : {
             id: "tv-employer",
             label: `${L}: employer register`,
             status: "yellow",
-            detail: "Not in the employer register: either no regular salaried staff, or staff not registered. Ask who will do the work. If only the owner works on site, the act requires items 1-3 only.",
+            ...recheck,
+            detail: fb
+              ? notListed("The employer register (työnantajarekisteri)")
+              : "Not in the employer register: either no regular salaried staff, or staff not registered. Ask who will do the work. If only the owner works on site, the act requires items 1-3 only.",
             evidence: [regEv(prh), guideEv(Q.soloOnly)],
             law: law1,
           },
     );
     add(
       prh.vatLiable
-        ? { id: "tv-vat", label: `${L}: VAT register`, status: "green", detail: "In the VAT register (arvonlisäverovelvollisten rekisteri). Construction services between builders use the reverse charge (käännetty arvonlisäverovelvollisuus).", evidence: [regEv(prh), guideEv(Q.item1)], law: law1 }
-        : { id: "tv-vat", label: `${L}: VAT register`, status: "yellow", detail: "Not in the VAT register. Unusual for a construction subcontractor; ask why.", evidence: [regEv(prh), guideEv(Q.item1)], law: law1 },
+        ? { id: "tv-vat", label: `${L}: VAT register`, status: "green", detail: `In the VAT register (arvonlisäverovelvollisten rekisteri). Construction services between builders use the reverse charge (käännetty arvonlisäverovelvollisuus).${note}`, evidence: [regEv(prh), guideEv(Q.item1)], law: law1, ...recheck }
+        : { id: "tv-vat", label: `${L}: VAT register`, status: "yellow", detail: fb ? notListed("The VAT register") : "Not in the VAT register. Unusual for a construction subcontractor; ask why.", evidence: [regEv(prh), guideEv(Q.item1)], law: law1, ...recheck },
     );
     add(
       prh.inTradeRegister
-        ? { id: "tv-trade-register", label: `${L}: trade register`, status: "green", detail: `Registered in the trade register as ${prh.name} (${prh.businessId}). Print the extract free from YTJ for your file.`, evidence: [regEv(prh), guideEv(Q.item2)], law: "1233/2006 5 § 2 kohta", action: { label: "Open in YTJ", url: YTJ(prh.businessId) } }
+        ? { id: "tv-trade-register", label: `${L}: trade register`, status: "green", detail: `Registered in the trade register as ${prh.name} (${prh.businessId}). Print the extract free from YTJ for your file.${note}`, evidence: [regEv(prh), guideEv(Q.item2)], law: "1233/2006 5 § 2 kohta", action: { label: "Open in YTJ", url: YTJ(prh.businessId) } }
         : {
             id: "tv-trade-register",
             label: `${L}: trade register`,
             status: "yellow",
-            detail: `${prh.name} (${prh.businessId}) is in the business information system but not in the trade register (typical of a sole trader). Ask for a register extract.`,
+            detail: fb
+              ? `${prh.name} (${prh.businessId}): the trade register is not listed as active on the copy of the register page we could read. Check YTJ or ask for a register extract.${note}`
+              : `${prh.name} (${prh.businessId}) is in the business information system but not in the trade register (typical of a sole trader). Ask for a register extract.`,
             evidence: [regEv(prh), guideEv(Q.item2)],
             needsDocument: true,
             document: { fi: "Kaupparekisteriote tai ote yritys- ja yhteisötietojärjestelmästä", en: "Trade register extract or Business Information System extract" },
@@ -400,8 +418,11 @@ function complianceChecks(prh: PrhCompany | null, pages: Page[], kind: TradeKind
     });
     add(
       prh.situations.length
-        ? { id: "tv-insolvency", label: `${L}: insolvency`, status: "red", detail: `The trade register shows: ${prh.situations.join(", ")}. Do not sign.`, evidence: [regEv(prh)] }
-        : { id: "tv-insolvency", label: `${L}: insolvency`, status: "green", detail: "No bankruptcy, liquidation or restructuring entry in the trade register.", evidence: [regEv(prh)] },
+        ? { id: "tv-insolvency", label: `${L}: insolvency`, status: "red", detail: `The trade register shows: ${prh.situations.join(", ")}. Do not sign.${note}`, evidence: [regEv(prh)] }
+        : fb
+          // An older copy can't rule out a recent bankruptcy or liquidation entry.
+          ? { id: "tv-insolvency", label: `${L}: insolvency`, status: "yellow", detail: `No bankruptcy, liquidation or restructuring entry on the copy of the register page we could read; a newer entry would not show there. Re-check in YTJ.${note}`, evidence: [regEv(prh)], ...recheck }
+          : { id: "tv-insolvency", label: `${L}: insolvency`, status: "green", detail: "No bankruptcy, liquidation or restructuring entry in the trade register.", evidence: [regEv(prh)] },
     );
   }
 

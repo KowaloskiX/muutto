@@ -2,7 +2,7 @@ import { z } from "zod";
 import { askJson } from "@/lib/llm";
 import { findCompaniesWeb, findPlaces, findSubcontractorsWeb, NOT_A_CONTRACTOR, search, type ExaTrace, type Place, type SubcontractorHit } from "@/lib/exa";
 import { withTimeout } from "@/lib/exa-grounded";
-import { domainOf, prhByBusinessId, prhByName, type PrhCompany } from "@/lib/prh";
+import { domainOf, prhByBusinessId, prhByName, prhFailedSince, type PrhCompany } from "@/lib/prh";
 import { expectedCheckDigit, idLikeTokens, isValidYTunnus } from "@/lib/ytunnus";
 import { buildRanking, polishWhy, type Ranked, type Why } from "@/lib/rationale";
 import { cachedReport, REPORT_FRESH_MS, verifyCompanyCached, type Audience, type CompanyReport } from "@/lib/verify";
@@ -268,7 +268,8 @@ export async function POST(req: Request) {
 
         // ---- Company mode: "Verify Caverion" / a valid business ID -----------------
         if (target === "company") {
-          const reg = validId ? await prhByBusinessId(validId).catch(() => null) : null;
+          const regT0 = Date.now();
+          const reg = validId ? await prhByBusinessId(validId, trace).catch(() => null) : null;
           const label = reg?.name || intent.companyName || validId || query;
           send({
             type: "intent",
@@ -286,6 +287,9 @@ export async function POST(req: Request) {
             : validId
               ? { name: validId, businessId: validId }
               : await resolveCompany(intent.companyName || query, trace);
+          if (validId && !reg && prhFailedSince(regT0)) {
+            throw new Error(`The trade register (PRH/YTJ) can't be reached right now and no public copy of the register page for ${validId} was found. Try again later, or open https://tietopalvelu.ytj.fi/yritys/${validId}.`);
+          }
           if (validId && !reg) {
             throw new Error(`Business ID ${validId} passes the checksum but is not in the open trade register (PRH/YTJ). It may belong to a sole trader or a closed company; ask the contractor for an extract from the trade register.`);
           }
