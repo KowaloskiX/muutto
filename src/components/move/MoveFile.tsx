@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Check, CircleNotch } from "@phosphor-icons/react";
 import type { Area, CriterionId, Listing } from "@/lib/move/types";
-import { allListings, columnsFor, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
+import { allListings, columnsFor, focusCols, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
 import { ListingRow, MoveDrawer } from "./MoveDrawer";
 import type { AreaPin, ListingDot } from "./MoveMap";
 import type { DraftState, ResearchState, RunState, View, WatchState } from "./types";
@@ -56,7 +56,12 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
   const areas = useMemo<Area[]>(() => (run?.ranked ? run.ranked : [...(run?.areas ?? [])].sort((a, b) => b.fit - a.fit)), [run?.ranked, run?.areas]);
   const ranked = !!run?.ranked;
   const intent = run?.intent;
-  const cols = useMemo(() => columnsFor(areas), [areas]);
+  const matrix = useMemo(() => columnsFor(areas, intent?.tenure), [areas, intent?.tenure]);
+  const [allCols, setAllCols] = useState(false);
+  const shown = useMemo(() => (allCols ? matrix.cols : focusCols(matrix.cols, intent?.priorities)), [allCols, matrix.cols, intent?.priorities]);
+  const hiddenN = matrix.cols.length - shown.length;
+  const cols = shown;
+  const groups = useMemo(() => cols.reduce<{ name: string; span: number }[]>((g, c) => (g.at(-1)?.name === c.group ? (g.at(-1)!.span++, g) : [...g, { name: c.group, span: 1 }]), []), [cols]);
   const listings = useMemo(() => allListings(areas), [areas]);
   const work = intent?.work ? { lat: intent.work.lat, lng: intent.work.lng, label: intent.work.label } : undefined;
 
@@ -233,17 +238,28 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
           </div>
           {areas.length ? (
             <div className={`${c.matrixWrap} ${x.matrixWrap}`}>
-              <table className={`${c.matrix} ${x.matrix}`}>
+              <table className={x.mx}>
                 <thead>
+                  <tr className={x.mxGroups}>
+                    <th className={x.mxSticky} colSpan={2} aria-hidden />
+                    {groups.map((g, i) => (
+                      <th key={`${g.name}-${i}`} colSpan={g.span} scope="colgroup">
+                        <span>{g.name}</span>
+                      </th>
+                    ))}
+                  </tr>
                   <tr>
-                    <th className={`${c.cCompany} ${x.cArea}`}>Area</th>
-                    <th className={c.cNum}>Fit</th>
-                    {cols.map((col) => (
-                      <th key={col.key} className={x.cCrit}>
+                    <th className={`${x.mxSticky} ${x.mxArea}`} scope="col">
+                      Area
+                    </th>
+                    <th className={x.mxFit} scope="col">
+                      Fit
+                    </th>
+                    {cols.map((col, i) => (
+                      <th key={col.key} scope="col" className={`${x.mxNum} ${i === 0 || cols[i - 1].group !== col.group ? x.mxStart : ""}`}>
                         {col.label}
                       </th>
                     ))}
-                    <th className={c.cNum}>Listings</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -256,12 +272,12 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
                         ref={(el) => {
                           rows.current[a.id] = el;
                         }}
-                        className={`${x.mrow} ${isOpen ? x.mrowOpen : hover === a.id ? x.mrowHover : ""}`}
+                        className={`${x.mxRow} ${isOpen ? x.mxRowOpen : hover === a.id ? x.mxRowHover : ""}`}
                         onMouseEnter={() => setHover(a.id)}
                         onMouseLeave={() => setHover(undefined)}
                         onClick={() => openArea(a.id)}
                       >
-                        <td className={`${c.cCompany} ${x.cArea}`}>
+                        <td className={`${x.mxSticky} ${x.mxArea}`}>
                           <button
                             type="button"
                             className={x.areaBtn}
@@ -274,45 +290,64 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
                             <span className={x.rank}>{ranked ? i + 1 : ""}</span>
                             <span className={x.areaName}>
                               <span>{a.name}</span>
-                              <small>{[a.postalCode, a.municipality].filter(Boolean).join(" ")}</small>
+                              <small>{[a.postalCode, a.municipality, a.listings.length ? `${a.listings.length} listing${a.listings.length === 1 ? "" : "s"}` : "no listings yet"].filter(Boolean).join(" · ")}</small>
                             </span>
                           </button>
                         </td>
-                        <td className={`${c.cNum} ${x.fitCell}`}>
-                          <span className={x.fitNum}>
-                            <i className={`${x.dotI} ${x[`t_${tone}`]}`} aria-hidden />
-                            {a.fit}
+                        <td className={x.mxFit}>
+                          <span className={x.fitWrap} title={`Fit ${a.fit}/100`}>
+                            <span className={x.fitNum}>{a.fit}</span>
+                            <span className={x.fitBar} aria-hidden>
+                              <i className={x[`t_${tone}`]} style={{ width: `${a.fit}%` }} />
+                            </span>
                           </span>
                         </td>
-                        {cols.map((col) => {
+                        {cols.map((col, ci) => {
                           const cell = col.get(a);
                           const status = cell?.status ?? "unknown";
                           const title = cell ? cell.title : "Not measured for this area";
+                          const isBest = cell?.n != null && matrix.best[col.key] === cell.n;
                           return (
-                            <td key={col.key} className={x.cCrit}>
+                            <td key={col.key} className={`${x.mxNum} ${ci === 0 || cols[ci - 1].group !== col.group ? x.mxStart : ""}`}>
                               <button
                                 type="button"
-                                className={`${x.cell} ${x[`k_${status}`]} ${isOpen && view?.kind === "area" && view.focus === col.crit ? x.cellOn : ""}`}
+                                className={`${x.mxCell} ${x[`m_${status}`]} ${isBest ? x.mxBest : ""} ${isOpen && view?.kind === "area" && view.focus === col.crit ? x.mxCellOn : ""}`}
                                 title={title}
-                                aria-label={`${a.name}, ${col.label}: ${cell?.value ?? "unknown"}. ${title}`}
+                                aria-label={`${a.name}, ${col.label}: ${cell?.value ?? "unknown"}${isBest ? " (best)" : ""}. ${title}`}
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   openArea(a.id, col.crit);
                                 }}
                               >
-                                {status === "good" && cell?.value && <Check weight="bold" aria-hidden />}
+                                {status === "poor" && cell?.value && <i className={x.mxDot} aria-hidden />}
                                 {cell?.value ?? DASH}
                               </button>
                             </td>
                           );
                         })}
-                        <td className={`${c.cNum} ${x.listN}`}>{a.listings.length || DASH}</td>
                       </tr>
                     );
                   })}
                 </tbody>
               </table>
             </div>
+          ) : null}
+          {areas.length ? (
+            <p className={x.mxLegend}>
+              <span>
+                <b className={x.mxBestKey}>Green</b> best in the column
+              </span>
+              <span>
+                <i className={x.mxDot} aria-hidden /> falls short of what you asked for
+              </span>
+              <span>{DASH} not measured</span>
+              {matrix.same.length > 0 && <span>Same in every area: {matrix.same.map((s) => `${s.label} ${s.value}`).join(" · ")}</span>}
+              {(hiddenN > 0 || allCols) && (
+                <button type="button" className={x.mxMore} onClick={() => setAllCols((v) => !v)}>
+                  {allCols ? "Show fewer criteria" : `+${hiddenN} more criteria`}
+                </button>
+              )}
+            </p>
           ) : (
             <p className={c.empty}>{run.finished ? "No areas came back for this search." : "Areas appear here as each one is measured."}</p>
           )}

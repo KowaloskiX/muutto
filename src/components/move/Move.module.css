@@ -533,3 +533,60 @@
 @media (prefers-color-scheme: dark) { .heroFig img { filter: saturate(.8) brightness(.85); } }
 @media (max-width: 720px) { .heroFig { display: none; } }
 @media (prefers-reduced-motion: reduce) { .heroFig, .heroFig img { animation: none; } }
+
+/* ---- areas matrix (quiet table: horizontal rules only, numbers right-aligned on one line) ---- */
+.mx { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
+.mx th { padding: 0 12px 10px; color: var(--muted); font-size: 12px; font-weight: 400; text-align: left; white-space: nowrap; vertical-align: bottom; background: var(--surface); }
+.mx thead tr:last-child th { border-bottom: 1px solid var(--line); }
+.mxGroups th { padding-top: 14px; padding-bottom: 6px; }
+.mxGroups th span { display: block; padding-bottom: 6px; border-bottom: 1px solid var(--line-strong); color: var(--ink-soft); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.mxGroups th[aria-hidden] span { display: none; }
+.mxGroups th:not(:first-child) { padding-left: 16px; }
+.mx td { padding: 0 12px; height: 56px; vertical-align: middle; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.mx tbody tr:last-child td { border-bottom: 0; }
+.mxSticky { position: sticky; left: 0; z-index: 1; background: var(--row-bg, var(--surface)); }
+.mx th.mxSticky { z-index: 2; background: var(--surface); }
+.mxArea { min-width: 196px; padding-left: 8px !important; }
+.mx th.mxArea { padding-left: 40px !important; }
+.mxFit { width: 1%; padding-right: 16px !important; }
+.mxNum { width: 1%; text-align: right !important; }
+.mxStart { padding-left: 16px !important; }
+.mxRow { cursor: pointer; }
+.mxRow > td { transition: background-color .15s ease; background: var(--row-bg, transparent); }
+.mxRowHover { --row-bg: var(--page); }
+.mxRowOpen { --row-bg: var(--accent-muted); }
+.mxRowOpen > .mxArea { box-shadow: inset 2px 0 0 var(--accent-deep); }
+.fitWrap { display: inline-flex; align-items: center; gap: 8px; }
+.fitWrap .fitNum { min-width: 20px; color: var(--ink); font-size: 14px; text-align: right; }
+.fitBar { position: relative; display: block; width: 44px; height: 4px; border-radius: 999px; background: var(--line); overflow: hidden; }
+.fitBar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--dot, var(--muted)); }
+.fitBar .t_green { background: var(--accent-deep); }
+.fitBar .t_yellow { background: var(--caution); }
+.fitBar .t_red { background: var(--destructive-text); }
+.mxCell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; height: 28px; margin-right: -8px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 13px; white-space: nowrap; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.mxCell:hover { background: var(--surface-strong); color: var(--ink); }
+.mxCell:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 1px; }
+.m_unknown { color: var(--faint); }
+.m_poor { color: var(--caution-text); }
+.mxBest { color: var(--accent-deep); font-weight: 500; }
+.mxCellOn { box-shadow: inset 0 0 0 1.5px var(--accent-deep); }
+.mxDot { display: inline-block; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--caution); }
+.mxLegend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin: 12px 4px 0; color: var(--muted); font-size: 12px; }
+.mxLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.mxBestKey { color: var(--accent-deep); font-weight: 500; }
+@media (prefers-color-scheme: dark) { .mxBest, .mxBestKey { color: #8fc9a8; } .fitBar .t_green { background: #8fc9a8; } }
+.mxMore { margin-left: auto; padding: 4px 12px; border: 0; border-radius: 999px; background: var(--surface-strong); color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
+.mxMore:hover { background: var(--line-strong); }
+.mxMore:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 1px; }
+@media (max-width: 720px) {
+  .mxArea { min-width: 132px; max-width: 150px; }
+  .mx th.mxArea { padding-left: 30px !important; }
+  .mxArea .areaBtn { max-width: 140px; }
+  .mxArea .areaName { overflow: hidden; }
+  .areaName span, .areaName small { overflow: hidden; text-overflow: ellipsis; }
+  .areaName span { font-size: 13px; }
+  .fitBar { display: none; }
+  .mx td { height: 52px; padding: 0 8px; }
+  .mx th { padding-left: 8px; padding-right: 8px; }
+  .mxMore { margin-left: 0; }
+}
