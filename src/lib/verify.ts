@@ -77,9 +77,10 @@ async function fetchSite(domain: string, trace: ExaTrace[]): Promise<Page[]> {
       {
         urls: [`https://${domain}`],
         text: { maxCharacters: 20000 },
-        subpages: 6,
+        subpages: 4,
         subpageTarget: ["yhteystiedot", "ota-yhteytta", "contact", "tietosuojaseloste", "yritys", "meista", "about", "palvelut"],
-        maxAgeHours: 168,
+        // Use Exa's cached copy when it has one; never wait long for a live crawl.
+        livecrawlTimeout: 3000,
       },
       trace,
     );
@@ -360,13 +361,19 @@ function extractContact(pages: Page[], domain: string | null) {
 export async function verifyCompany(input: { name?: string; website?: string; businessId?: string; service: string; city?: string }): Promise<CompanyReport> {
   const trace: ExaTrace[] = [];
   const domain = domainOf(input.website);
-  const pages = domain ? await fetchSite(domain, trace) : [];
+  const claimedId = input.businessId ? normalizeYTunnus(input.businessId) ?? input.businessId : undefined;
 
-  if (domain && !pages.some((p) => extractYTunnukset(p.text).length)) pages.push(...(await findIdOnDomain(domain, trace)));
+  // Everything that only needs the domain/name starts at once; Exa calls are fast,
+  // waiting for them one after another was what made a company take 15–20 s.
+  const servicePromise = domain ? serviceProof(domain, input.service, trace) : Promise.resolve<Check | null>(null);
+  const reputationPromise = reputationCheck(input.name ?? domain ?? "", domain, claimedId, trace);
+  const pricesPromise = domain && process.env.EXA_SNAPSHOT === "1" ? priceHistoryCheck(domain, trace) : Promise.resolve<Check | null>(null);
+  const [sitePages, idPages] = domain ? await Promise.all([fetchSite(domain, trace), findIdOnDomain(domain, trace)]) : [[], []];
+  const pages = [...sitePages, ...(sitePages.some((p) => extractYTunnukset(p.text).length) ? [] : idPages)];
+
   const siteIds = new Map<string, Page>();
   for (const p of pages) for (const id of extractYTunnukset(p.text)) if (!siteIds.has(id)) siteIds.set(id, p);
 
-  const claimedId = input.businessId ? normalizeYTunnus(input.businessId) ?? input.businessId : undefined;
   let prh: PrhCompany | null = null;
   const lookupId = claimedId && isValidYTunnus(claimedId) ? claimedId : [...siteIds.keys()][0];
   if (lookupId) prh = await prhByBusinessId(lookupId).catch(() => null);
@@ -376,12 +383,7 @@ export async function verifyCompany(input: { name?: string; website?: string; bu
   }
 
   const name = prh?.name ?? input.name ?? domain ?? "Unknown company";
-  const [service, claims, reputation, prices] = await Promise.all([
-    domain ? serviceProof(domain, input.service, trace) : Promise.resolve<Check | null>(null),
-    siteClaimChecks(pages, prh),
-    reputationCheck(name, domain, prh?.businessId, trace),
-    domain ? priceHistoryCheck(domain, trace) : Promise.resolve<Check | null>(null),
-  ]);
+  const [service, claims, reputation, prices] = await Promise.all([servicePromise, siteClaimChecks(pages, prh), reputationPromise, pricesPromise]);
 
   const checks = [
     ...identityChecks(pages, domain, prh, siteIds, claimedId),
