@@ -571,8 +571,10 @@ type VerifyInput = Parameters<typeof verifyCompany>[0];
 /** Younger than this: served without re-checking. Older (up to 24 h): shown at once, then re-checked. */
 export const REPORT_FRESH_MS = Number(process.env.REPORT_CACHE_TTL_MS ?? 6 * HOUR);
 export const REPORT_STALE_MS = 24 * HOUR;
-/** Reports whose register facts came from the fallback (registry-fallback.ts) count as fresh this long. */
-export const FALLBACK_FRESH_MS = HOUR;
+/** Reports whose register facts came from the fallback (registry-fallback.ts) count as fresh this long
+ *  while PRH stays down. Rebuilding during the outage would read the same stored copy again, so it only
+ *  spends Exa/LLM calls; the moment PRH answers again they go stale and are redone from the live register. */
+export const FALLBACK_FRESH_MS = Number(process.env.FALLBACK_CACHE_TTL_MS ?? REPORT_FRESH_MS);
 
 const reportKey = (i: VerifyInput) =>
   JSON.stringify([
@@ -588,8 +590,8 @@ const reportKey = (i: VerifyInput) =>
 export function cachedReport(input: VerifyInput, maxAgeMs = REPORT_STALE_MS): { report: CompanyReport; ageMs: number } | undefined {
   const hit = cacheGet<CompanyReport>("report", reportKey(input), maxAgeMs);
   if (!hit) return undefined;
-  // Built on fallback register data (PRH was down): fresh for an hour at most, and stale as
-  // soon as PRH has answered again, so callers show it and then redo it from the live register.
+  // Built on fallback register data (PRH was down): stale as soon as PRH has answered again,
+  // so callers show it and then redo it from the live register.
   const fallbackStale = !!hit.value.registrySource && (hit.ageMs > FALLBACK_FRESH_MS || prhOkSince(hit.at));
   return {
     ageMs: fallbackStale ? Math.max(hit.ageMs, REPORT_FRESH_MS + 1) : hit.ageMs,
