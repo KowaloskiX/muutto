@@ -466,7 +466,7 @@ export default function DriveTimeLayer({
       })}
       <FitScale heat={heat} scale={scale} work={work} />
       {status && (
-        <div ref={panel} className={x.reachPanel}>
+        <div ref={panel} className={x.reachPanel} data-tour="reach">
           <div className={x.scaleSwitch} role="radiogroup" aria-label="Reach scale">
             {(Object.keys(SCALE_UI) as HeatScale[]).map((s) => (
               <button key={s} type="button" role="radio" aria-checked={scale === s} className={scale === s ? x.scaleOn : ""} onClick={() => onScale(s)}>

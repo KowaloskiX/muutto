@@ -9,6 +9,7 @@ import { ArrowUp, CaretLeft, CaretRight, ChatCircleText, CircleNotch, NotePencil
 import type { Area, Listing, MoveEvent, ResearchEvent, ViewingDraft, WatchResult, WatchRuns } from "@/lib/move/types";
 import MoveFile, { PROMPTS } from "./MoveFile";
 import { MoveProgress } from "./MoveProgress";
+import { Tour, type TourStep } from "./Tour";
 import { mins } from "./model";
 import { fitScore, rankAreas, weights, whyLines } from "@/lib/move/rank";
 import type { AskResult } from "@/lib/move/ask";
@@ -58,6 +59,8 @@ const errText = async (res: Response) => {
     return `HTTP ${res.status}`;
   }
 };
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const bestListing = (areas: Area[]) => {
   for (const a of areas) if (a.listings[0]) return { listing: a.listings[0], area: a };
@@ -235,6 +238,7 @@ export default function MoveApp() {
         const chips: Chip[] = [];
         if (bestListing(ranked)) chips.push({ label: "Research best listing", action: "research_best", primary: true });
         chips.push({ label: "Watch these areas", action: "watch", primary: !chips.length });
+        chips.push({ label: "Take the tour", action: "tour" });
         chips.push({ label: "Open move file", action: "open_file" });
         push({ id: uid(), role: "bot", kind: "text", text, chips });
       }
@@ -391,6 +395,133 @@ export default function MoveApp() {
     if (v && isMobile()) setSheet(true);
   };
 
+  // ---- guided tour (demo): every step acts first, so nobody has to know what to click
+  const [tourOn, setTourOn] = useState(false);
+  const clickText = (sel: string, text: RegExp) => [...document.querySelectorAll<HTMLElement>(sel)].find((b) => text.test(b.textContent ?? "") || text.test(b.getAttribute("aria-label") ?? ""))?.click();
+  const tourSteps = (): TourStep[] => {
+    const ranked = run?.ranked ?? [];
+    const top = ranked[0];
+    // For the listing steps, prefer a flat with a removed earlier listing: that is the story worth showing.
+    const withHistory = ranked.flatMap((ar) => ar.listings.filter((l) => l.history?.seen.some((s) => s.removedOn)).map((l) => ({ listing: l, area: ar })))[0] ?? ranked.flatMap((ar) => ar.listings.filter((l) => l.history?.seen.length).map((l) => ({ listing: l, area: ar })))[0];
+    const best = withHistory ?? bestListing(ranked);
+    const onMobile = isMobile();
+    const file = () => onMobile && setSheet(true);
+    const steps: TourStep[] = [
+      {
+        target: '[data-tour="progress"]',
+        title: "One question, a whole pipeline",
+        body: "From one sentence the agent found your workplace, picked candidate areas by real commute, measured each one and pulled live listings. Exa is the layer that reads the live web; open data fills in the rest.",
+        sources: ["Exa Search", "Exa Places", "Statistics Finland", "OSRM", "FMI", "HSY / Väylävirasto"],
+        before: () => {
+          openView(undefined);
+          setSheet(false);
+        },
+      },
+      {
+        target: '[data-tour="map"]',
+        title: "Areas on the map",
+        body: "Postal areas coloured by how well they fit your priorities, with live listings as price pins. Click any area or pin to open it.",
+        sources: ["Statistics Finland Paavo", "Exa (listings)"],
+        before: () => {
+          file();
+          clickText('[data-tour="layers"] button', /^Fit/);
+        },
+      },
+      {
+        target: '[data-tour="map"]',
+        title: "How far you get from work",
+        body: "Drive-time zones traced along the real road network. Drag the slider minute by minute, press Play, or switch to Region to see where the car takes you in up to three hours.",
+        sources: ["Valhalla on OpenStreetMap", "OSRM"],
+        before: async () => {
+          clickText('[data-tour="layers"] button', /Drive/);
+          await sleep(1200);
+        },
+      },
+      {
+        target: '[data-tour="areas"]',
+        title: "Compare areas at a glance",
+        body: "Green is the best value in each column, an amber dot means it falls short of what you asked for. Every cell opens its source.",
+        before: () => clickText('[data-tour="layers"] button', /^Fit/),
+      },
+      {
+        target: '[data-tour="add-criterion"]',
+        title: "Ask for anything",
+        body: "A climbing wall, a sauna, near the sea, safe at night. A place type goes to Exa Places; any other question goes to Exa Search, and every answer quotes the page it came from.",
+        sources: ["Exa Places", "Exa Search"],
+      },
+    ];
+    if (top)
+      steps.push(
+        {
+          target: '[data-tour="drawer"]',
+          title: `Inside ${top.name}`,
+          body: "Key numbers on top, the details in tabs: criteria with sources, daily life and contacts for settling in, news and plans, listings.",
+          before: () => openView({ kind: "area", id: top.id }),
+        },
+        {
+          target: '[data-tour="drawer-body"]',
+          title: "What is coming, and what residents say",
+          body: "City decisions, zoning plans and projects for the next years, plus dated forum quotes. Information that changes every week and that no model was trained on.",
+          sources: ["Exa Search: city pages", "local news", "vauva.fi / Suomi24 / Reddit"],
+          before: async () => {
+            await sleep(300);
+            clickText('[data-tour="drawer-tabs"] button', /News/);
+          },
+        },
+      );
+    steps.push({
+      target: '[data-tour="listings"]',
+      title: "Live listings, with what the page says",
+      body: "Rentals and sales published in the last 30 days, with the portal's own photos. Facts like the build year, lift, sauna or a planned pipe renovation are read from the listing text, each with its exact line.",
+      sources: ["Exa Search + Contents", "oikotie.fi", "vuokraovi.com", "etuovi.com"],
+      before: () => {
+        openView(undefined);
+        file();
+      },
+    });
+    if (best)
+      steps.push(
+        {
+          target: '[data-tour="drawer"]',
+          title: "One flat, end to end",
+          body: "Price, size, commute and build year on top; the facts from the listing below, each linked to the line it came from.",
+          before: () => openView({ kind: "listing", url: best.listing.url, from: best.area.id }),
+        },
+        {
+          target: '[data-tour="drawer-body"]',
+          title: "Has it been on the market before?",
+          body: "Exa finds earlier pages of the same flat that the portals have already taken down: when it was removed and what it cost then.",
+          sources: ["Exa Search (delisted pages)"],
+          before: async () => {
+            await sleep(300);
+            clickText('[data-tour="drawer-tabs"] button', /History/);
+          },
+        },
+        {
+          target: '[data-tour="drawer-body"]',
+          title: "From research to a viewing request",
+          body: "Deep research checks the building, the landlord and the street. Then a viewing request is drafted in Finnish and English to the real contact. You approve it; in this demo it goes to our own inbox.",
+          sources: ["Exa Agent + Search", "Resend (test mode)"],
+          before: async () => {
+            openView({ kind: "listing", url: best.listing.url, from: best.area.id, focus: "draft", n: Date.now() });
+            if (!drafts[best.listing.url]) void runDraft(best.listing);
+            await sleep(600);
+          },
+        },
+      );
+    steps.push({
+      target: '[data-tour="chips"]',
+      title: "And it keeps watching",
+      body: "Watch these areas creates an Exa Monitor that checks the portals every day and brings new listings back here.",
+      sources: ["Exa Monitors"],
+      before: () => {
+        openView(undefined);
+        setSheet(false);
+      },
+    });
+    return steps;
+  };
+
   const onChip = (msgId: string, c: Chip) => {
     if (c.action === "retry") {
       void search(c.payload ?? "");
@@ -398,6 +529,10 @@ export default function MoveApp() {
     }
     if (c.action === "open_file") {
       setSheet(true);
+      return;
+    }
+    if (c.action === "tour") {
+      setTourOn(true);
       return;
     }
     setMsgs((prev) => prev.map((m) => (m.id === msgId && m.role === "bot" && m.kind === "text" ? { ...m, chips: m.chips?.filter((x) => x.action !== c.action) } : m)));
@@ -453,7 +588,11 @@ export default function MoveApp() {
       );
     if (m.kind === "run") {
       const r = runs[m.runId];
-      return r ? <MoveProgress run={r} /> : null;
+      return r ? (
+        <div data-tour="progress">
+          <MoveProgress run={r} />
+        </div>
+      ) : null;
     }
     return (
       <div className={`${s.bot} ${m.tone === "error" ? s.error : m.tone === "note" ? s.note : ""}`}>
@@ -489,6 +628,11 @@ export default function MoveApp() {
             <strong>Muutto</strong>
             <small>{busy ? "Working on it…" : "Where to live, Helsinki region"}</small>
           </div>
+          {(run?.ranked?.length ?? 0) > 0 && !busy && (
+            <button type="button" className={s.headBtn} onClick={() => setTourOn(true)} title="Guided tour">
+              <span>Tour</span>
+            </button>
+          )}
           <button type="button" className={`${s.headBtn} ${s.caseBtn}`} onClick={() => setSheet(true)} aria-label="Open move file">
             <span>Move file</span>
             {areas.length > 0 && <b className={s.caseCount}>{areas.length}</b>}
@@ -521,7 +665,7 @@ export default function MoveApp() {
                 <div className={s.col}>
                   {body(m)}
                   {chips && (
-                    <div className={s.chips}>
+                    <div className={s.chips} data-tour="chips">
                       {chips.map((c) => (
                         <button key={c.label} type="button" className={`${s.chip} ${c.primary ? s.chipPrimary : ""} ${c.action === "open_file" ? s.mobileOnly : ""}`} onClick={() => onChip(m.id, c)} disabled={busy && c.action !== "open_file"}>
                           {c.label}
@@ -589,6 +733,7 @@ export default function MoveApp() {
         />
       </section>
       {sheet && <button type="button" className={s.sheetScrim} onClick={() => setSheet(false)} aria-label="Close move file" />}
+      {tourOn && <Tour steps={tourSteps()} onClose={() => setTourOn(false)} />}
     </div>
   );
 }

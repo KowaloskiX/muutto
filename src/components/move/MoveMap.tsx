@@ -404,7 +404,7 @@ export default function MoveMap({
   }
 
   return (
-    <div className={x.mapWrap}>
+    <div className={x.mapWrap} data-tour="map">
       <div className={`${m.box} ${m.vars} ${x.mapBox}`}>
         <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom={false} zoomControl={false} className={m.leaflet} attributionControl>
           <TileLayer key={dark ? "dark" : "light"} attribution={ATTRIBUTION} url={(dark ? TILES.dark : TILES.light).base} maxZoom={17} maxNativeZoom={16} />
@@ -481,7 +481,7 @@ export default function MoveMap({
         <div className={`${m.legend} ${x.legend}`} aria-live="polite">
           {legend}
         </div>
-        <div className={x.layers} role="radiogroup" aria-label="Map layer">
+        <div className={x.layers} role="radiogroup" aria-label="Map layer" data-tour="layers">
           {LAYERS.map((l) => (
             <button key={l.id} type="button" role="radio" aria-checked={layer === l.id} className={layer === l.id ? x.layerOn : ""} onClick={() => setLayer(l.id)}>
               <span className={x.lFull}>{l.label}</span>

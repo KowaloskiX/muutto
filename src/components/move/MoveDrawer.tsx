@@ -214,7 +214,7 @@ type TabDef<T extends string> = { id: T; label: string; icon: React.ComponentTyp
 
 function Tabs<T extends string>({ tabs, value, onChange }: { tabs: TabDef<T>[]; value: T; onChange: (t: T) => void }) {
   return (
-    <div className={x.dTabs} role="tablist">
+    <div className={x.dTabs} role="tablist" data-tour="drawer-tabs">
       {tabs.map((tb) => (
         <button key={tb.id} type="button" role="tab" aria-selected={value === tb.id} aria-label={tb.label} title={tb.label} className={value === tb.id ? x.dTabOn : ""} onClick={() => onChange(tb.id)}>
           <tb.icon aria-hidden />
@@ -229,7 +229,7 @@ function Tabs<T extends string>({ tabs, value, onChange }: { tabs: TabDef<T>[]; 
 
 function Tiles({ items }: { items: { label: string; value: React.ReactNode; sub?: string; tone?: string }[] }) {
   return (
-    <div className={x.dTiles}>
+    <div className={x.dTiles} data-tour="drawer-tiles">
       {items.map((it) => (
         <div key={it.label} className={x.dTile}>
           <span>{it.label}</span>
@@ -680,7 +680,7 @@ function TestSend({ dr, subject, body, listingUrl }: { dr: ViewingDraft; subject
     }
   };
   return (
-    <div className={x.testSend}>
+    <div className={x.testSend} data-tour="test-send">
       <button type="button" className={x.primaryBtn} onClick={() => void send()} disabled={s.busy}>
         {s.busy ? "Sending…" : s.sent ? "Send test again" : `Approve and send test to ${cfg.testTo}`}
       </button>
@@ -1017,7 +1017,7 @@ export function MoveDrawer({
   return (
     <div className={`${d.wrap} ${x.dwrap}`}>
       <button type="button" className={d.scrim} onClick={onClose} aria-label="Close" tabIndex={-1} />
-      <aside className={`${d.drawer} ${x.drawer}`} aria-label={view.kind === "area" ? "Area" : "Listing"}>
+      <aside className={`${d.drawer} ${x.drawer}`} aria-label={view.kind === "area" ? "Area" : "Listing"} data-tour="drawer">
         <header className={d.head}>
           <button type="button" className={d.back} onClick={back.go}>
             <ArrowLeft weight="bold" aria-hidden />
@@ -1036,7 +1036,7 @@ export function MoveDrawer({
           </button>
         </header>
         {tabsBar}
-        <div className={d.body} ref={body}>
+        <div className={d.body} ref={body} data-tour="drawer-body">
           {content}
         </div>
       </aside>

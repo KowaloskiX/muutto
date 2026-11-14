@@ -65,12 +65,12 @@ function AddCriterion({ asking, areasN, onAdd }: { asking?: { question: string; 
   };
   if (!open && !asking)
     return (
-      <button type="button" className={x.acOpen} onClick={() => setOpen(true)}>
+      <button type="button" className={x.acOpen} onClick={() => setOpen(true)} data-tour="add-criterion">
         <Plus weight="bold" aria-hidden /> Add criterion
       </button>
     );
   return (
-    <div className={x.ac}>
+    <div className={x.ac} data-tour="add-criterion">
       <form
         className={x.acRow}
         onSubmit={(e) => {
@@ -319,7 +319,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
           </section>
         )}
 
-        <section className={c.section} aria-labelledby="move-areas">
+        <section className={c.section} aria-labelledby="move-areas" data-tour="areas">
           <div className={c.secHead}>
             <h2 id="move-areas">Areas</h2>
             {areas.length > 0 && (
@@ -456,7 +456,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
           {ranked && areas.some((a) => a.commute?.estimate) && <p className={x.footnote}>≈ marks a distance-based commute estimate, not a timetable result.</p>}
         </section>
 
-        <section className={c.section} aria-labelledby="move-listings">
+        <section className={c.section} aria-labelledby="move-listings" data-tour="listings">
           <div className={c.secHead}>
             <h2 id="move-listings">Listings</h2>
             {listings.length > 0 && <span className={c.tally}>{listings.length} live · from {[...new Set(listings.map((l) => l.listing.source || host(l.listing.url)))].join(", ")}</span>}
