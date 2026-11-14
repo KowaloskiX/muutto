@@ -194,3 +194,10 @@ a.meta:hover { color: var(--accent-deep); }
 .sendBtn { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border: 0; border-radius: 50%; background: var(--accent); color: var(--accent-ink); }
 .sendBtn svg { width: 18px; height: 18px; }
 .inQuote { display: inline-flex; padding: 1px 7px; border-radius: 999px; background: var(--surface-strong); color: var(--muted); font-size: 11px; font-weight: 600; line-height: 18px; white-space: nowrap; vertical-align: middle; }
+
+/* ---- grounded answers: inline [n] citations + numbered source list ---- */
+.cite { display: inline-grid; place-items: center; min-width: 16px; height: 16px; margin: 0 1px; padding: 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent-deep); font-size: 10px; font-weight: 700; line-height: 1; text-decoration: none; vertical-align: 2px; }
+.cite:hover { background: color-mix(in srgb, var(--accent) 28%, var(--surface)); }
+.srcList { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.srcList .src b { font-weight: 800; margin-right: 2px; }
+.note { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }

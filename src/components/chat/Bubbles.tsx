@@ -278,3 +278,90 @@ export function WatchCard({ name, domain, monitorId, mode }: { name: string; dom
     </div>
   );
 }
+
+const CHECK_ORDER: Status[] = ["red", "yellow", "green", "grey"];
+
+/** Everything verified about one company: every check with its sources, plus register facts. */
+export function CompanyDetailCard({ item, rank }: { item: Ranked; rank?: number }) {
+  const r = item.report;
+  const name = r.name || item.place.name;
+  const site = item.place.website ?? r.website;
+  const checks = [...r.checks].sort((a, b) => CHECK_ORDER.indexOf(a.status) - CHECK_ORDER.indexOf(b.status));
+  const phone = item.place.phone ?? r.contact.phones[0];
+  return (
+    <div className={s.card}>
+      <div className={s.cardHead}>
+        {rank != null && <span className={s.rank}>{rank}</span>}
+        <div className={s.cardTitle}>
+          <strong>{name}</strong>
+          {site && <a href={site} target="_blank" rel="noopener noreferrer">{host(site)}</a>}
+        </div>
+        <span className={`${s.fit} ${item.fit >= 70 ? s.fitHigh : item.fit >= 45 ? s.fitMid : s.fitLow}`} title="Fit score">{item.fit}<small>/100</small></span>
+      </div>
+      {(r.businessId || r.registry?.registrationDate || r.registry?.mainBusinessLine) && (
+        <p className={s.muted}>
+          {[r.businessId && `Y-tunnus ${r.businessId}`, r.registry?.registrationDate && `reg. ${r.registry.registrationDate}`, r.registry?.mainBusinessLine]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      )}
+      <ul className={s.why}>
+        {checks.map((c) => (
+          <li key={c.id}>
+            <Dot status={c.status} />
+            <span>
+              <b>{c.label}.</b> {c.detail} <Sources list={c.evidence.map((e) => ({ url: e.url, quote: e.quote }))} />
+            </span>
+          </li>
+        ))}
+      </ul>
+      <div className={s.cardFoot}>
+        {phone && (
+          <a href={`tel:${phone.replace(/\s/g, "")}`} className={s.meta}>
+            <Phone weight="fill" /> {phone}
+          </a>
+        )}
+        {r.contact.emails[0] && (
+          <a href={`mailto:${r.contact.emails[0]}`} className={s.meta}>
+            <Envelope weight="fill" /> {r.contact.emails[0]}
+          </a>
+        )}
+        <ExaBadge />
+      </div>
+    </div>
+  );
+}
+
+/** Answer text with inline [n] markers turned into links to the numbered sources. */
+export function CitedText({ text, sources }: { text: string; sources: Source[] }) {
+  const byN = new Map(sources.filter((x) => x.n != null).map((x) => [x.n!, x]));
+  const parts = text.split(/(\[\d+\])/g);
+  return (
+    <span className={s.text}>
+      {parts.map((p, i) => {
+        const m = /^\[(\d+)\]$/.exec(p);
+        const src = m ? byN.get(Number(m[1])) : undefined;
+        if (!m) return p;
+        if (!src) return null;
+        return (
+          <a key={i} className={s.cite} href={withTextFragment(src.url, src.quote)} target="_blank" rel="noopener noreferrer" title={src.quote ? `“${src.quote}”` : src.title ?? src.url}>
+            {m[1]}
+          </a>
+        );
+      })}
+    </span>
+  );
+}
+
+export function NumberedSources({ list }: { list: Source[] }) {
+  return (
+    <span className={s.srcList}>
+      {list.map((x) => (
+        <a key={`${x.n}-${x.url}`} className={s.src} href={withTextFragment(x.url, x.quote)} target="_blank" rel="noopener noreferrer" title={x.quote ? `“${x.quote}”` : x.title ?? x.url}>
+          <b>{x.n}</b> {host(x.url)}
+          <ArrowSquareOut weight="bold" />
+        </a>
+      ))}
+    </span>
+  );
+}

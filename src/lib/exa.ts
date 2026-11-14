@@ -213,29 +213,52 @@ function parsePlace(e: any): Place | null {
 
 // Exa routes local-business queries into its Places index when the query is in
 // English and names the city; places come back as `entities` on a result.
+const distKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+  const r = Math.PI / 180;
+  const s = Math.sin(((b.lat - a.lat) * r) / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(((b.lng - a.lng) * r) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(s));
+};
+
 export async function findPlaces(
   trade: string,
   city: string,
   coords: { latitude: number; longitude: number },
   trace?: ExaTrace[],
+  opts?: { plurals?: string[]; fi?: string; maxKm?: number },
 ): Promise<{ places: Place[]; web: ExaResult[] }> {
   // The places lane is phrasing-sensitive ("painters in Helsinki" hits, "painter in Helsinki" may not).
-  const plural = trade.endsWith("s") ? trade : `${trade}s`;
-  const phrasings = [`${plural} in ${city}`, `${trade} in ${city}`, `${city} ${trade}`];
-  const runs = await Promise.all(
-    phrasings.map((q) =>
-      search({ query: q, type: "lite", numResults: 10, userLocation: { country: "FI", ...coords }, contents: { highlights: { maxCharacters: 400 } } }, trace).catch(() => ({ results: [] as ExaResult[] })),
-    ),
-  );
-  for (const data of runs) {
-    const places: Place[] = [];
-    const web: ExaResult[] = [];
-    for (const r of data.results ?? []) {
-      const ents = (r.entities ?? []).filter((e: any) => e.type === "place");
-      if (ents.length) ents.forEach((e: any) => { const p = parsePlace(e); if (p) places.push(p); });
-      else web.push(r);
+  const plurals = (opts?.plurals ?? []).map((x) => x.trim()).filter(Boolean);
+  if (!plurals.length) plurals.push(/s$/i.test(trade) ? trade : `${trade}s`);
+  const maxKm = opts?.maxKm ?? 35;
+  const run = (q: string) =>
+    search({ query: q, type: "lite", numResults: 10, userLocation: { country: "FI", ...coords }, contents: { highlights: { maxCharacters: 400 } } }, trace).catch(
+      () => ({ results: [] as ExaResult[] }),
+    );
+  const collect = (runs: { results: ExaResult[] }[]) => {
+    for (const data of runs) {
+      const places: Place[] = [];
+      const web: ExaResult[] = [];
+      for (const r of data.results ?? []) {
+        const ents = (r.entities ?? []).filter((e: any) => e.type === "place");
+        if (ents.length) ents.forEach((e: any) => { const p = parsePlace(e); if (p) places.push(p); });
+        else web.push(r);
+      }
+      // A listing far from the requested place (e.g. Helsinki results for Rovaniemi) is not local.
+      const near = places.filter((p) => p.lat == null || p.lng == null || distKm({ lat: coords.latitude, lng: coords.longitude }, { lat: p.lat, lng: p.lng }) <= maxKm);
+      if (near.length) return { places: near, web };
     }
-    if (places.length) return { places, web };
+    return null;
+  };
+  const english = [...new Set([...plurals.slice(0, 3).map((p) => `${p} in ${city}`), `${trade} in ${city}`])].slice(0, 4);
+  const runs = await Promise.all(english.map(run));
+  const hit = collect(runs);
+  if (hit) return hit;
+  // English category found nothing: try the Finnish category word ("hammaslääkäri Tampere").
+  const fi = opts?.fi?.trim();
+  if (fi && fi.toLowerCase() !== trade.toLowerCase()) {
+    const fiRuns = await Promise.all([`${fi} ${city}`, `${fi} in ${city}`].map(run));
+    const fiHit = collect(fiRuns);
+    if (fiHit) return fiHit;
   }
   return { places: [], web: runs[0]?.results ?? [] };
 }
@@ -280,22 +303,9 @@ export function nameFromTitle(title: string | undefined, hostname: string): stri
 
 export type WebCompany = { name: string; website: string; url: string; title?: string; highlight?: string };
 
-export async function findCompaniesWeb(service: string, city: string, trace?: ExaTrace[]): Promise<WebCompany[]> {
-  // Budget 2500: below ~4000 Exa honours the shared budget (plus a ~200-char floor per result);
-  // at 4000 we measured it falling back to ~4k chars per result, so keep it well under.
-  const data = await searchDynamic(
-    {
-      query: `local company offering ${service} in ${city}, Finland`,
-      type: "auto",
-      numResults: 15,
-      userLocation: "FI",
-      excludeDomains: NOT_A_CONTRACTOR,
-    },
-    { query: `${service} in ${city}`, maxTotalCharacters: 2500, fallbackMaxCharacters: 500 },
-    trace,
-  );
+function webCompanies(results: ExaResult[]): WebCompany[] {
   const byOrigin = new Map<string, WebCompany>();
-  for (const r of data.results ?? []) {
+  for (const r of results) {
     let origin: string;
     try {
       origin = new URL(r.url).origin;
@@ -308,5 +318,32 @@ export async function findCompaniesWeb(service: string, city: string, trace?: Ex
     byOrigin.set(origin, { name, website: origin, url: r.url, title: r.title, highlight: r.highlights?.[0] });
   }
   return [...byOrigin.values()];
+}
+
+/**
+ * Company sites offering the service in the place. Runs the English phrase and, when
+ * given, the Finnish one in parallel (Finnish small businesses rarely have English pages),
+ * then interleaves the two lists.
+ */
+export async function findCompaniesWeb(service: string, city: string, trace?: ExaTrace[], opts?: { serviceFi?: string }): Promise<WebCompany[]> {
+  // Budget 2500: below ~4000 Exa honours the shared budget (plus a ~200-char floor per result);
+  // at 4000 we measured it falling back to ~4k chars per result, so keep it well under.
+  const one = (query: string, hl: string) =>
+    searchDynamic(
+      { query, type: "auto", numResults: 12, userLocation: "FI", excludeDomains: NOT_A_CONTRACTOR },
+      { query: hl, maxTotalCharacters: 2500, fallbackMaxCharacters: 500 },
+      trace,
+    );
+  const fi = opts?.serviceFi?.trim();
+  const useFi = !!fi && fi.toLowerCase() !== service.toLowerCase();
+  const [en, fin] = await Promise.all([
+    one(`local company offering ${service} in ${city}, Finland`, `${service} in ${city}`).catch(() => ({ results: [] as ExaResult[] })),
+    useFi ? one(`${fi} ${city} yritys`, `${fi} ${city}`).catch(() => ({ results: [] as ExaResult[] })) : Promise.resolve({ results: [] as ExaResult[] }),
+  ]);
+  const a = webCompanies(en.results ?? []);
+  const b = webCompanies(fin.results ?? []);
+  const out = new Map<string, WebCompany>();
+  for (let i = 0; i < Math.max(a.length, b.length); i++) for (const w of [a[i], b[i]]) if (w && !out.has(w.website)) out.set(w.website, w);
+  return [...out.values()];
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

@@ -6,24 +6,6 @@ import type { QuoteCheck, QuoteEvidence, QuoteReport, Status } from "@/lib/quote
 import { JUMP_HINT, withTextFragment } from "@/lib/textFragment";
 import styles from "./QuoteChecker.module.css";
 
-export const SAMPLE_QUOTE = `TARJOUS nro 2026-114
-Espoon Putki & Saneeraus Oy
-Y-tunnus 3502206-6 · www.espoonputki.fi
-
-Asiakas: Matti Virtanen, Espoo
-Kohde: kylpyhuoneen putkiremontti ja vedeneristys, kerrostaloasunto 6 m²
-
-Meillä on yli 20 vuoden kokemus putkitöistä pääkaupunkiseudulla. Olemme Tukes-rekisteröity yritys ja sertifioitu vedeneristäjä.
-
-Tarjoamme työn kiinteään urakkahintaan:
-Urakkahinta yhteensä 12 900 € (sisältää työt ja materiaalit)
-
-Maksuehdot: 100 % ennakkomaksu ennen töiden aloitusta, maksu 7 päivän kuluessa tilauksesta.
-Työt aloitetaan kahden viikon kuluessa maksun saapumisesta.
-
-Tarjous on voimassa 14 päivää.
-Ystävällisin terveisin,
-Jari Lehtonen, toimitusjohtaja`;
 
 const SOURCE_LABEL: Record<QuoteEvidence["source"], string> = {
   quote: "In the quote",
@@ -116,9 +98,7 @@ export default function QuoteChecker({ defaultWebsite }: { defaultWebsite?: stri
     <section className={styles.wrap} aria-labelledby="qc-title">
       <div className={styles.head}>
         <h2 id="qc-title" className={styles.title}><FileText weight="duotone" /> Check a quote</h2>
-        <button type="button" className={styles.ghost} onClick={() => { setText(SAMPLE_QUOTE); setWebsite(""); setBusinessId(""); setReport(null); }}>
-          Load sample quote
-        </button>
+
       </div>
       <p className={styles.lead}>Paste the contractor&apos;s offer (tarjous). We check the business ID, payment terms, tax-credit eligibility, VAT, warranty and every marketing claim against registers and official guidance, with sources.</p>
       <textarea

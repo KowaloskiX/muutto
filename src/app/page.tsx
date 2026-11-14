@@ -183,7 +183,7 @@ function RegistryRow({ checks }: { checks: VerifyCheck[] }) {
   const status = checks.length ? worst(checks) : "grey";
   const merged: VerifyCheck = {
     id: "registry",
-    label: "Registered company & tax credit",
+    label: checks.some((c) => c.label === "Household tax credit") ? "Registered company & tax credit" : "Registered company",
     status,
     detail: checks.map((c) => c.detail).join(" "),
     evidence: checks.flatMap((c) => c.evidence).filter((e, i, a) => a.findIndex((x) => x.url === e.url && x.quote === e.quote) === i),
@@ -290,12 +290,8 @@ function SiteQuotes({ report }: { report: CompanyReport }) {
   );
 }
 
-function genericAnswer(service: string, city: string) {
-  const job = service || "this job";
-  return `To find someone for ${job}${city ? ` in ${city}` : ""}, search Google or a marketplace like Fixmera, read their reviews, and ask a few companies for quotes. Make sure the company is registered and has a valid business ID before you pay anything.`;
-}
 
-function WithWithout({ top, service, city }: { top: Ranked; service: string; city: string }) {
+function WithWithout({ top, baseline }: { top: Ranked; baseline: { answer?: string; model?: string; loading: boolean } }) {
   const { place, report } = top;
   const why = (top.why ?? []).filter((w) => w?.sentence);
   const phone = place.phone ?? report.contact?.phones?.[0];
@@ -304,9 +300,9 @@ function WithWithout({ top, service, city }: { top: Ranked; service: string; cit
   return (
     <section className="kp-compare" aria-label="Without Exa vs with Exa">
       <div className="kp-compare-box without">
-        <span className="kp-compare-label">A model without web search would say:</span>
-        <p>{genericAnswer(service, city)}</p>
-        <span className="kp-compare-foot">No names · no phone numbers · no sources</span>
+        <span className="kp-compare-label">Same model, no web search{baseline.model ? ` (${baseline.model})` : ""}:</span>
+        {baseline.loading ? <p className="kp-muted"><SpinnerGap className="spin" /> Asking the model without Exa…</p> : <p>{baseline.answer ? baseline.answer.replace(/\*\*|__/g, "") : "The model did not answer."}</p>}
+        <span className="kp-compare-foot">Live answer from the model alone · no sources it can show</span>
       </div>
       <div className="kp-compare-arrow" aria-hidden><ArrowRight weight="bold" /></div>
       <div className="kp-compare-box with">
@@ -374,7 +370,7 @@ function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch
           {place.rating && <span><Star weight="fill" /> {place.rating.score.toFixed(1)} ({place.rating.count})</span>}
           {report.businessId && <span>Y-tunnus {report.businessId}</span>}
           {report.registry?.registrationDate && <span>Since {report.registry.registrationDate.slice(0, 4)}</span>}
-          {tax && <span>{tax.status === "green" ? "Tax credit OK" : "No tax credit"}</span>}
+          {tax && (tax.label === "Household tax credit" ? <span>{tax.status === "green" ? "Tax credit OK" : "No tax credit"}</span> : <span>{tax.status === "green" ? "Prepayment reg. OK" : "Not in prepayment reg."}</span>)}
         </div>
       </div>
       <div className="product-copy">
@@ -467,6 +463,7 @@ export default function Home() {
   const [companies, setCompanies] = useState<Record<string, "scanning" | "done" | "failed">>({});
   const [ranked, setRanked] = useState<Ranked[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [baseline, setBaseline] = useState<{ answer?: string; model?: string; loading: boolean }>({ loading: false });
   const [notices, setNotices] = useState<{ level: "info" | "warning"; message: string }[]>([]);
   const [active, setActive] = useState(0);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
@@ -526,6 +523,11 @@ export default function Home() {
     setDrafts(null);
     setError(null);
     setNotices([]);
+    setBaseline({ loading: true });
+    void fetch("/api/baseline", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) })
+      .then((r) => r.json())
+      .then((d) => setBaseline({ answer: d.answer, model: d.model, loading: false }))
+      .catch(() => setBaseline({ loading: false }));
     setTrace([]);
     setPending(0);
     setRanking(true);
@@ -742,7 +744,7 @@ export default function Home() {
           <ExaSummary trace={trace} />
         )}
       </div>
-      {showCompare && ranked[0] && <WithWithout top={ranked[0]} service={intent.service || summary} city={intent.city} />}
+      {showCompare && ranked[0] && <WithWithout top={ranked[0]} baseline={baseline} />}
       {ranked.length ? (
         <>
           <section className="results-track" aria-label="Contractors">

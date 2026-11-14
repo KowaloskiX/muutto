@@ -2,7 +2,7 @@ import type { Ranked } from "@/lib/rationale";
 import type { QuoteRow, Recommendation, QuoteInput } from "@/lib/compare";
 import type { QuoteReport } from "@/lib/quote";
 
-export type Source = { url: string; quote?: string };
+export type Source = { url: string; quote?: string; n?: number; title?: string };
 
 export type Action =
   | "example"
@@ -10,12 +10,12 @@ export type Action =
   | "pick_myself"
   | "draft_selected"
   | "not_now"
-  | "demo_quotes"
   | "paste_another"
   | "compare_now"
   | "hire"
   | "not_yet"
-  | "find_again";
+  | "find_again"
+  | "watch_name";
 
 export type Chip = { label: string; action: Action; payload?: string; primary?: boolean };
 
@@ -36,9 +36,10 @@ type Base = { id: string; chips?: Chip[]; chipsUsed?: boolean };
 export type Msg = Base &
   (
     | { role: "user"; kind: "text"; text: string; attachment?: string }
-    | { role: "bot"; kind: "text"; text: string; sources?: Source[]; tone?: "progress" | "error" | "success"; exa?: boolean }
+    | { role: "bot"; kind: "text"; text: string; sources?: Source[]; tone?: "progress" | "error" | "success"; exa?: boolean; note?: string }
     | { role: "bot"; kind: "checking"; items: { name: string; domain: string; status: "scanning" | "done" | "failed" }[] }
     | { role: "bot"; kind: "company"; item: Ranked; rank: number }
+    | { role: "bot"; kind: "detail"; item: Ranked; rank?: number }
     | { role: "bot"; kind: "draft"; draft: Draft }
     | { role: "bot"; kind: "quoteCheck"; company: string; report: QuoteReport }
     | { role: "bot"; kind: "compare"; rows: QuoteRow[]; recommendation: Recommendation }
@@ -53,9 +54,17 @@ export type Ctx = {
   quotes: QuoteInput[];
   pick?: { name: string; domain?: string };
   hired?: string;
+  /** The search text that produced `ranked` (for follow-ups like "Tampere instead"). */
+  lastQuery?: string;
+  /** Language of the conversation (ISO 639-1), from the router. */
+  lang?: string;
+  /** Last company checked on its own ("check this company: ..."). */
+  checked?: Ranked;
+  comparison?: { headline: string; pick?: string; rows: { company: string; total?: number; upfrontPct?: number; reds: number; yellows: number }[]; reasons: string[] };
+  watched: { name: string; domain?: string; monitorId: string }[];
 };
 
-export const EMPTY_CTX: Ctx = { ranked: [], selected: [], quotes: [] };
+export const EMPTY_CTX: Ctx = { ranked: [], selected: [], quotes: [], watched: [] };
 
 /** A message before it gets an id (distributes over the union). */
 export type NewMsg = Msg extends infer M ? (M extends Msg ? Omit<M, "id"> & { id?: string } : never) : never;

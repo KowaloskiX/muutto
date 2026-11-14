@@ -4,40 +4,9 @@ import { useEffect, useState } from "react";
 import { ArrowSquareOut, Bell, CheckCircle, Plus, Scales, SpinnerGap, Trophy, Warning, X, XCircle } from "@phosphor-icons/react";
 import type { QuoteRow, Reason, ReasonRef, Recommendation } from "@/lib/compare";
 import type { QuoteEvidence } from "@/lib/quote";
-import { SAMPLE_QUOTE } from "./QuoteChecker";
 import { withTextFragment } from "@/lib/textFragment";
 import styles from "./QuoteCompare.module.css";
 
-// A second, well-formed demo quote so the comparison has a real choice to make.
-const SAMPLE_QUOTE_GOOD = `TARJOUS 14.11.2026
-LVI-Vesiniitty Oy, Y-tunnus 2941791-8, www.vesiniitty.fi
-
-Kohde: kylpyhuoneen putkiremontti ja vedeneristys, kerrostaloasunto 6 m², Espoo
-
-Hinta-erittely (sis. ALV 25,5 %):
-- Työn osuus 7 900 € (kotitalousvähennyskelpoinen)
-- Tarvikkeet ja materiaalit 5 600 €
-Yhteensä 13 500 € sis. ALV 25,5 %
-
-Maksuerät: 20 % töiden alkaessa, 50 % kun putkityöt valmiit, 30 % vastaanoton jälkeen.
-Sopimusehdot: KSE 2013. Takuu 2 vuotta työlle, vedeneristykselle sertifioitu asennus.
-
-Ystävällisin terveisin, LVI-Vesiniitty Oy`;
-
-// A third demo: cheaper on paper, but priced without VAT and with a deposit.
-const SAMPLE_QUOTE_TMI = `Tmi Putkityö Salo
-Y-tunnus 3301122-4
-
-TARJOUS
-Kohde: kylpyhuoneen putkiremontti, kerrostalo 6 m², Espoo
-
-Hinnat alv 0 %:
-Työn osuus 6 200 €
-Tarvikkeet 4 100 €
-Yhteensä 10 300 € alv 0 %
-
-Varausmaksu 1 500 € tilauksen yhteydessä, loput kun työ on valmis.
-Takuu 1 vuosi.`;
 
 const MAX_QUOTES = 4;
 const HIRED_KEY = "kp-hired-v1";
@@ -123,15 +92,7 @@ export default function QuoteCompare({ companies }: { companies: Company[] }) {
   const addQuote = () => setItems((xs) => (xs.length >= MAX_QUOTES ? xs : [...xs, { company: `Company ${String.fromCharCode(65 + xs.length)}`, text: "" }]));
   const removeQuote = (i: number) => setItems((xs) => xs.filter((_, j) => j !== i));
 
-  function loadDemo() {
-    setItems([
-      { company: "Espoon Putki & Saneeraus Oy", website: "https://espoonputki.fi", text: SAMPLE_QUOTE },
-      { company: "LVI-Vesiniitty Oy", website: "https://www.vesiniitty.fi", text: SAMPLE_QUOTE_GOOD },
-      { company: "Tmi Putkityö Salo", text: SAMPLE_QUOTE_TMI },
-    ]);
-    setResult(null);
-    setError(null);
-  }
+
 
   async function compare() {
     setBusy(true);
@@ -182,7 +143,6 @@ export default function QuoteCompare({ companies }: { companies: Company[] }) {
     <div className="kp-cmp">
       <div className="kp-cmp-head">
         <h3><Scales weight="bold" /> Compare the quotes you got back</h3>
-        <button type="button" className="kp-cmp-ghost" onClick={loadDemo}>Load 3 demo quotes</button>
       </div>
       <div className="kp-cmp-inputs">
         {items.map((q, i) => (

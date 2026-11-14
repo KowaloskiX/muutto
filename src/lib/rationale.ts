@@ -29,7 +29,7 @@ const MAX = Object.values(W).reduce((a, b) => a + b, 0);
 const SHARE: Record<string, Partial<Record<Status, number>>> = {
   service: { green: 1, grey: 0, yellow: 0.3, red: 0 },
   identity: { green: 1, yellow: 0.5, grey: 0, red: 0 },
-  prepayment: { green: 1, red: 0 },
+  prepayment: { green: 1, yellow: 0.3, red: 0 },
   reputation: { green: 1, grey: 0.5, yellow: 0.25, red: 0 },
   age: { green: 1, yellow: 0.4 },
 };
@@ -85,8 +85,12 @@ function candidates(place: Place, r: CompanyReport, service: string): Cand[] {
   else if (svc) add(80, "grey", `Their site doesn't clearly mention this job (${service}); ask before booking`, svc.evidence);
 
   const pre = find(r, "prepayment");
-  if (pre?.status === "green") add(70, "green", "In the prepayment register, so the household tax credit applies", pre.evidence);
-  else if (pre?.status === "red") add(95, "red", "Not in the prepayment register: the household tax credit can be refused", pre.evidence);
+  const household = r.householdWork ?? pre?.label === "Household tax credit";
+  if (household) {
+    if (pre?.status === "green") add(70, "green", "In the prepayment register, so the household tax credit applies", pre.evidence);
+    else if (pre?.status === "red") add(95, "red", "Not in the prepayment register: the household tax credit can be refused", pre.evidence);
+  } else if (pre?.status === "green") add(30, "green", "Registered in the tax prepayment register", pre.evidence);
+  else if (pre && pre.status !== "grey") add(62, "yellow", "Not in the tax prepayment register; ask why before paying upfront", pre.evidence);
 
   const rep = find(r, "reputation");
   if (rep) {
@@ -193,7 +197,7 @@ export async function polishWhy(list: Ranked[], ms = 9000): Promise<Ranked[]> {
     const out = await withTimeout(
       askJson({
         system:
-          "Rewrite short reasons a homeowner sees next to a contractor ranking. Keep each reason's meaning, keep every number, company name and website exactly, add no new facts, max 14 words each, plain English, no exclamation marks. Return the same number of sentences per item in the same order.",
+          "Rewrite short reasons a customer sees next to a ranking of local businesses. Never mention tax credits unless the original sentence does. Keep comparisons exact: 'Only company of 4 confirmed in X' means this company is the single one of the 4 with X. Keep each reason's meaning, keep every number, company name and website exactly, add no new facts, max 14 words each, plain English, no exclamation marks. Return the same number of sentences per item in the same order.",
         user: JSON.stringify(list.map((x, i) => ({ i, company: x.report.name, sentences: x.why.map((w) => w.sentence) }))),
         schema: Polished,
       }),
