@@ -15,12 +15,12 @@ export const dynamic = "force-dynamic";
 const err = (e: unknown, status = 500) => NextResponse.json({ error: (e as Error).message ?? String(e) }, { status });
 
 // Exa refuses webhook URLs on localhost / private ranges. Locally we fall back to
-// polling (GET ?id=) and give Exa a placeholder URL; set PUBLIC_BASE_URL (e.g. a tunnel) for live webhooks.
+// polling (GET ?id=) and give Exa a no-op sink URL (Exa rejects example.com and private hosts); set PUBLIC_BASE_URL (e.g. a tunnel) for live webhooks.
 function webhookUrl(req: Request): { url: string; live: boolean } {
   const origin = process.env.PUBLIC_BASE_URL ?? new URL(req.url).origin;
   const host = new URL(origin).hostname;
   const local = /^(localhost|127\.|0\.0\.0\.0|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|\[?::1\]?$)/.test(host) || host.endsWith(".local");
-  if (local || !origin.startsWith("https://")) return { url: "https://example.com/kilpailutus/exa-webhook", live: false };
+  if (local || !origin.startsWith("https://")) return { url: "https://httpbin.org/status/204", live: false };
   return { url: `${origin.replace(/\/$/, "")}/api/exa-webhook`, live: true };
 }
 

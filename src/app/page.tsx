@@ -154,7 +154,7 @@ function CheckRow({ check }: { check: VerifyCheck }) {
           <p>{check.detail}</p>
           {check.evidence.map((ev, i) => (
             <a key={i} className="kp-evidence" href={withTextFragment(ev.url, ev.quote)} target="_blank" rel="noopener noreferrer" title={ev.quote ? JUMP_HINT : undefined}>
-              {ev.quote && <q>{ev.quote}</q>}
+              {ev.quote && <q>{plainQuote(ev.quote)}</q>}
               <span className="kp-evidence-src">
                 {ev.source === "registry" ? "Trade register" : ev.source === "site" ? "Their website" : "Web"} · {hostOf(ev.url)} <ArrowSquareOut />
                 {ev.quote && <JumpHint />}
@@ -254,6 +254,16 @@ function ExaSummary({ trace }: { trace: ExaTrace[] }) {
   );
 }
 
+// Exa returns page text as markdown; quotes should read as plain sentences.
+function plainQuote(q: string): string {
+  return q
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/^[\s#>*\-|]+/gm, "")
+    .replace(/[*_`|]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function siteQuotes(report: CompanyReport): { url: string; quote: string; href: string }[] {
   const service = report.checks.find((c) => c.id === "service");
   const claims = report.checks.filter((c) => c.id.startsWith("claim-"));
@@ -271,7 +281,7 @@ function SiteQuotes({ report }: { report: CompanyReport }) {
     <div className="kp-quotes">
       {quotes.map((q, i) => (
         <a key={i} className="kp-quote" href={q.href} target="_blank" rel="noopener noreferrer" title={JUMP_HINT}>
-          <q>{q.quote}</q>
+          <q>{plainQuote(q.quote)}</q>
           <span className="kp-quote-src">From their site · {hostOf(q.url)} · via Exa <ArrowSquareOut /><JumpHint /></span>
         </a>
       ))}
@@ -308,7 +318,7 @@ function WithWithout({ top, service, city }: { top: Ranked; service: string; cit
           {site && <a href={site} target="_blank" rel="noopener noreferrer"><ArrowSquareOut weight="bold" />{hostOf(site)}</a>}
         </div>
         {why.length > 0 && <WhyList why={why} max={2} />}
-        {quote && <a className="kp-quote" href={quote.href} target="_blank" rel="noopener noreferrer" title={JUMP_HINT}><q>{quote.quote}</q><span className="kp-quote-src">From their site · {hostOf(quote.url)} · via Exa <ArrowSquareOut /><JumpHint /></span></a>}
+        {quote && <a className="kp-quote" href={quote.href} target="_blank" rel="noopener noreferrer" title={JUMP_HINT}><q>{plainQuote(quote.quote)}</q><span className="kp-quote-src">From their site · {hostOf(quote.url)} · via Exa <ArrowSquareOut /><JumpHint /></span></a>}
         <span className="kp-compare-foot">{report.trace.length} Exa calls for this company · every claim linked</span>
       </div>
     </section>
@@ -455,6 +465,7 @@ export default function Home() {
   const [trace, setTrace] = useState<ExaTrace[]>([]);
   // Cards appear as soon as each company is verified; the final ranking replaces them.
   const [pending, setPending] = useState(0);
+  const [ranking, setRanking] = useState(false);
   const [intent, setIntent] = useState<{ service: string; city: string }>({ service: "", city: "" });
   const [showCompare, setShowCompare] = useState(true);
   const [advanced, setAdvanced] = useState(false);
@@ -494,6 +505,7 @@ export default function Home() {
     setError(null);
     setTrace([]);
     setPending(0);
+    setRanking(true);
     setIntent({ service: "", city: "" });
     setSummary(q);
     const res = await fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
@@ -527,10 +539,14 @@ export default function Home() {
         else if (e.type === "done") {
           setRanked(e.ranked);
           setPending(0);
+          setRanking(false);
           setTrace(e.trace ?? e.ranked.flatMap((r) => r.report.trace ?? []));
           setActive(0);
           setView("results");
-        } else if (e.type === "error") setError(e.message);
+        } else if (e.type === "error") {
+          setError(e.message);
+          setRanking(false);
+        }
       }
     }
   }
@@ -654,8 +670,11 @@ export default function Home() {
         )}
       </section>
       <div className="kp-results-meta">
-        {pending > 0 ? (
-          <span className="kp-pending"><SpinnerGap className="spin" />Checking {pending} more {pending === 1 ? "company" : "companies"}… ranking updates when done</span>
+        {pending > 0 || ranking ? (
+          <span className="kp-pending">
+            <SpinnerGap className="spin" />
+            {pending > 0 ? `Checking ${pending} more ${pending === 1 ? "company" : "companies"}… ranking updates when done` : "Ranking by trust and writing the reasons…"}
+          </span>
         ) : (
           <ExaSummary trace={trace} />
         )}
