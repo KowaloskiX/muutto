@@ -3,7 +3,7 @@
 // Leaflet map of the project site and the candidate subcontractors. Client-only: loaded
 // with next/dynamic({ ssr: false }) from CaseFile, because Leaflet touches `window` on import.
 import "leaflet/dist/leaflet.css";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import { MapContainer, Marker, TileLayer, Tooltip, useMap } from "react-leaflet";
 import type { Verdict } from "./model";
@@ -11,22 +11,37 @@ import s from "./Case.module.css";
 
 export type Pin = { key: string; lat: number; lng: number; label: string; rank?: number; verdict: Verdict; sub?: string };
 
+function fit(map: L.Map, points: [number, number][]) {
+  if (!points.length) return;
+  if (points.length === 1) map.setView(points[0], 11);
+  else map.fitBounds(L.latLngBounds(points), { padding: [36, 36], maxZoom: 12 });
+}
+
 function Fit({ points }: { points: [number, number][] }) {
   const map = useMap();
   const sig = points.map((p) => p.join(",")).join(";");
+  const latest = useRef(points);
+  latest.current = points;
   useEffect(() => {
-    if (!points.length) return;
-    if (points.length === 1) map.setView(points[0], 11);
-    else map.fitBounds(L.latLngBounds(points), { padding: [24, 24], maxZoom: 12 });
+    fit(map, points);
     // Only refit when the set of points changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, map]);
   useEffect(() => {
-    // The map lives in panels that open and resize (mobile sheet, drawer): keep tiles in sync.
+    // The map lives in panels that open and resize (mobile sheet, drawer): keep tiles in sync
+    // and refit, so no pin ends up outside the narrower box.
     const el = map.getContainer();
-    const ro = new ResizeObserver(() => map.invalidateSize());
+    let t: ReturnType<typeof setTimeout> | undefined;
+    const ro = new ResizeObserver(() => {
+      map.invalidateSize();
+      clearTimeout(t);
+      t = setTimeout(() => fit(map, latest.current), 120);
+    });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      clearTimeout(t);
+      ro.disconnect();
+    };
   }, [map]);
   return null;
 }

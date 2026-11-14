@@ -337,7 +337,8 @@ export default function ChatApp() {
         }),
         table,
       ]);
-      const lang = ctxRef.current.lang === "fi" ? "fi" : "en";
+      // The recipients are Finnish subcontractors: open the drafts in Finnish (EN is one tap away).
+      const lang = "fi" as const;
       // B2B: one RFQ and one tilaajavastuu document request per company.
       const out: Draft[] = drafts.flatMap((d) => {
         const { documentRequestFi, documentRequestEn, documents, ...rfq } = d;
@@ -1009,7 +1010,7 @@ export default function ChatApp() {
             ref={inputRef}
             value={input}
             rows={1}
-            placeholder={ctx.ranked.length ? "Message Kilpi, or paste a subcontractor quote…" : "Trade, project and site, e.g. waterproofing for a school in Vantaa"}
+            placeholder={ctx.ranked.length ? "Ask Kilpi, or paste a quote…" : "Trade, project and site, e.g. waterproofing for a school in Vantaa"}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

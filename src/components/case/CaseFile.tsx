@@ -252,7 +252,7 @@ export default function CaseFile({
               >
                 <span>Map</span>
                 <small>
-                  {pins.length ? `${pins.length} of ${cands.length} placed` : "site"}
+                  {cands.length ? `${pins.length} of ${cands.length} placed` : "site"}
                 </small>
                 <CaretDown weight="bold" className={mapOpen ? s.caretUp : ""} />
               </button>
@@ -609,7 +609,7 @@ function OutboxRow({
             <ul className={s.docList}>
               {d.documents.map((x, i) => (
                 <li key={i}>
-                  {x.en}
+                  {d.lang === "fi" ? x.fi || x.en : x.en}
                   {x.law && <small> · {x.law}</small>}
                 </li>
               ))}

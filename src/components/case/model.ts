@@ -62,7 +62,8 @@ export function verdict(c: Cand): Verdict {
 
 export type Finding = { status: Status; label: string; text: string; quote?: string; sources: { url: string; quote?: string }[] };
 
-const firstSentence = (t: string) => (t.match(/[^.!?]+[.!?]+/)?.[0] ?? t).trim();
+// A sentence ends at . ! ? followed by a space or the end, so "systempoint.fi" stays whole.
+const firstSentence = (t: string) => (t.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? t).trim();
 const tidy = (q: string, n = 160) => {
   const t = q.replace(/[#*|`>]+/g, " ").replace(/\s+/g, " ").trim();
   return t.length > n ? `${t.slice(0, n).replace(/\s+\S*$/, "")}…` : t;

@@ -7,6 +7,8 @@ import type { QuoteReport, QuoteCheck } from "@/lib/quote";
 import type { Status } from "@/lib/verify";
 import { withTextFragment } from "@/lib/textFragment";
 import type { Draft, Source } from "./types";
+// Same key finding as the case file table, so the chat card and the table never disagree.
+import { findingOf, fromRanked } from "@/components/case/model";
 import s from "./Chat.module.css";
 
 export const host = (u?: string) => {
@@ -116,7 +118,7 @@ export function CompanyCard({ item, rank, selected, onToggle }: { item: Ranked; 
   const phone = item.place.phone ?? item.report.contact.phones[0];
   const site = item.place.website ?? item.report.website;
   const fitCls = item.fit >= 70 ? s.fitHigh : item.fit >= 45 ? s.fitMid : s.fitLow;
-  const key = keyFinding(item);
+  const key = findingOf(fromRanked(item, rank));
   return (
     <div className={s.card}>
       <div className={s.cardHead}>
@@ -174,7 +176,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: (d: Dra
           <small>{draft.email ?? "No email found on their site: add one in your mail app"}</small>
         </div>
         <div className={s.langToggle} role="group" aria-label="Language">
-          {(["en", "fi"] as const).map((l) => (
+          {(["fi", "en"] as const).map((l) => (
             <button key={l} type="button" className={draft.lang === l ? s.on : ""} onClick={() => onChange({ ...draft, lang: l, edited: undefined })}>
               {l.toUpperCase()}
             </button>
