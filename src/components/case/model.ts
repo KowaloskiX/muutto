@@ -60,7 +60,7 @@ export function verdict(c: Cand): Verdict {
   return "green";
 }
 
-export type Finding = { status: Status; label: string; text: string; quote?: string; sources: { url: string; quote?: string }[] };
+export type Finding = { status: Status; label: string; text: string; quote?: string; sources: { url: string; quote?: string }[]; check?: Check };
 
 // A sentence ends at . ! ? followed by a space or the end, so "systempoint.fi" stays whole.
 const firstSentence = (t: string) => (t.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? t).trim();
@@ -87,6 +87,7 @@ export function findingOf(c: Cand): Finding | null {
     text: `${label.charAt(0).toUpperCase()}${label.slice(1)}: ${firstSentence(detail)}`,
     quote: q ? tidy(q) : undefined,
     sources: ev.map((e) => ({ url: e.url, quote: e.quote })),
+    check: flag,
   };
 }
 
@@ -121,6 +122,27 @@ export function regName(c: Check): string {
   return l.charAt(0).toUpperCase() + l.slice(1);
 }
 export { firstSentence };
+
+/** How a register check reads in a matrix cell: quiet when clear, a short loud word when not. */
+export type CellKind = "ok" | "missing" | "clarify" | "flag" | "na";
+export function cellOf(c: Check): { kind: CellKind; word: string } {
+  if (c.status === "green") return { kind: "ok", word: "Clear" };
+  if (c.status === "red") return { kind: "flag", word: "Flag" };
+  if (c.status === "grey") return { kind: "na", word: c.action ? "Check manually" : "No data" };
+  return /\bnot listed\b|^not in\b/i.test(c.detail) ? { kind: "missing", word: "Missing" } : { kind: "clarify", word: "Clarify" };
+}
+
+/**
+ * "Not listed: Työnantajarekisteri (employer register)": for a check about a register missing
+ * from the source page, built only from the check's own label and detail.
+ */
+export function notListedLine(c: Check): string | null {
+  if (c.status === "green" || !/\bnot listed\b|^not in\b/i.test(c.detail)) return null;
+  const en = c.label.replace(/^Tilaajavastuu:\s*/i, "").trim();
+  const fi = c.detail.match(/\(([a-zåäö-]*rekisteri[a-zåäö]*)\)/i)?.[1];
+  if (!en) return null;
+  return fi ? `Not listed: ${fi.charAt(0).toUpperCase()}${fi.slice(1)} (${en})` : `Not listed: ${en.charAt(0).toUpperCase()}${en.slice(1)}`;
+}
 
 /** "6/9 checks · 3 docs to request": the tilaajavastuu checklist when present, else every check. */
 export function compliance(r?: CompanyReport) {

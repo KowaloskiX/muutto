@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUp, Buildings, CaretRight, CheckCircle, CircleNotch, ClipboardText, MagnifyingGlass, NotePencil, Paperclip, Question, ShieldCheck, SquaresFour, WarningCircle, X } from "@phosphor-icons/react";
+import Image from "next/image";
+import { ArrowUp, Buildings, CaretLeft, CaretRight, ChatCircleText, CheckCircle, CircleNotch, ClipboardText, MagnifyingGlass, NotePencil, Paperclip, Question, ShieldCheck, SquaresFour, WarningCircle, X } from "@phosphor-icons/react";
 import CaseFile, { type OutboxItem } from "@/components/case/CaseFile";
 import { ActionCard, PlanCard, str } from "./Agent";
 import type { Ranked } from "@/lib/rationale";
@@ -110,6 +111,14 @@ export default function ChatApp() {
   const [ready, setReady] = useState(false);
   /** Mobile: the case file opens as a bottom sheet. */
   const [sheet, setSheet] = useState(false);
+  // Desktop: while a candidate is open, the chat folds to a rail so the case file gets the width.
+  const [caseFocus, setCaseFocus] = useState(false);
+  const [chatPeek, setChatPeek] = useState(false);
+  const onCaseFocus = useCallback((open: boolean) => {
+    setCaseFocus(open);
+    if (!open) setChatPeek(false);
+  }, []);
+  const folded = caseFocus && !chatPeek;
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -945,6 +954,10 @@ export default function ChatApp() {
       case "welcome":
         return (
           <div className={s.welcome}>
+            <figure className={s.welcomeFig}>
+              <Image src="/media/site.webp" alt="" width={960} height={1200} unoptimized />
+              <figcaption>Photo: K8 / Unsplash</figcaption>
+            </figure>
             <h1 className={s.welcomeLead}>{m.text}</h1>
             <p className={s.welcomeSub}>{WELCOME_SUB}</p>
           </div>
@@ -969,8 +982,26 @@ export default function ChatApp() {
   }
 
   return (
-    <div className={s.stage}>
+    <div className={`${s.stage} ${folded ? s.stageFolded : ""}`}>
       <main className={s.phone} aria-label="Chat with Kilpi">
+        <button
+          type="button"
+          className={s.rail}
+          onClick={() => {
+            setChatPeek(true);
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+          aria-label="Show the chat"
+          title="Show the chat"
+          tabIndex={folded ? 0 : -1}
+          aria-hidden={!folded}
+        >
+          <strong>Kilpi</strong>
+          <span className={s.railChat}>
+            <ChatCircleText weight="bold" aria-hidden />
+            <span>Chat</span>
+          </span>
+        </button>
         <header className={s.header}>
           <span className={s.avatar} aria-hidden><ShieldCheck weight="fill" /></span>
           <div className={s.who}>
@@ -982,6 +1013,11 @@ export default function ChatApp() {
             <span>Case file</span>
             {caseCount > 0 && <b className={s.caseCount} title={`${caseCount} candidates`} aria-label={`${caseCount} candidates`}>{caseCount}</b>}
           </button>
+          {caseFocus && chatPeek && (
+            <button type="button" className={`${s.headBtn} ${s.iconOnly} ${s.foldBtn}`} onClick={() => setChatPeek(false)} title="Fold the chat" aria-label="Fold the chat">
+              <CaretLeft weight="bold" />
+            </button>
+          )}
           <Link href="/" className={`${s.headBtn} ${s.iconOnly}`} title="Classic view" aria-label="Classic view"><SquaresFour weight="bold" /></Link>
           <button type="button" className={`${s.headBtn} ${s.iconOnly}`} onClick={newChat} disabled={busy} title="New project" aria-label="New project"><NotePencil weight="bold" /></button>
         </header>
@@ -1099,6 +1135,7 @@ export default function ChatApp() {
           onDraft={(r) => caseFromPanel(() => runDrafts([r], loadTable(ctxRef.current.lang ?? "en")))}
           onWatch={(target) => caseFromPanel(() => runWatch(target))}
           onDraftChange={(id, d) => patch(id, (x) => ({ ...x, draft: d }) as Msg)}
+          onFocusChange={onCaseFocus}
           onPrefill={(text) => {
             setSheet(false);
             setInput(text);

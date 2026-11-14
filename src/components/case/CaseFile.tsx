@@ -2,15 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { CaretDown, CheckCircle, CircleNotch, Copy, Envelope } from "@phosphor-icons/react";
+import Image from "next/image";
+import { CaretDown, Check as CheckIcon, CheckCircle, CircleNotch, Copy, Envelope } from "@phosphor-icons/react";
 import type { Ranked } from "@/lib/rationale";
 import type { Check } from "@/lib/verify";
 import type { QuoteRow, Recommendation } from "@/lib/compare";
 import { Sources, companyKey, draftBody } from "@/components/chat/Bubbles";
 import type { Ctx, Draft } from "@/components/chat/types";
-import { CandidateDrawer, Glyph, VerdictWord } from "./CandidateDrawer";
+import { CandidateDrawer, VerdictWord } from "./CandidateDrawer";
 import {
   addressOf,
+  cellOf,
   fmtKm,
   findingOf,
   fromRanked,
@@ -50,27 +52,18 @@ type Props = {
   onWatch: (target: { name: string; domain?: string }) => void;
   onDraftChange: (id: string, d: Draft) => void;
   onPrefill: (text: string) => void;
+  /** Desktop: a candidate is open in the drawer, so the chat can fold away and give the matrix room. */
+  onFocusChange?: (open: boolean) => void;
 };
 
 const eur = (n?: number) => (n == null ? "?" : `${Math.round(n).toLocaleString("fi-FI")} €`);
 const asRanked = (c: Cand): Ranked | null => (c.report ? { place: c.place, report: c.report, why: c.why, fit: c.fit ?? 0 } : null);
 const mailto = (d: Draft, body: string) => `mailto:${d.email ?? ""}?subject=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(body)}`;
 
-/** Matrix column headers: short, the full register name in the tooltip. */
-const REG_SHORT: Record<string, string> = {
-  "tv-prepayment": "Prepay",
-  "tv-employer": "Employer",
-  "tv-vat": "VAT",
-  "tv-trade-register": "Trade",
-  "tv-tax": "Tax debt",
-  "tv-insolvency": "Insolv.",
-  "tv-reliable-partner": "Partner",
-};
-const STATUS_TITLE = { green: "clear", yellow: "clarify", red: "failed", grey: "no data" } as const;
 /** A check backed by a web source the drawer can cite. */
 const sourced = (c: Check) => c.evidence.some((e) => !!e.url && /^https?:/i.test(e.url));
 
-export default function CaseFile({ ctx, outbox, compare, busy, picked, onTogglePick, onDraft, onWatch, onDraftChange, onPrefill }: Props) {
+export default function CaseFile({ ctx, outbox, compare, busy, picked, onTogglePick, onDraft, onWatch, onDraftChange, onPrefill, onFocusChange }: Props) {
   const [selected, setSelected] = useState<string | undefined>();
   const [open, setOpen] = useState<string | undefined>();
   // A clicked matrix cell: open that company's drawer at that check (n re-triggers on a repeat click).
@@ -162,6 +155,10 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
   }, [cands]);
 
   const openCand = cands.find((c) => c.key === open);
+  const isOpen = !!openCand;
+  useEffect(() => {
+    onFocusChange?.(isOpen);
+  }, [isOpen, onFocusChange]);
   const unsent = outbox.filter((o) => !o.draft.sent).length;
   const empty = !p && !cands.length && !outbox.length && !compare && !ctx.watched.length;
   const done = cands.filter((c) => c.status === "done");
@@ -184,31 +181,45 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
       : `Tilaajavastuulaki applies${tv.applies === "yes" ? (p?.contractValueEur ? ` (${eur(p.contractValueEur)})` : "") : " from €9,000"}`
     : "";
   const showMap = !!(site || pins.length);
-  const cols = 3 + regCols.length + (regCols.length ? 1 : 0) + 2; // company, fit, distance, registers (+ strip), verdict, finding
+  const pickMode = picked.length > 0;
 
   return (
     <div className={`${s.case} ${openCand ? s.caseOpen : ""}`}>
       <div className={`${s.scroller} ${empty ? s.scrollerEmpty : ""}`}>
         {empty ? (
           <section className={s.hero} aria-labelledby="case-hero">
-            <h1 id="case-hero" className={s.heroTitle}>
-              Vet subcontractors before you sign.
-            </h1>
-            <p className={s.heroSub}>Describe the trade, the project and the site in the chat. Candidates, their register checks and your drafted requests collect here. Nothing is sent without your OK.</p>
-            <ol className={s.heroSteps}>
-              <li>
-                <strong>Candidates</strong>
-                <p>Ranked by fit and distance to the site.</p>
-              </li>
-              <li>
-                <strong>Register checks</strong>
-                <p>Every tilaajavastuu check, cited to its source.</p>
-              </li>
-              <li>
-                <strong>Outbox</strong>
-                <p>Quote and document requests, drafted for your OK.</p>
-              </li>
-            </ol>
+            <div className={s.heroText}>
+              <p className={s.eyebrow}>Subcontractor vetting</p>
+              <h1 id="case-hero" className={s.heroTitle}>
+                Vet subcontractors before you sign.
+              </h1>
+              <p className={s.heroSub}>Describe the trade, the project and the site in the chat. Candidates, their register checks and your drafted requests collect here. Nothing is sent without your OK.</p>
+              <ol className={s.heroSteps}>
+                <li>
+                  <strong>Candidates</strong>
+                  <p>Ranked by fit and distance to the site.</p>
+                </li>
+                <li>
+                  <strong>Register checks</strong>
+                  <p>Every tilaajavastuu check, cited to its source.</p>
+                </li>
+                <li>
+                  <strong>Outbox</strong>
+                  <p>Quote and document requests, drafted for your OK.</p>
+                </li>
+              </ol>
+            </div>
+            <figure className={s.heroFig}>
+              <div className={s.heroImg}>
+                <Image src="/media/site.webp" alt="Apartment building under facade renovation, wrapped in scaffolding, Jyväskylä" width={960} height={1200} unoptimized priority />
+              </div>
+              <figcaption>
+                Photo:{" "}
+                <a href="https://unsplash.com/photos/brown-concrete-building-under-white-sky-during-daytime-OvvfmRm4ja4" target="_blank" rel="noopener noreferrer">
+                  K8 / Unsplash
+                </a>
+              </figcaption>
+            </figure>
           </section>
         ) : (
         <>
@@ -281,19 +292,19 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
           </div>
           {cands.length ? (
             <div className={s.matrixWrap}>
-              <table className={s.matrix}>
+              <table className={`${s.matrix} ${pickMode ? s.pickMode : ""}`}>
                 <thead>
                   <tr>
                     <th className={s.cCompany}>Company</th>
                     <th className={s.cNum}>Fit</th>
                     <th className={`${s.cNum} ${s.cKm}`}>Distance</th>
                     {regCols.map((k, i) => (
-                      <th key={k.id} className={`${s.cReg} ${i === 0 ? s.cRegFirst : ""}`} title={regName(k)}>
-                        {REG_SHORT[k.id] ?? regName(k)}
+                      <th key={k.id} className={`${s.cReg} ${i === 0 ? s.cRegFirst : ""}`} title={k.label.replace(/^Tilaajavastuu:\s*/i, "")}>
+                        {k.id === "tv-reliable-partner" ? "Partner" : regName(k)}
                       </th>
                     ))}
-                    {regCols.length > 0 && <th className={s.cStrip}>Registers</th>}
-                    <th className={`${s.cVerdict} ${regCols.length ? s.cRegAfter : ""}`}>Verdict</th>
+                    <th className={s.cIssues}>Registers</th>
+                    <th className={s.cVerdict}>Verdict</th>
                     <th className={s.cFinding}>Finding</th>
                   </tr>
                 </thead>
@@ -313,13 +324,33 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                     setOpen(c.key);
                     setFocus(checkId ? { id: checkId, n: Date.now() } : undefined);
                   };
+                  const cellBtn = (x: Check, extra = "") => {
+                    const cell = cellOf(x);
+                    return (
+                      <button
+                        type="button"
+                        className={`${s.cell} ${s[`k_${cell.kind}`]} ${extra} ${open === c.key && focus?.id === x.id ? s.cellOn : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          go(x.id);
+                        }}
+                        title={`${regName(x)}: ${cell.word}${sourced(x) ? " (cited)" : ""}`}
+                        aria-label={`${c.name}, ${regName(x)}: ${cell.word}. Show the source`}
+                      >
+                        {cell.kind === "ok" ? <CheckIcon weight="bold" aria-hidden /> : cell.kind === "na" ? "–" : cell.word}
+                      </button>
+                    );
+                  };
+                  const issues = regs.filter((x) => x.status === "yellow" || x.status === "red");
+                  const clearN = regs.filter((x) => x.status === "green").length;
+                  const manualN = regs.length - issues.length - clearN;
                   return (
                     <tbody
                       key={c.key}
                       ref={(el) => {
                         rows.current[c.key] = el;
                       }}
-                      className={`${s.cand} ${can ? s.candLink : ""} ${open === c.key ? s.candOpen : selected === c.key ? s.candHover : ""}`}
+                      className={`${s.cand} ${can ? s.candLink : ""} ${isPicked ? s.candPicked : ""} ${open === c.key ? s.candOpen : selected === c.key ? s.candHover : ""}`}
                       onMouseEnter={() => setSelected(c.key)}
                       onClick={() => go()}
                     >
@@ -327,19 +358,19 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                         <td className={s.cCompany}>
                           <span className={s.company}>
                             <span className={s.pickSlot}>
-                                {pickable && (
-                                  <input
-                                    type="checkbox"
-                                    className={s.pick}
-                                    checked={isPicked}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onChange={() => onTogglePick(pk)}
-                                    aria-label={`Pick ${c.name}`}
-                                    title="Pick for a quote request"
-                                  />
-                                )}
+                              {c.rank != null && <span className={s.rank} aria-hidden>{c.rank}</span>}
+                              {pickable && (
+                                <input
+                                  type="checkbox"
+                                  className={s.pick}
+                                  checked={isPicked}
+                                  onClick={(e) => e.stopPropagation()}
+                                  onChange={() => onTogglePick(pk)}
+                                  aria-label={`Pick ${c.name} for a quote request`}
+                                  title="Pick for a quote request"
+                                />
+                              )}
                             </span>
-                            <span className={s.rank}>{c.rank ?? ""}</span>
                             <button
                               type="button"
                               className={s.nameBtn}
@@ -364,59 +395,28 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                         {regCols.map((col, i) => {
                           const x = regs.find((r) => r.id === col.id);
                           return (
-                            <td key={col.id} className={`${s.cReg} ${i === 0 ? s.cRegFirst : ""}`} title={x ? `${regName(x)}: ${STATUS_TITLE[x.status]}` : undefined}>
-                              {x && can ? (
-                                <button
-                                  type="button"
-                                  className={`${s.cell} ${open === c.key && focus?.id === x.id ? s.cellOn : ""}`}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    go(x.id);
-                                  }}
-                                  aria-label={`${c.name}, ${regName(x)}: ${STATUS_TITLE[x.status]}. Show the source`}
-                                >
-                                  <Glyph status={x.status} />
-                                  {sourced(x) && <i className={s.citeMark} aria-hidden />}
-                                </button>
-                              ) : x ? (
-                                <Glyph status={x.status} />
-                              ) : c.status === "scanning" ? (
-                                <span className={s.pending} aria-hidden />
-                              ) : null}
+                            <td key={col.id} className={`${s.cReg} ${i === 0 ? s.cRegFirst : ""}`}>
+                              {x && can ? cellBtn(x) : x ? <span className={`${s.cell} ${s[`k_${cellOf(x).kind}`]}`}>{cellOf(x).word}</span> : c.status === "scanning" ? <span className={s.pending} aria-hidden /> : null}
                             </td>
                           );
                         })}
-                        {regCols.length > 0 && (
-                          <td className={s.cStrip}>
-                            <span className={s.strip}>
-                              {regCols.map((col) => {
-                                const x = regs.find((r) => r.id === col.id);
-                                return (
-                                  <span key={col.id} title={x ? `${regName(x)}: ${STATUS_TITLE[x.status]}` : regName(col)}>
-                                    {x && can ? (
-                                      <button
-                                        type="button"
-                                        className={`${s.cell} ${s.cellSm} ${open === c.key && focus?.id === x.id ? s.cellOn : ""}`}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          go(x.id);
-                                        }}
-                                        aria-label={`${c.name}, ${regName(x)}: ${STATUS_TITLE[x.status]}. Show the source`}
-                                      >
-                                        <Glyph status={x.status} />
-                                      </button>
-                                    ) : x ? (
-                                      <Glyph status={x.status} />
-                                    ) : c.status === "scanning" ? (
-                                      <span className={s.pending} aria-hidden />
-                                    ) : null}
-                                  </span>
-                                );
-                              })}
+                        {/* phones: the exceptions as words, the clear registers as a count */}
+                        <td className={s.cIssues}>
+                          {can && regs.length > 0 && (
+                            <span className={s.issues}>
+                              {issues.map((x) => (
+                                <span key={x.id} className={s.issue}>
+                                  <span className={s.issueName}>{regName(x)}</span>
+                                  {cellBtn(x, s.cellInline)}
+                                </span>
+                              ))}
+                              {(clearN > 0 || manualN > 0) && (
+                                <span className={s.issueClear}>{[clearN && `${clearN} clear`, manualN && `${manualN} to check by hand`].filter(Boolean).join(" · ")}</span>
+                              )}
                             </span>
-                          </td>
-                        )}
-                        <td className={`${s.cVerdict} ${regCols.length ? s.cRegAfter : ""}`}>
+                          )}
+                        </td>
+                        <td className={s.cVerdict}>
                           {c.status === "scanning" ? (
                             <span className={s.checking}>
                               <CircleNotch className={s.spin} aria-hidden /> Checking
@@ -424,20 +424,11 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                           ) : c.status === "failed" ? (
                             <span className={s.checking}>Not checked</span>
                           ) : (
-                            <VerdictWord v={v} />
+                            <VerdictWord v={v} short />
                           )}
                         </td>
-                        <td className={s.cFinding} title={k?.text}>
-                          {k?.text}
-                        </td>
+                        <td className={s.cFinding}>{k && <span className={s.clamp} title={k.text}>{k.text}</span>}</td>
                       </tr>
-                      {k && (
-                        <tr className={s.findRow}>
-                          <td colSpan={cols}>
-                            <span>{k.text}</span>
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   );
                 })}

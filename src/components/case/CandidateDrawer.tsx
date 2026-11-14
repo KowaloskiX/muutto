@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowUpRight, Bell, ChatCircleText, Check, Minus, WarningCircle, X, XCircle } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowUpRight, Bell, CaretDown, ChatCircleText, Check, Minus, WarningCircle, X, XCircle } from "@phosphor-icons/react";
 import type { Check as CheckT, Status } from "@/lib/verify";
 import { withTextFragment } from "@/lib/textFragment";
-import { findingOf, firstSentence, fmtKm, hostOf, isDoc, isTv, publicRegisters, regName, verdict, VERDICT_LABEL, type Cand } from "./model";
+import { findingOf, firstSentence, fmtKm, hostOf, isDoc, isTv, notListedLine, publicRegisters, regName, verdict, VERDICT_LABEL, type Cand } from "./model";
 import s from "./Case.module.css";
 
 const GLYPH = { green: Check, yellow: WarningCircle, red: XCircle, grey: Minus } as const;
@@ -20,9 +20,15 @@ export function Glyph({ status }: { status: Status }) {
   );
 }
 
-/** The verdict as a coloured word. */
-export function VerdictWord({ v }: { v: Status }) {
-  return <span className={`${s.verdict} ${s[`t_${v}`]}`}>{VERDICT_LABEL[v]}</span>;
+/** The verdict as a coloured dot and a word. */
+const SHORT_VERDICT: Record<Status, string> = { green: "Clear", yellow: "Clarify", red: "Red flag", grey: "Checking" };
+export function VerdictWord({ v, short }: { v: Status; short?: boolean }) {
+  return (
+    <span className={`${s.verdict} ${s[`t_${v}`]}`} title={short ? VERDICT_LABEL[v] : undefined}>
+      <i className={`${s.vDot} ${s[`d_${v}`]}`} aria-hidden />
+      {short ? SHORT_VERDICT[v] : VERDICT_LABEL[v]}
+    </span>
+  );
 }
 
 const ORDER: Status[] = ["red", "yellow", "green", "grey"];
@@ -55,39 +61,70 @@ function SourceLinks({ ev }: { ev: Ev[] }) {
   );
 }
 
-/** Everything behind one check: the full detail, the law, the quote, the sources, the manual re-check. */
+/** The cited passage as a source card: where it was read and when, the passage line by line, and what the page does not list. */
+function SourceCard({ e, checks = [] }: { e: Ev; checks?: CheckT[] }) {
+  const passage = clean(e.quote ?? "", 600);
+  if (!passage) return null;
+  // "Active registers: A · B · C" reads as a heading and a list; any passage splits on " · ".
+  const head = passage.match(/^([^·:]{3,40}):\s+(.*)$/);
+  const lines = (head ? head[2] : passage).split(" · ").map((x) => x.trim()).filter(Boolean);
+  const missing = checks.map(notListedLine).filter((x): x is string => !!x);
+  return (
+    <figure className={s.source}>
+      <figcaption className={s.sourceHead}>
+        <a href={withTextFragment(e.url, e.quote)} target="_blank" rel="noopener noreferrer" title={e.via ?? "Opens the page at this passage"}>
+          {hostOf(e.url)}
+          <ArrowUpRight weight="bold" aria-hidden />
+        </a>
+        {e.asOf && <span>Copy of {fiDate(e.asOf)}</span>}
+      </figcaption>
+      <blockquote className={s.passage}>
+        {head && <span className={s.passageHead}>{head[1]}</span>}
+        {lines.map((l, i) => (
+          <span key={i} className={s.passageLine}>
+            {l}
+          </span>
+        ))}
+        {missing.map((m) => (
+          <span key={m} className={s.passageMissing}>
+            {m}
+          </span>
+        ))}
+      </blockquote>
+    </figure>
+  );
+}
+
+/** Everything behind one check: the full detail, the cited passage, the law, the other sources, the manual re-check. */
 function CheckDetail({ c }: { c: CheckT }) {
   const ev = webEv(c);
-  const quote = ev.find((e) => e.quote && e.quote.trim().length > 12);
+  const lead = ev.find((e) => e.quote && e.quote.trim().length > 12);
+  const rest = ev.filter((e) => e !== lead);
   return (
     <div className={s.detail}>
       <p>{c.detail}</p>
-      {quote?.quote && (
-        <a className={s.quote} href={withTextFragment(quote.url, quote.quote)} target="_blank" rel="noopener noreferrer" title="Opens the page at this sentence">
-          “{clean(quote.quote)}”
-        </a>
+      {lead && <SourceCard e={lead} checks={[c]} />}
+      {(rest.length > 0 || c.action || c.law || !ev.length) && (
+        <span className={s.detailLinks}>
+          {c.law && <span className={s.law}>{c.law}</span>}
+          <SourceLinks ev={rest} />
+          {!ev.length && !c.action && <span className={s.noSrc}>{c.status === "grey" ? "Not confirmed from public data" : "Kilpi's own check"}</span>}
+          {c.action && (
+            <a className={s.src} href={c.action.url} target="_blank" rel="noopener noreferrer">
+              {c.action.label}
+              <ArrowUpRight weight="bold" aria-hidden />
+            </a>
+          )}
+        </span>
       )}
-      {c.law && <p className={s.law}>{c.law}</p>}
-      <span className={s.detailLinks}>
-        <SourceLinks ev={ev} />
-        {!ev.length && !c.action && <span className={s.noSrc}>{c.status === "grey" ? "Not confirmed from public data" : "Kilpi's own check"}</span>}
-        {c.action && (
-          <a className={s.src} href={c.action.url} target="_blank" rel="noopener noreferrer">
-            {c.action.label}
-            <ArrowUpRight weight="bold" aria-hidden />
-          </a>
-        )}
-      </span>
     </div>
   );
 }
 
-/** One list line: glyph, title, short status or summary, source right-aligned; expands in place. */
-function CheckLine({ c, title, summary, showSource, focus }: { c: CheckT; title: string; summary: string; showSource?: boolean; focus?: number }) {
+/** One list line: glyph, title, short status or summary; expands in place. Exceptions wrap their summary instead of truncating it. */
+function CheckLine({ c, title, summary, note, focus, loud }: { c: CheckT; title: string; summary: string; note?: string; focus?: number; loud?: boolean }) {
   const [open, setOpen] = useState(!!focus);
   const ref = useRef<HTMLLIElement>(null);
-  const ev = webEv(c);
-  const first = ev[0];
   // Opened from a matrix cell: expand this check and bring it into view.
   useEffect(() => {
     if (!focus) return;
@@ -96,19 +133,14 @@ function CheckLine({ c, title, summary, showSource, focus }: { c: CheckT; title:
     requestAnimationFrame(() => ref.current?.scrollIntoView({ block: "center", behavior: still ? "auto" : "smooth" }));
   }, [focus]);
   return (
-    <li ref={ref} className={`${s.line} ${open ? s.lineOpen : ""} ${focus ? s.lineFocus : ""}`}>
-      <div className={s.lineHead}>
-        <button type="button" className={s.lineBtn} onClick={() => setOpen((x) => !x)} aria-expanded={open}>
-          <Glyph status={c.status} />
-          <span className={s.lineTitle}>{title}</span>
-          <span className={s.lineSum}>{summary}</span>
-        </button>
-        {showSource && first && (
-          <a className={s.lineSrc} href={withTextFragment(first.url, first.quote)} target="_blank" rel="noopener noreferrer" title={first.via ?? first.url}>
-            {hostOf(first.url)}
-          </a>
-        )}
-      </div>
+    <li ref={ref} className={`${s.line} ${open ? s.lineOpen : ""} ${focus ? s.lineFocus : ""} ${loud ? s.lineLoud : ""}`}>
+      <button type="button" className={s.lineBtn} onClick={() => setOpen((x) => !x)} aria-expanded={open}>
+        <Glyph status={c.status} />
+        <span className={s.lineTitle}>{title}</span>
+        <span className={s.lineSum}>{summary}</span>
+        <CaretDown weight="bold" className={`${s.chev} ${open ? s.chevOpen : ""}`} aria-hidden />
+      </button>
+      {note && !open && <p className={s.lineNote}>{note}</p>}
       {open && <CheckDetail c={c} />}
     </li>
   );
@@ -176,7 +208,8 @@ export function CandidateDrawer({
   const v = verdict(cand);
   const key = findingOf(cand);
   const regs = publicRegisters(r);
-  const clear = regs.filter((c) => c.status === "green").length;
+  const issues = regs.filter((c) => c.status !== "green").sort(byStatus);
+  const clear = regs.filter((c) => c.status === "green");
   const docs = r.checks.filter((c) => isTv(c) && isDoc(c));
   // A document named in `documents` without a matching check still has to be requested.
   const extraDocs = (r.documents ?? []).filter((d) => !docs.some((c) => c.document?.en === d.en || c.id === d.id));
@@ -186,6 +219,34 @@ export function CandidateDrawer({
     const asOf = webEv(c).find((e) => e.asOf)?.asOf;
     return asOf ? `${statusWord(c)}, ${fiDate(asOf)}` : statusWord(c);
   };
+  // The key finding's passage, with the date and publisher from the evidence it came from.
+  const allEv: Ev[] = [...r.checks.flatMap((c) => c.evidence), ...cand.why.flatMap((w) => w.evidence)].filter((e) => e.url && /^https?:/i.test(e.url));
+  const leadSrc = key?.sources.find((x) => x.quote && x.quote.trim().length > 12);
+  const lead: Ev | undefined = leadSrc ? (allEv.find((e) => e.url === leadSrc.url && e.quote === leadSrc.quote) ?? leadSrc) : undefined;
+  // The register checks this passage is evidence for (so the card can say what the page does not list).
+  const leadChecks = key?.check
+    ? [key.check]
+    : lead
+      ? regs.filter((c) => c.status !== "green" && c.evidence.some((e) => e.url === lead.url && e.quote === lead.quote))
+      : [];
+  const otherSrc = key ? key.sources.filter((x) => !lead || hostOf(x.url) !== hostOf(lead.url)) : [];
+  const line = r.registry?.mainBusinessLine;
+  const facts: [string, React.ReactNode][] = [
+    ["Business ID", r.businessId],
+    ["Distance", distance != null ? `${fmtKm(distance)} from site` : undefined],
+    ["Fit", cand.fit != null ? `${cand.fit} / 100` : undefined],
+    [
+      "Website",
+      cand.site ? (
+        <a href={cand.site} target="_blank" rel="noopener noreferrer">
+          {hostOf(cand.site)}
+        </a>
+      ) : undefined,
+    ],
+    ["Line of business", line ? `${line.charAt(0).toUpperCase()}${line.slice(1)}` : undefined],
+    // Honest freshness: cached reports are real earlier checks, say how old they are.
+    ["Checked", r.cachedAt ? checkedAgo(r.cachedAt) : "just now"],
+  ];
 
   return (
     <aside className={s.drawerWrap} role="dialog" aria-label={`${cand.name}: all checks`}>
@@ -198,20 +259,6 @@ export function CandidateDrawer({
           <div className={s.dTitle}>
             <VerdictWord v={v} />
             <h2>{cand.name}</h2>
-            <p className={s.dMeta}>
-              {[r.businessId, distance != null ? fmtKm(distance) : "", cand.fit != null ? `fit ${cand.fit}` : ""].filter(Boolean).join(" · ")}
-              {cand.site && (
-                <>
-                  {" · "}
-                  <a href={cand.site} target="_blank" rel="noopener noreferrer">
-                    {hostOf(cand.site)}
-                  </a>
-                </>
-              )}
-              {/* Honest freshness: cached reports are real earlier checks, say how old they are. */}
-              {" · "}
-              <span className={s.nowrap}>checked {r.cachedAt ? checkedAgo(r.cachedAt) : "just now"}</span>
-            </p>
           </div>
           <button type="button" className={s.close} onClick={onClose} aria-label="Close">
             <X weight="bold" />
@@ -219,11 +266,23 @@ export function CandidateDrawer({
         </header>
 
         <div className={s.dBody}>
+          <dl className={s.facts}>
+            {facts
+              .filter(([, val]) => val != null && val !== "")
+              .map(([k, val]) => (
+                <div key={k} className={k === "Line of business" ? s.factWide : undefined}>
+                  <dt>{k}</dt>
+                  <dd>{val}</dd>
+                </div>
+              ))}
+          </dl>
+
           {key && (
             <section className={s.finding} aria-label="Key finding">
+              <h3 className={s.eyebrowH}>Key finding</h3>
               <p className={s.findingText}>{key.text}</p>
-              {key.quote && <q className={s.findingQuote}>{key.quote}</q>}
-              <SourceLinks ev={key.sources} />
+              {lead ? <SourceCard e={lead} checks={leadChecks} /> : null}
+              {otherSrc.length > 0 && <SourceLinks ev={otherSrc} />}
             </section>
           )}
 
@@ -232,13 +291,22 @@ export function CandidateDrawer({
               <h3>
                 Registers
                 <span>
-                  {clear} of {regs.length} clear
+                  {clear.length} of {regs.length} clear
                 </span>
               </h3>
               <ul className={s.lines}>
-                {regs.map((c) => (
-                  <CheckLine key={c.id} c={c} title={regName(c)} summary={regSummary(c)} showSource focus={focus?.id === c.id ? focus.n : undefined} />
+                {issues.map((c) => (
+                  <CheckLine
+                    key={c.id}
+                    c={c}
+                    title={regName(c)}
+                    summary={regSummary(c)}
+                    note={firstSentence(c.detail)}
+                    loud
+                    focus={focus?.id === c.id ? focus.n : undefined}
+                  />
                 ))}
+                {clear.length > 0 && <ClearGroup checks={clear} focus={focus} summary={regSummary} />}
               </ul>
               {r.registrySource && (
                 <p className={s.footnote}>
@@ -303,14 +371,42 @@ export function CandidateDrawer({
           <button type="button" className={s.primary} onClick={onDraft} disabled={busy}>
             Draft RFQ and documents
           </button>
-          <button type="button" className={s.quiet} onClick={onWatch} disabled={busy || watching}>
-            <Bell weight="bold" aria-hidden /> {watching ? "Watching" : "Watch"}
-          </button>
-          <button type="button" className={s.quiet} onClick={onAsk} disabled={busy} aria-label="Ask about this company">
-            <ChatCircleText weight="bold" aria-hidden /> Ask
-          </button>
+          <span className={s.footQuiet}>
+            <button type="button" className={s.quiet} onClick={onWatch} disabled={busy || watching}>
+              <Bell weight="bold" aria-hidden /> {watching ? "Watching" : "Watch"}
+            </button>
+            <button type="button" className={s.quiet} onClick={onAsk} disabled={busy} aria-label="Ask about this company">
+              <ChatCircleText weight="bold" aria-hidden /> Ask
+            </button>
+          </span>
         </footer>
       </div>
     </aside>
+  );
+}
+
+/** The clear registers fold into one "4 clear" line; it opens by itself when a matrix cell points inside it. */
+function ClearGroup({ checks, focus, summary }: { checks: CheckT[]; focus?: { id: string; n: number }; summary: (c: CheckT) => string }) {
+  const inside = !!focus && checks.some((c) => c.id === focus.id);
+  const [open, setOpen] = useState(inside);
+  useEffect(() => {
+    if (inside) setOpen(true);
+  }, [inside, focus?.n]);
+  return (
+    <li className={`${s.line} ${s.clearGroup}`}>
+      <button type="button" className={s.lineBtn} onClick={() => setOpen((x) => !x)} aria-expanded={open}>
+        <Glyph status="green" />
+        <span className={s.lineTitle}>{checks.length} clear</span>
+        <span className={s.lineSum}>{checks.map(regName).join(", ")}</span>
+        <CaretDown weight="bold" className={`${s.chev} ${open ? s.chevOpen : ""}`} aria-hidden />
+      </button>
+      {open && (
+        <ul className={`${s.lines} ${s.subLines}`}>
+          {checks.map((c) => (
+            <CheckLine key={c.id} c={c} title={regName(c)} summary={summary(c)} focus={focus?.id === c.id ? focus.n : undefined} />
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }

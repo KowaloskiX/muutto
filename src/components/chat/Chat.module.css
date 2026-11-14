@@ -42,6 +42,25 @@
   font-family: var(--font-sans);
 }
 
+/* desktop focus: a candidate is open, the chat folds to a slim rail (click to bring it back) */
+.rail { display: none; }
+.foldBtn { display: none; }
+@media (min-width: 1024px) {
+  .stage { transition: grid-template-columns .32s var(--c-ease); }
+  .stageFolded { grid-template-columns: 64px minmax(0, 1fr); }
+  .stageFolded .phone > :not(.rail) { display: none; }
+  .stageFolded .rail { display: flex; }
+  .foldBtn { display: inline-flex; }
+  .rail { flex-direction: column; align-items: center; gap: 24px; height: 100%; padding: 20px 0 24px; border: 0; background: var(--c-bg); color: var(--c-ink); cursor: pointer; animation: railIn .3s var(--c-ease) both; }
+  .rail strong { font-size: 15px; font-weight: 500; }
+  .railChat { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 8px; border-radius: var(--c-pill); background: var(--c-tile); color: var(--c-ink2); font-size: 13px; transition: background-color .2s ease, color .2s ease; }
+  .railChat svg { width: 18px; height: 18px; }
+  .railChat span { writing-mode: vertical-rl; transform: rotate(180deg); }
+  .rail:hover .railChat, .rail:focus-visible .railChat { background: var(--c-grey-pill); color: var(--c-ink); }
+}
+@keyframes railIn { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .stage { transition: none; } .rail { animation: none; } }
+
 .casePane { position: relative; min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; }
 .sheetBar, .caseBtn, .sheetScrim, .caseStrip { display: none !important; }
 .caseCount { min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--c-pill); background: var(--c-accent); color: var(--c-accent-ink); font-size: 13px; font-weight: 500; line-height: 18px; letter-spacing: 0; text-align: center; font-variant-numeric: tabular-nums; }
@@ -125,6 +144,12 @@
 .welcomeLead { margin: 0; color: var(--c-ink); font-family: var(--font-display); font-size: 41px; font-weight: 400; line-height: 1.02; letter-spacing: -.01em; text-wrap: balance; }
 .welcomeSub { margin: 0; color: var(--c-ink2); font-size: 18px; line-height: 1.3; }
 @media (min-width: 1024px) { .welcome { display: none; } }
+/* a calm editorial strip of the photo above the headline (phones only) */
+.welcomeFig { position: relative; margin: 0 0 8px; height: clamp(120px, 22dvh, 200px); border-radius: 4px; overflow: hidden; background: var(--sand, #ece8df); }
+.welcomeFig img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; filter: saturate(.72) sepia(.08) contrast(.96); }
+.welcomeFig::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(250 249 247 / 0) 55%, rgb(250 249 247 / .18)); pointer-events: none; }
+.welcomeFig figcaption { position: absolute; right: 8px; bottom: 6px; z-index: 1; color: rgb(255 255 255 / .86); font-size: 11px; text-shadow: 0 1px 2px rgb(0 0 0 / .35); }
+@media (max-height: 700px) { .welcomeFig { display: none; } }
 
 /* welcome suggestions: an eyebrow, then quiet hairline rows */
 .suggest { display: flex; flex-direction: column; }
