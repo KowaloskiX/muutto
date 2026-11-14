@@ -37,7 +37,7 @@ export type MoveIntent = {
   workSources?: Source[];
   /** Anything else the user wants near home, beyond the built-in criteria: "gyms", "climbing gyms",
    *  "Lidl", "dog parks". Each becomes a `custom:<slug>` criterion measured with Exa Places. */
-  customPlaces?: { id: `custom:${string}`; what: string; label: string }[];
+  customPlaces?: { id: `custom:${string}`; what: string; label: string; /** 1 nice to have, 3 important, 6 must have */ weight?: number; kind?: "place" | "yes_no" | "descriptive" }[];
 };
 
 /** A criterion measured for an area. `id` is stable so the UI can build matrix columns. */

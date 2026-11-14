@@ -629,3 +629,29 @@
 @media (prefers-reduced-motion: reduce) { .lc, .lc:hover { transition: none; transform: none; } .lcPhoto img { animation: none; } }
 .drawerGallery { margin: 0 0 8px; border-radius: 12px; aspect-ratio: 16 / 10; }
 .drawerGallery .lcNav { opacity: 1; }
+
+/* ---- add any criterion ---- */
+.acOpen { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 12px; padding: 6px 14px; border: 1px dashed var(--line-strong); border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-size: 13px; cursor: pointer; }
+.acOpen:hover { border-style: solid; background: var(--surface); }
+.acOpen svg { width: 12px; height: 12px; }
+.ac { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; padding: 12px; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.acRow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.acRow input { flex: 1 1 260px; min-width: 0; height: 36px; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--page); color: var(--ink); font: inherit; font-size: 14px; }
+.acRow input:focus { outline: 2px solid var(--accent-deep); outline-offset: -1px; }
+.acWeights { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface-strong); }
+.acWeights button { min-height: 28px; padding: 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: inherit; font-size: 12px; cursor: pointer; }
+.acWeights .acWeightOn { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(13 16 22 / .12); }
+.acRow .lcPrimary { min-height: 36px; }
+.acRow .lcPrimary:disabled { opacity: .45; cursor: default; }
+.acClose { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.acClose:hover { background: var(--surface-strong); color: var(--ink); }
+.acNote { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: 12px; }
+.acIdeas { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.acIdeas button { padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink-soft); font: inherit; font-size: 12px; cursor: pointer; }
+.acIdeas button:hover { border-color: var(--line-strong); color: var(--ink); }
+.mxPick { display: inline-flex; align-items: center; gap: 4px; }
+.mxPick button { display: grid; place-items: center; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--faint); cursor: pointer; opacity: 0; transition: opacity .15s ease; }
+.mxPick button svg { width: 9px; height: 9px; }
+.mx th:hover .mxPick button, .mxPick button:focus-visible { opacity: 1; }
+.mxPick button:hover { background: var(--surface-strong); color: var(--ink); }
+@media (hover: none) { .mxPick button { opacity: 1; } }

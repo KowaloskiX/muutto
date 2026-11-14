@@ -10,6 +10,9 @@ import type { Area, Listing, MoveEvent, ResearchEvent, ViewingDraft, WatchResult
 import MoveFile, { PROMPTS } from "./MoveFile";
 import { MoveProgress } from "./MoveProgress";
 import { mins } from "./model";
+import { fitScore, rankAreas, weights, whyLines } from "@/lib/move/rank";
+import type { AskResult } from "@/lib/move/ask";
+import type { CriterionId } from "@/lib/move/types";
 import type { Chip, DraftState, Msg, ResearchState, RunState, StageId, View, WatchState } from "./types";
 import s from "./Move.module.css";
 
@@ -240,6 +243,56 @@ export default function MoveApp() {
   };
 
   // ---- deep research on one listing
+  // ---- user-added criteria (any question; Exa Places or Exa search, cited), merged into the run
+  const [asking, setAsking] = useState<{ question: string; error?: string } | undefined>();
+  const rescore = (r: RunState, list: Area[]): Area[] => {
+    if (!r.intent) return list;
+    const w = weights(r.intent);
+    return rankAreas(list.map((a) => ({ ...a, fit: fitScore(a.criteria, w), why: whyLines(a.criteria, w) })));
+  };
+  const addCriterion = async (question: string, weight: number) => {
+    const id = currentRun;
+    const r = id ? runsRef.current[id] : undefined;
+    const list = r ? (r.ranked ?? r.areas) : [];
+    if (!r || !id || !list.length) return;
+    setAsking({ question });
+    try {
+      const res = await fetch("/api/move/criterion", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, areas: list.map((a) => ({ id: a.id, name: a.name, municipality: a.municipality, center: a.center })) }),
+      });
+      const j = (await res.json()) as AskResult & { error?: string };
+      if (!res.ok || j.error) throw new Error(j.error ?? `HTTP ${res.status}`);
+      const c = j.criterion;
+      patchRun(id, (cur) => {
+        const intent = cur.intent ? { ...cur.intent, customPlaces: [...(cur.intent.customPlaces ?? []).filter((x) => x.id !== c.id), { id: c.id, what: c.what, label: c.label, weight, kind: c.kind }] } : cur.intent;
+        const merge = (a: Area): Area => {
+          const got = j.results[a.id];
+          if (!got) return a;
+          return { ...a, criteria: [...a.criteria.filter((x) => x.id !== c.id), got.criterion], places: [...a.places.filter((p) => p.criterion !== c.id), ...got.places] };
+        };
+        const next = { ...cur, intent };
+        const areas = cur.areas.map(merge);
+        const ranked = cur.ranked ? rescore(next, cur.ranked.map(merge)) : undefined;
+        return { ...next, areas, ranked };
+      });
+      setAsking(undefined);
+    } catch (e) {
+      setAsking({ question, error: (e as Error).message });
+    }
+  };
+  const removeCriterion = (cid: CriterionId) => {
+    const id = currentRun;
+    if (!id) return;
+    patchRun(id, (cur) => {
+      const intent = cur.intent ? { ...cur.intent, customPlaces: (cur.intent.customPlaces ?? []).filter((x) => x.id !== cid) } : cur.intent;
+      const strip = (a: Area): Area => ({ ...a, criteria: a.criteria.filter((x) => x.id !== cid), places: a.places.filter((p) => p.criterion !== cid) });
+      const next = { ...cur, intent };
+      return { ...next, areas: cur.areas.map(strip), ranked: cur.ranked ? rescore(next, cur.ranked.map(strip)) : undefined };
+    });
+  };
+
   const runResearch = async (l: Listing) => {
     const cur = researchRef.current[l.url];
     if (cur?.running || cur?.research) return;
@@ -520,6 +573,9 @@ export default function MoveApp() {
           onDraftOpened={(url) => setDrafts((p) => (p[url] ? { ...p, [url]: { ...p[url], opened: true } } : p))}
           onWatch={() => void startWatch()}
           onPrompt={(t) => void search(t)}
+          asking={asking}
+          onAddCriterion={(q, w) => void addCriterion(q, w)}
+          onRemoveCriterion={removeCriterion}
         />
       </section>
       {sheet && <button type="button" className={s.sheetScrim} onClick={() => setSheet(false)} aria-label="Close move file" />}

@@ -42,8 +42,8 @@ function addressOf(a: unknown): string | undefined {
   return [o.street, [o.postcode, o.locality].filter(Boolean).join(" ")].filter(Boolean).join(", ") || undefined;
 }
 
-async function venuesNear(what: string, place: string, c: LatLng, trace: ExaTrace[]): Promise<Venue[]> {
-  const res = await search({ query: `${what} in ${place}`, type: "lite", numResults: 10, userLocation: { country: "FI", latitude: c.lat, longitude: c.lng } }, trace);
+async function venuesNear(query: string, c: LatLng, trace: ExaTrace[]): Promise<Venue[]> {
+  const res = await search({ query, type: "lite", numResults: 10, userLocation: { country: "FI", latitude: c.lat, longitude: c.lng } }, trace);
   const out = new Map<string, Venue>();
   for (const r of res.results ?? []) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,8 +65,13 @@ async function venuesNear(what: string, place: string, c: LatLng, trace: ExaTrac
  * Venues that match every word of the request in their name or most specific category
  * ("Sports > Gym and Studio > Yoga Studio" counts as "Yoga Studio", not as a gym).
  */
+// Holiday flats "with sauna" or "with gym" are not the venue someone asked for.
+const LODGING = /accommodation|lodging|apartment|hotel|hostel|vacation|holiday|rental|real estate|bed and breakfast/i;
+
 function matching(vs: Venue[], what: string): Venue[] {
   const ws = words(what);
+  const wantsLodging = LODGING.test(what);
+  vs = vs.filter((v) => wantsLodging || !v.categories.some((c) => LODGING.test(c)));
   if (!ws.length) return vs;
   return vs.filter((v) => {
     const hay = `${v.name} ${v.categories.map((c) => c.split(" > ").pop()).join(" ")}`.toLowerCase();
@@ -82,9 +87,17 @@ export async function measureCustom(cp: Custom, area: { name: string; municipali
   const inReach = (vs: Venue[]) => matching(vs, cp.what).filter((v) => v.distanceM <= REACH_M);
   let near: Venue[];
   try {
-    near = inReach(await venuesNear(cp.what, place, area.center, trace));
-    // Popular broader venues can crowd a specific request out of the local results: ask city-wide too.
-    if (!near.length && place !== area.municipality) near = inReach(await venuesNear(cp.what, area.municipality, area.center, trace));
+    // Exa Places is phrasing-sensitive and sometimes answers with web pages instead of venues, so a
+    // miss is retried with the bare noun ("public saunas" -> "saunas") and then city-wide.
+    // "X near <area>" and "X near me" (with the area centre as the user location) return venues most
+    // reliably (measured); "X in <city>" sometimes returns only web pages.
+    const bare = words(cp.what).map((w) => `${w}s`).join(" ");
+    const tries = [`${cp.what} near ${short}`, `${cp.what} near me`, `${cp.what} in ${place}`, ...(bare && bare !== cp.what.toLowerCase() ? [`${bare} near me`] : [])];
+    near = [];
+    for (const q of tries) {
+      near = inReach(await venuesNear(q, area.center, trace));
+      if (near.length) break;
+    }
   } catch (e) {
     return { criterion: { id: cp.id, label: cp.label, status: "unknown", value: null, detail: `Exa Places unavailable (${(e as Error).message}).`, sources: [] }, places: [] };
   }

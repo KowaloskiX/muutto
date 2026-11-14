@@ -5,7 +5,7 @@
 // the watch. Renders only what /api/move returned.
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Check, CircleNotch } from "@phosphor-icons/react";
+import { Check, CircleNotch, Plus, X } from "@phosphor-icons/react";
 import type { Area, CriterionId, Listing } from "@/lib/move/types";
 import { allListings, columnsFor, focusCols, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
 import { MoveDrawer } from "./MoveDrawer";
@@ -40,7 +40,79 @@ type Props = {
   onDraftOpened: (url: string) => void;
   onWatch: () => void;
   onPrompt: (text: string) => void;
+  asking?: { question: string; error?: string };
+  onAddCriterion: (question: string, weight: number) => void;
+  onRemoveCriterion: (id: CriterionId) => void;
 };
+
+const WEIGHTS = [
+  { w: 1, label: "Nice to have" },
+  { w: 3, label: "Important" },
+  { w: 6, label: "Must have" },
+];
+const IDEAS = ["Sauna", "Near the sea", "Safe at night", "Dog park", "International school", "Quiet at night"];
+
+function AddCriterion({ asking, areasN, onAdd }: { asking?: { question: string; error?: string }; areasN: number; onAdd: (q: string, w: number) => void }) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [w, setW] = useState(3);
+  const busy = !!asking && !asking.error;
+  const submit = (text = q) => {
+    const v = text.trim();
+    if (v.length < 3 || busy) return;
+    onAdd(v, w);
+    setQ("");
+  };
+  if (!open && !asking)
+    return (
+      <button type="button" className={x.acOpen} onClick={() => setOpen(true)}>
+        <Plus weight="bold" aria-hidden /> Add criterion
+      </button>
+    );
+  return (
+    <div className={x.ac}>
+      <form
+        className={x.acRow}
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit();
+        }}
+      >
+        <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Anything: climbing wall, near the sea, safe at night…" aria-label="New criterion" disabled={busy} />
+        <div className={x.acWeights} role="radiogroup" aria-label="How much it matters">
+          {WEIGHTS.map((o) => (
+            <button key={o.w} type="button" role="radio" aria-checked={w === o.w} className={w === o.w ? x.acWeightOn : ""} onClick={() => setW(o.w)} disabled={busy}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        <button type="submit" className={x.lcPrimary} disabled={busy || q.trim().length < 3}>
+          {busy ? "Checking…" : "Add"}
+        </button>
+        {!busy && (
+          <button type="button" className={x.acClose} onClick={() => setOpen(false)} aria-label="Close">
+            <X weight="bold" />
+          </button>
+        )}
+      </form>
+      {busy ? (
+        <p className={x.acNote}>
+          <CircleNotch className={x.spin} aria-hidden /> Checking “{asking!.question}” in {areasN} areas with Exa… every answer will link to its page.
+        </p>
+      ) : asking?.error ? (
+        <p className={`${x.acNote} ${x.capErr}`}>{asking.error}</p>
+      ) : (
+        <p className={x.acIdeas}>
+          {IDEAS.map((i) => (
+            <button key={i} type="button" onClick={() => submit(i)}>
+              {i}
+            </button>
+          ))}
+        </p>
+      )}
+    </div>
+  );
+}
 
 type SortId = "match" | "price" | "commute" | "new";
 const SORTS: { id: SortId; label: string }[] = [
@@ -57,7 +129,7 @@ const PROMPTS = [
 ];
 export { PROMPTS };
 
-export default function MoveFile({ run, view, research, drafts, watch, onView, onResearch, onDraft, onDraftLang, onDraftOpened, onWatch, onPrompt }: Props) {
+export default function MoveFile({ run, view, research, drafts, watch, onView, onResearch, onDraft, onDraftLang, onDraftOpened, onWatch, onPrompt, asking, onAddCriterion, onRemoveCriterion }: Props) {
   const [hover, setHover] = useState<string | undefined>();
   const rows = useRef<Record<string, HTMLTableRowElement | null>>({});
 
@@ -256,6 +328,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
               </span>
             )}
           </div>
+          {ranked && areas.length > 0 && <AddCriterion asking={asking} areasN={areas.length} onAdd={onAddCriterion} />}
           {areas.length ? (
             <div className={`${c.matrixWrap} ${x.matrixWrap}`}>
               <table className={x.mx}>
@@ -277,7 +350,16 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
                     </th>
                     {cols.map((col, i) => (
                       <th key={col.key} scope="col" className={`${x.mxNum} ${i === 0 || cols[i - 1].group !== col.group ? x.mxStart : ""}`}>
-                        {col.label}
+                        {col.group === "Your picks" ? (
+                          <span className={x.mxPick}>
+                            {col.label}
+                            <button type="button" onClick={() => onRemoveCriterion(col.crit)} aria-label={`Remove ${col.label}`} title="Remove this criterion">
+                              <X weight="bold" />
+                            </button>
+                          </span>
+                        ) : (
+                          col.label
+                        )}
                       </th>
                     ))}
                   </tr>
