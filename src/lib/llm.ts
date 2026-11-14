@@ -3,7 +3,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import type { z } from "zod";
 
 // All LLM calls go through askJson (structured output validated by zod).
-export const MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
+export const MODEL = process.env.OPENAI_MODEL || "gpt-5.4-mini";
 
 let client: OpenAI | null = null;
 function getClient(): OpenAI {
@@ -22,7 +22,8 @@ export async function askJson<T extends z.ZodType>(opts: {
       model: MODEL,
       instructions: opts.system,
       input: opts.user,
-      reasoning: { effort: opts.effort ?? "low" },
+      // Reasoning effort only exists on reasoning models (gpt-5*, o*).
+      ...(/^(gpt-5|o\d)/.test(MODEL) ? { reasoning: { effort: opts.effort ?? "low" } } : {}),
       text: { format: zodTextFormat(opts.schema, "result") },
     },
     { timeout: 60_000 },
