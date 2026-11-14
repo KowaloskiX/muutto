@@ -82,11 +82,11 @@ const PLACE_STYLE: Record<Place["kind"], { color: string; svg: string }> = {
   school: { color: "#2f5d9e", svg: '<path d="M1.5 6.5 8 3.5l6.5 3L8 9.5z"/><path d="M4.5 8v3c2 1.5 5 1.5 7 0V8"/>' },
   daycare: { color: "#2f5d9e", svg: '<circle cx="8" cy="5" r="2.2"/><path d="M4 14c0-3 1.8-5 4-5s4 2 4 5"/>' },
   park: { color: "#2b7a4b", svg: '<circle cx="8" cy="6.5" r="4"/><path d="M8 10.5V15"/>' },
-  custom: { color: "#005032", svg: '<path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z" fill="currentColor" stroke="none"/>' },
+  custom: { color: "#0084cc", svg: '<path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z" fill="currentColor" stroke="none"/>' },
   transit: { color: "#6b4fa0", svg: '<rect x="3.5" y="2" width="9" height="10" rx="2"/><path d="M3.5 8h9M5.5 14.5l1-2.5M10.5 14.5l-1-2.5"/>' },
 };
 // The user's own criteria get one colour each (first, second, third), all with the star glyph.
-const CUSTOM_COLORS = ["#005032", "#b0306a", "#1f6f8b"];
+const CUSTOM_COLORS = ["#0084cc", "#b0306a", "#1f6f8b"];
 const placeColor = (p: Pick<Place, "kind" | "criterion">, customOrder: string[]) =>
   p.kind === "custom" ? CUSTOM_COLORS[Math.max(0, customOrder.indexOf(p.criterion ?? "")) % CUSTOM_COLORS.length] : PLACE_STYLE[p.kind].color;
 const placeIcon = (k: Place["kind"], color = PLACE_STYLE[k].color) =>

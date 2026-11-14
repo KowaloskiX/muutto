@@ -437,7 +437,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
           {areas.length ? (
             <p className={x.mxLegend}>
               <span>
-                <b className={x.mxBestKey}>Green</b> best in the column
+                <b className={x.mxBestKey}>Blue</b> best in the column
               </span>
               <span>
                 <i className={x.mxDot} aria-hidden /> falls short of what you asked for
