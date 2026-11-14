@@ -791,3 +791,15 @@
 .lcChips .lcHist + span::before { display: none; }
 .lcGrid { gap: 16px; }
 .lcMeta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- layout fixes ---- */
+.dTilesRow { padding: 0 24px 12px; }
+.dTilesRow .dTiles { margin-top: 0; }
+/* map: legend and layer switch never collide; on a narrow map the legend moves to the bottom */
+.mapBox { container-type: inline-size; }
+.legend { max-width: calc(100% - 360px) !important; flex-wrap: wrap; }
+@container (max-width: 860px) {
+  .legend { top: auto !important; bottom: 12px !important; left: 12px !important; max-width: calc(100% - 80px) !important; border-radius: 12px !important; }
+}
+.layers { max-width: calc(100% - 24px); }
+@container (max-width: 860px) { .lFull { display: none; } .lShort { display: inline; } .layers button { padding: 0 10px; } }

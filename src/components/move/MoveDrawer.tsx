@@ -873,6 +873,7 @@ export function MoveDrawer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewKey, view.kind === "area" ? view.focus : view.focus, view.n]);
   let tabsBar: React.ReactNode = null;
+  let tiles: React.ReactNode = null;
   let head: React.ReactNode = null;
   let content: React.ReactNode = null;
   let back: { label: string; go: () => void } = { label: "Move file", go: onClose };
@@ -886,12 +887,13 @@ export function MoveDrawer({
       <>
         <h2>{a.name}</h2>
         <p className={d.meta}>
-          <span>
-            #{i + 1} · fit <b>{a.fit}</b>/100
-          </span>
+          <span>#{i + 1}</span>
           <span className={x[`w_${tone}`]}>{FIT_WORD[tone]}</span>
           <span>{[a.postalCode, a.municipality].filter(Boolean).join(" ")}</span>
         </p>
+      </>
+    );
+    tiles = (
         <Tiles
           items={[
             { label: "Fit", value: `${a.fit}`, sub: "of 100" },
@@ -900,7 +902,6 @@ export function MoveDrawer({
             { label: "Listings", value: `${a.listings.length}`, sub: "live" },
           ]}
         />
-      </>
     );
     tabsBar = (
       <Tabs<AreaTab>
@@ -943,10 +944,6 @@ export function MoveDrawer({
       <>
         <h2>{l.address || l.title}</h2>
         <p className={d.meta}>
-          <span>
-            <b>{price(l, tenure) ?? "Price not stated"}</b>
-          </span>
-          {sz && <span>{sz}</span>}
           {area && <span>{area.name}</span>}
           <span>
             <a href={l.url} target="_blank" rel="noreferrer">
@@ -954,6 +951,9 @@ export function MoveDrawer({
             </a>
           </span>
         </p>
+      </>
+    );
+    tiles = (
         <Tiles
           items={[
             { label: tenure === "buy" ? "Price" : "Rent", value: eur(l.price), sub: l.price && l.sizeM2 ? `€${Math.round(l.price / l.sizeM2)}/m²` : tenure === "buy" ? undefined : "per month" },
@@ -962,7 +962,6 @@ export function MoveDrawer({
             { label: "Built", value: l.facts?.find((f) => f.key === "built")?.value ?? null, sub: l.facts?.find((f) => f.key === "floor")?.value ? `floor ${l.facts?.find((f) => f.key === "floor")?.value}` : undefined },
           ]}
         />
-      </>
     );
     const rs = research[l.url];
     const ds = drafts[l.url];
@@ -1049,6 +1048,7 @@ export function MoveDrawer({
             <X weight="bold" />
           </button>
         </header>
+        {tiles && <div className={x.dTilesRow}>{tiles}</div>}
         {tabsBar}
         <div className={d.body} ref={body} data-tour="drawer-body">
           {content}
