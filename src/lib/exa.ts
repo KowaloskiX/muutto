@@ -338,18 +338,30 @@ export function nameFromTitle(title: string | undefined, hostname: string): stri
 
 export type WebCompany = { name: string; website: string; url: string; title?: string; highlight?: string };
 
+/**
+ * Site origin of a result URL, or null when it is not a real public host. Exa's company
+ * index sometimes returns a doubled scheme ("https://https://firm.fi"), which parses as
+ * host "https"; repair that, and reject hosts without a dot.
+ */
+export function siteOrigin(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const fixed = raw.trim().replace(/^(https?):\/*(?:https?(?::\/*|\/+))+/i, "$1://");
+  try {
+    const u = new URL(/^https?:\/\//i.test(fixed) ? fixed : `https://${fixed}`);
+    return u.hostname.includes(".") ? u.origin : null;
+  } catch {
+    return null;
+  }
+}
+
 function webCompanies(results: ExaResult[]): WebCompany[] {
   const byOrigin = new Map<string, WebCompany>();
   for (const r of results) {
-    let origin: string;
-    try {
-      origin = new URL(r.url).origin;
-    } catch {
-      continue;
-    }
+    const origin = siteOrigin(r.url);
+    if (!origin) continue;
     if (byOrigin.has(origin) || isDirectory(r.url) || looksLikeListing(r.url, r.title)) continue;
     const ent = (r.entities ?? []).find((e: any) => e.type === "company")?.properties;
-    const name = ent?.name ?? nameFromTitle(r.title, new URL(r.url).hostname);
+    const name = ent?.name ?? nameFromTitle(r.title, new URL(origin).hostname);
     byOrigin.set(origin, { name, website: origin, url: r.url, title: r.title, highlight: r.highlights?.[0] });
   }
   return [...byOrigin.values()];
@@ -404,12 +416,8 @@ export function companyProfileOf(r: ExaResult): CompanyProfile | null {
   const ent = (r.entities ?? []).find((e: any) => e.type === "company");
   const p = ent?.properties;
   if (!p?.name) return null;
-  let website: string;
-  try {
-    website = new URL(r.url).origin;
-  } catch {
-    return null;
-  }
+  const website = siteOrigin(r.url);
+  if (!website) return null;
   const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? x : undefined);
   return {
     name: String(p.name),

@@ -449,7 +449,13 @@ function complianceChecks(prh: PrhCompany | null, pages: Page[], kind: TradeKind
   });
 
   // Luotettava Kumppani / Tilaajavastuu report: one document that bundles the items above.
-  const lk = findOnSite(pages, /luotettava kumppani|tilaajavastuu\.fi|tilaajavastuu-?raportti|vastuu group/i);
+  // The programme is written as a proper noun ("Luotettava Kumppani", often with its
+  // tilaajavastuu.fi badge); lower-case "olemme luotettava kumppani(si)" is just marketing
+  // copy and must not count as membership.
+  const lk = findOnSite(
+    pages,
+    /Luotettava Kumppani(?![\p{L}])|LUOTETTAVA KUMPPANI(?![\p{L}])|luotettava kumppani\s*-\s*(?:ohjelma|palvelu|merkki|logo|raportti|jäsen)|tilaajavastuu\.fi|[Tt]ilaajavastuu-?raportti|[Vv]astuu ?[Gg]roup/u,
+  );
   if (lk) {
     add({
       id: "tv-reliable-partner",

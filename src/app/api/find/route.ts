@@ -115,8 +115,11 @@ function guessIntent(q: string): IntentT {
 // B2B phrasing the keyword fallback (and a cautious LLM) should not miss.
 const B2B_RE = /sub-?contract|aliurak|urakoitsij\w* (?:kohtee|työmaa)|tilaajavastuu|for our (?:project|site|client)|kohteeseen|kohteessa|työmaalle|main contractor|pääurakoitsij/i;
 
-const EXAMPLES = `e.g. "Pipe relining for my flat in Espoo", "Dentist in Tampere who speaks English" or "Is Putki-Jussi Oy legit?"`;
-const WHAT_I_DO =
+const EXAMPLES_B2B = `e.g. "Waterproofing subcontractor for a pipe renovation in Turku, about €60k" or "Check subcontractor: Spigot Oy"`;
+const WHAT_I_DO_B2B =
+  "I find and vet construction subcontractors in Finland: give me a trade and a site location, or a company to check, and I run the tilaajavastuu checklist (trade, prepayment, employer and VAT registers, tax debt) and check capacity, references and licences";
+const EXAMPLES_C = `e.g. "Pipe relining for my flat in Espoo", "Dentist in Tampere who speaks English" or "Is Putki-Jussi Oy legit?"`;
+const WHAT_I_DO_C =
   "I find and vet local service providers and businesses in Finland: give me a service and a place, and I check each company's business ID, trade register, tax prepayment register and reviews";
 
 export type FindEvent =
@@ -203,6 +206,10 @@ export async function POST(req: Request) {
   // Rambling input: the job is almost always in the first couple of paragraphs.
   const query = typeof rawQuery === "string" ? rawQuery.replace(/\s+/g, " ").trim().slice(0, 1500) : "";
   const enc = new TextEncoder();
+  // The subcontractor workspace sends audience "b2b": answer refusals in its terms.
+  const b2bAsked = bodyAudience === "b2b";
+  const EXAMPLES = b2bAsked ? EXAMPLES_B2B : EXAMPLES_C;
+  const WHAT_I_DO = b2bAsked ? WHAT_I_DO_B2B : WHAT_I_DO_C;
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -351,17 +358,37 @@ export async function POST(req: Request) {
         // inflection ("Porvoossa", "Jyväskylän").
         const fold = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
         const stems = [...new Set([city, ...area.split(/,\s*/)].map(fold).filter((x) => x.length >= 3).map((x) => x.slice(0, Math.max(4, x.length - 2))))];
+        // Trade words from the parsed request ("asbestos removal", "asbestipurku", "vedeneristys"),
+        // as folded prefixes so Finnish inflection and compounds still match; generic work words
+        // (installation, urakointi, saneeraus...) say nothing about the trade and are dropped.
+        const GENERIC = /^(instal|contra|servic|compan|subcon|work|urako|asenn|asent|palve|yrity|renov|repai|korja|remon|saneer|constr|rakenn|build|proje|remov|tyot|tyo$|for$|and$|the$|with)/;
+        const tradeStems = [...new Set(
+          [intent.service, intent.serviceFi, intent.tradeFi, intent.trade]
+            .join(" ")
+            .split(/[\s,/()-]+/)
+            .map(fold)
+            .filter((x) => x.length >= 4 && !GENERIC.test(x))
+            .map((x) => x.slice(0, Math.max(4, Math.min(6, x.length - 2)))),
+        )];
         const local = (w: SubcontractorHit) => stems.some((st) => fold(`${w.title ?? ""} ${w.highlight ?? ""} ${w.url} ${w.profile?.city ?? ""}`).includes(st));
         // The municipality's own site (tampere.fi, hameenlinna.fi) is not a company to vet.
         const cityStem = fold(city);
         const isCitySite = (u?: string) => !!cityStem && (domainOf(u) ?? "").split(".").slice(-2)[0]?.replace(/-/g, "") === cityStem;
         const want = Math.max(1, Math.min(6, verifyTop));
         const placeCount = places.filter((p) => p.website && !isCitySite(p.website)).length;
-        const localWeb = webCos.filter((w) => !isCitySite(w.website) && local(w));
-        // B2B: firms with a real crew (Exa company index headcount >= 5) go first; order is otherwise kept.
-        if (b2b) localWeb.sort((a, b) => Number((b.profile?.employees ?? 0) >= 5) - Number((a.profile?.employees ?? 0) >= 5));
+        // A cached or malformed hit without a real host ("https://https") is not a company site.
+        const realSite = (w: SubcontractorHit) => (domainOf(w.website) ?? "").includes(".");
+        const localWeb = webCos.filter((w) => realSite(w) && !isCitySite(w.website) && local(w));
+        // B2B: firms whose own text names the trade go first, then firms with a real crew (Exa
+        // company index headcount >= 5); order is otherwise kept. Headcount alone let big
+        // off-trade firms from the company index (a lab, a tool grinder) outrank specialists.
+        if (b2b) {
+          const onTopic = (w: SubcontractorHit) => tradeStems.some((st) => fold(`${w.name} ${w.title ?? ""} ${w.highlight ?? ""} ${w.profile?.description ?? ""} ${w.url}`).includes(st));
+          const score = (w: SubcontractorHit) => (tradeStems.length && onTopic(w) ? 2 : 0) + Number((w.profile?.employees ?? 0) >= 5);
+          localWeb.sort((a, b) => score(b) - score(a));
+        }
         // Out-of-town sites only fill slots that local sites and map listings can't.
-        const farWeb = localWeb.length + placeCount >= want * 2 ? [] : webCos.filter((w) => !isCitySite(w.website) && !local(w));
+        const farWeb = localWeb.length + placeCount >= want * 2 ? [] : webCos.filter((w) => realSite(w) && !isCitySite(w.website) && !local(w));
         const webList = [...localWeb, ...farWeb].map((w) => {
           const p = placeByDomain.get(domainOf(w.website));
           return { ...(p ?? { categories: [] }), name: p?.name ?? w.name, website: w.website } as Place;
