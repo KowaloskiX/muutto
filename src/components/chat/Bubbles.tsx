@@ -321,7 +321,7 @@ export function WatchCard({ name, domain, mode }: { name: string; domain?: strin
       <div>
         <strong>Watching {name}</strong>
         <small>
-          Daily Exa Monitor for news, complaints and register changes{domain ? ` about ${domain}` : ""}
+          Daily Exa Monitor of the web for bankruptcy, restructuring and complaint news{domain ? ` about ${domain}` : ""}
           {mode === "polling" ? " (checked on demand while running locally)" : ""}.
         </small>
       </div>

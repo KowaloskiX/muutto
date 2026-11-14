@@ -512,7 +512,7 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
               {ctx.watched.map((w) => (
                 <li key={w.monitorId}>
                   <span className={s.name}>{w.name}</span>
-                  <span className={s.sub}>News, register changes, bankruptcy and payment-default notices{w.domain ? ` · ${w.domain}` : ""}</span>
+                  <span className={s.sub}>Daily web check: bankruptcy, restructuring, complaints{w.domain ? ` · ${w.domain}` : ""}</span>
                 </li>
               ))}
             </ul>

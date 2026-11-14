@@ -41,7 +41,7 @@ export const EN = {
   compareError: "I couldn't compare the quotes: {msg}",
   startingWatch: "Setting up a daily Exa Monitor on {name}…",
   watchWho: "Who should I watch? Name the subcontractor, or find candidates first.",
-  watching: "Done. I'll watch {name} for the length of the project (daily Exa Monitor): news, register changes, bankruptcy and payment-default notices. New findings show up in the Watching section of this project.",
+  watching: "Done. I'll watch {name} for the length of the project (daily Exa Monitor): web news about bankruptcy, restructuring, complaints and reclamations. New findings show up in the Watching section of this project.",
   alreadyWatching: "I'm already watching {name}.",
   watchError: "I couldn't start watching {name}: {msg}",
   notWatching: "I'm not watching anyone right now.",
@@ -111,7 +111,7 @@ export function format(tpl: string, vars: Record<string, string | number> = {}) 
   return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-const STORE = "kilpi-chat-i18n-b2b-v6";
+const STORE = "kilpi-chat-i18n-b2b-v7";
 const cache: Record<string, Table> = {};
 const pending: Record<string, Promise<Table>> = {};
 
