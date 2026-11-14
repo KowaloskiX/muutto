@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { CaretDown, Check as CheckIcon, CheckCircle, CircleNotch, Copy, Envelope } from "@phosphor-icons/react";
@@ -186,10 +186,7 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
   return (
     <div className={`${s.case} ${openCand ? s.caseOpen : ""}`}>
       {empty && (
-        <div className={s.heroBg} aria-hidden>
-          <Image src="/media/aerial.webp" alt="" fill sizes="(min-width: 1024px) 75vw, 0px" unoptimized priority />
-          <span className={s.aiCredit}>Image: AI-generated</span>
-        </div>
+        <HeroBackdrop />
       )}
       <div className={`${s.scroller} ${empty ? s.scrollerEmpty : ""}`}>
         {empty ? (
@@ -197,7 +194,8 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
             <div className={s.heroText}>
               <p className={s.eyebrow}>Subcontractor vetting</p>
               <h1 id="case-hero" className={s.heroTitle}>
-                Vet subcontractors before you sign.
+                <span className={s.heroLine}><span>Vet subcontractors</span></span>{" "}
+                <span className={s.heroLine}><span>before you sign.</span></span>
               </h1>
               <p className={s.heroSub}>Describe the trade, the project and the site in the chat. Candidates, their register checks and your drafted requests collect here. Nothing is sent without your OK.</p>
               <ol className={s.heroSteps}>
@@ -215,6 +213,7 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                 </li>
               </ol>
             </div>
+            <HeroPreview />
           </section>
         ) : (
         <>
@@ -636,5 +635,137 @@ function OutboxRow({
         </div>
       )}
     </li>
+  );
+}
+
+/* The welcome backdrop: three AI-generated scenes crossfading on one 21 s CSS timeline (7 s each,
+   1.4 s crossfade, a slow Ken Burns drift). Layers, scene names and progress bars share the
+   same per-scene delay, so pausing them together (tab hidden) keeps them in step. */
+const SCENES = [
+  { src: "/media/aerial.webp", name: "Courtyard blocks · Helsinki", pos: "56% 50%" },
+  { src: "/media/facade.webp", name: "Facade renovation · Helsinki", pos: "50% 38%" },
+  { src: "/media/corridor.webp", name: "Ventilation works · school", pos: "50% 45%" },
+];
+
+function usePageHidden() {
+  const [hidden, setHidden] = useState(false);
+  useEffect(() => {
+    const on = () => setHidden(document.hidden);
+    on();
+    document.addEventListener("visibilitychange", on);
+    return () => document.removeEventListener("visibilitychange", on);
+  }, []);
+  return hidden;
+}
+
+function HeroBackdrop() {
+  const hidden = usePageHidden();
+  return (
+    <div className={`${s.heroBg} ${hidden ? s.paused : ""}`} aria-hidden>
+      {SCENES.map((sc, i) => (
+        <div key={sc.src} className={s.scene} style={{ "--i": i } as CSSProperties}>
+          <Image src={sc.src} alt="" fill sizes="(min-width: 1024px) 75vw, 0px" unoptimized priority={i === 0} loading="eager" style={{ objectPosition: sc.pos }} />
+        </div>
+      ))}
+      <div className={s.heroFoot}>
+        <span className={s.sceneNames}>
+          {SCENES.map((sc, i) => (
+            <span key={sc.src} className={s.sceneName} style={{ "--i": i } as CSSProperties}>
+              {sc.name}
+            </span>
+          ))}
+        </span>
+        <span className={s.sceneBars}>
+          {SCENES.map((sc, i) => (
+            <i key={sc.src} style={{ "--i": i } as CSSProperties} />
+          ))}
+        </span>
+        <span className={s.heroCredit}>Image: AI-generated</span>
+      </div>
+    </div>
+  );
+}
+
+/* A product preview beside the welcome: a snapshot of a real recorded run (live check, 14 Nov 2026,
+   ventilation for a school in Katajanokka). The register cells resolve one by one, the one company
+   missing from two registers turns amber, then the register passage that proves it slides in.
+   Nothing here is invented; it is replayed from that run. A 250 ms tick drives it (12 s loop). */
+const PREVIEW_COLS = ["Trade", "VAT", "Prepay.", "Employer"];
+const PREVIEW_ROWS: { name: string; id: string; cells: ("ok" | "missing")[] }[] = [
+  { name: "Saipu Oy", id: "0678395-8", cells: ["ok", "ok", "ok", "ok"] },
+  { name: "Pylon Rakennus Oy", id: "0738421-1", cells: ["ok", "ok", "ok", "ok"] },
+  { name: "Helsingin ilmanvaihto Oy", id: "3226458-8", cells: ["ok", "ok", "missing", "missing"] },
+];
+const TICK = 250;
+const LOOP = 48; // 12 s
+const FIRST = 3; // cell k resolves at tick FIRST + k
+const FLAGGED = FIRST + 12 + 1; // the amber row lights up
+const PASSAGE = FLAGGED + 2; // the passage slides in
+const OUT = 44; // everything settles back before the loop restarts
+
+function HeroPreview() {
+  const hidden = usePageHidden();
+  const [tick, setTick] = useState(0);
+  const [still, setStill] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const on = () => setStill(mq.matches);
+    on();
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  useEffect(() => {
+    if (still || hidden) return;
+    const id = window.setInterval(() => setTick((x) => (x + 1) % LOOP), TICK);
+    return () => window.clearInterval(id);
+  }, [still, hidden]);
+  const at = still ? OUT - 1 : tick;
+  const live = at < OUT;
+  return (
+    <figure className={s.preview} aria-hidden>
+      <div className={s.pvCard}>
+        <figcaption className={s.pvCaption}>
+          <span>Ventilation · Katajanokka</span>
+          <span>Example from a real check · 14 Nov 2026</span>
+        </figcaption>
+        <table className={s.pvTable}>
+          <thead>
+            <tr>
+              <th>Company</th>
+              {PREVIEW_COLS.map((c) => (
+                <th key={c}>{c}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {PREVIEW_ROWS.map((r, ri) => (
+              <tr key={r.id} className={r.cells.includes("missing") && live && at >= FLAGGED ? s.pvFlag : ""}>
+                <td>
+                  <span className={s.pvName}>{r.name}</span>
+                  <span className={s.pvId}>{r.id}</span>
+                </td>
+                {r.cells.map((c, ci) => {
+                  const done = live && at >= FIRST + ri * 4 + ci;
+                  return (
+                    <td key={ci}>
+                      <span className={`${s.pvCell} ${done ? s.pvDone : ""} ${c === "missing" ? s.pvMissing : ""}`}>
+                        <CircleNotch className={s.pvSpin} />
+                        <span className={s.pvVal}>{c === "ok" ? <CheckIcon weight="bold" /> : "Missing"}</span>
+                      </span>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className={`${s.pvPassage} ${live && at >= PASSAGE ? s.pvShow : ""}`}>
+          <p className={s.pvWait}>{live && at >= FIRST ? "Reading the public registers…" : "Opening the public registers…"}</p>
+          <p className={s.pvSrc}>Helsingin ilmanvaihto Oy · Asiakastieto (YTJ register data)</p>
+          <p className={s.pvQuote}>Active registers: Kaupparekisteri 03.08.2021 · Verohallinnon perustiedot 03.08.2021 · Arvonlisäverovelvollisuus 31.07.2021</p>
+          <p className={s.pvNot}>Not listed: Ennakkoperintärekisteri · Työnantajarekisteri</p>
+        </div>
+      </div>
+    </figure>
   );
 }

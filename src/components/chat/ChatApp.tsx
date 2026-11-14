@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowUp, Buildings, CaretLeft, CaretRight, ChatCircleText, CheckCircle, CircleNotch, ClipboardText, MagnifyingGlass, NotePencil, Paperclip, Question, ShieldCheck, SquaresFour, WarningCircle, X } from "@phosphor-icons/react";
@@ -1007,7 +1007,9 @@ export default function ChatApp() {
         return (
           <div className={s.welcome}>
             <figure className={s.welcomeFig}>
-              <Image src="/media/facade.webp" alt="" fill sizes="100vw" unoptimized priority />
+              {["/media/facade.webp", "/media/corridor.webp", "/media/aerial.webp"].map((src, i) => (
+                <Image key={src} src={src} alt="" fill sizes="100vw" unoptimized priority={i === 0} loading="eager" style={{ "--i": i } as CSSProperties} />
+              ))}
               <figcaption>Image: AI-generated</figcaption>
             </figure>
             <h1 className={s.welcomeLead}>{m.text}</h1>

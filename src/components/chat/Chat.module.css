@@ -146,22 +146,43 @@
 @media (min-width: 1024px) { .welcome { display: none; } }
 /* a calm editorial strip of the photo above the headline (phones only) */
 .welcomeFig { position: relative; margin: 0 0 8px; height: clamp(120px, 22dvh, 200px); border-radius: 4px; overflow: hidden; background: var(--sand, #ece8df); }
-.welcomeFig img { object-fit: cover; object-position: 50% 42%; filter: saturate(.72) sepia(.08) contrast(.96); }
+.welcomeFig img { object-fit: cover; object-position: 50% 42%; filter: saturate(.72) sepia(.08) contrast(.96); opacity: 0; animation: figCycle 15s linear calc(var(--i) * 5s) infinite both, figDrift 15s linear calc(var(--i) * 5s) infinite both; }
+.welcomeFig img:first-child { opacity: 1; }
+/* three scenes, 5 s each with a 1.2 s crossfade and a barely-there drift */
+@keyframes figCycle { 0% { opacity: 0; } 8% { opacity: 1; } 33.333% { opacity: 1; } 41.333% { opacity: 0; } 100% { opacity: 0; } }
+@keyframes figDrift { 0% { transform: scale(1); } 41.333% { transform: scale(1.04); } 100% { transform: scale(1.04); } }
+/* entrance on phones: lighter than desktop, a short fade and 6px rise */
+.welcome > * { animation: welcomeIn .5s cubic-bezier(.2, .8, .2, 1) both; }
+.welcome > :nth-child(2) { animation-delay: .08s; }
+.welcome > :nth-child(3) { animation-delay: .16s; }
+@keyframes welcomeIn { from { opacity: 0; transform: translateY(6px); } }
 .welcomeFig::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(13 16 22 / 0) 60%, rgb(13 16 22 / .28)); pointer-events: none; }
 .welcomeFig figcaption { position: absolute; right: 8px; bottom: 6px; z-index: 1; color: rgb(255 255 255 / .86); font-size: 11px; text-shadow: 0 1px 2px rgb(0 0 0 / .35); }
 @media (max-height: 700px) { .welcomeFig { display: none; } }
+@media (prefers-reduced-motion: reduce) { .welcomeFig img, .welcome > * { animation: none; } }
 @media (prefers-color-scheme: dark) { .welcomeFig img { filter: saturate(.55) brightness(.72); } .welcomeFig::after { background: linear-gradient(180deg, rgb(13 16 22 / .1), rgb(13 16 22 / .4)); } }
 
 /* welcome suggestions: an eyebrow, then quiet hairline rows */
-.suggest { display: flex; flex-direction: column; }
-.suggest::before { content: "Start with"; padding-bottom: 12px; border-bottom: 1px solid var(--c-hair); color: var(--c-ink2); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
-.suggestRow { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--c-hair); border-radius: 0; background: transparent; color: var(--c-ink); font-size: 15px; line-height: 1.35; text-align: left; transition: color .2s ease; }
-.suggestRow:hover:not(:disabled) { color: var(--c-ink2); }
+.suggest { --enter: cubic-bezier(.2, .8, .2, 1); display: flex; flex-direction: column; }
+.suggest::before { content: "Start with"; animation: suggestIn .6s var(--enter) .3s both; padding-bottom: 12px; border-bottom: 1px solid var(--c-hair); color: var(--c-ink2); font-size: 11px; letter-spacing: .05em; text-transform: uppercase; }
+.suggestRow { position: relative; isolation: isolate; display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--c-hair); border-radius: 0; background: transparent; color: var(--c-ink); font-size: 15px; line-height: 1.35; text-align: left; transition: color .2s ease; animation: suggestIn .6s var(--enter) both; }
+.suggestRow:nth-child(1) { animation-delay: .38s; }
+.suggestRow:nth-child(2) { animation-delay: .46s; }
+.suggestRow:nth-child(3) { animation-delay: .54s; }
+.suggestRow:nth-child(4) { animation-delay: .62s; }
+.suggestRow:nth-child(5) { animation-delay: .7s; }
+@keyframes suggestIn { from { opacity: 0; transform: translateY(10px); } }
+/* hover: a soft wash bleeding 8px past the hairlines, the arrow nudges */
+.suggestRow::before { content: ""; position: absolute; inset: 1px -8px 0; z-index: -1; border-radius: 6px; background: color-mix(in srgb, var(--c-ink) 4%, transparent); opacity: 0; transition: opacity .25s ease; }
+.suggestRow:hover:not(:disabled)::before { opacity: 1; }
 .suggestIcon { display: none; }
 .suggestLabel { flex: 1; min-width: 0; }
 .suggestCaret { flex: none; width: 12px; height: 12px; color: var(--c-ink3); transition: transform .2s var(--c-ease); }
-.suggestRow:hover:not(:disabled) .suggestCaret { transform: translateX(2px); }
-.suggestPrimary .suggestCaret { box-sizing: content-box; padding: 6px; border-radius: 50%; background: var(--c-accent); color: var(--c-accent-ink); }
+.suggestRow:hover:not(:disabled) .suggestCaret { transform: translateX(3px); }
+.suggestPrimary .suggestCaret { box-sizing: content-box; padding: 6px; border-radius: 50%; background: var(--c-accent); color: var(--c-accent-ink); animation: invite 6s ease-out 1.4s 2 both; }
+/* the primary suggestion invites the first click: one soft ring after the entrance, once more 6 s later */
+@keyframes invite { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c-accent) 45%, transparent); } 25% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--c-accent) 0%, transparent); } 100% { box-shadow: 0 0 0 10px transparent; } }
+@media (prefers-reduced-motion: reduce) { .suggest::before, .suggestRow, .suggestPrimary .suggestCaret { animation: none; } .suggestRow::before { transition: none; } }
 
 /* ---- action chips: one green pill with the arrow disc, the rest grey pills ---- */
 .chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
