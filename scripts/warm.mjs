@@ -6,6 +6,7 @@
 const BASE = process.argv[2] ?? "http://localhost:3000";
 const QUERIES = [
   // Must match what /chat sends: the welcome chip text + audience "b2b".
+  "Ventilation (IV) subcontractor for a school renovation (perusparannus) in Katajanokka, Helsinki, about 400 000 €, start in spring",
   "Electrical subcontractor for a 40-apartment pipe renovation (linjasaneeraus) in Espoo, start March",
 ];
 
