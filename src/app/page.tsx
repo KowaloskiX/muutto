@@ -150,9 +150,9 @@ export default function Landing() {
               </h1>
               <div className={`${s.heroRow} ${s.in4}`}>
                 <p className={s.lead}>
-                  Tell Muutto where you&rsquo;ll work. It ranks areas by your
-                  real commute and daily life, finds live listings, and links
-                  every fact to its source.
+                  Tell Muutto where you&rsquo;ll work. It finds the best place
+                  for you to rent or buy: areas ranked by your real commute and
+                  daily life, live listings, every fact linked to its source.
                 </p>
                 <div className={s.ctaRow}>
                   <Cta href="/move">Start with your workplace</Cta>

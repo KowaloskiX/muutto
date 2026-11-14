@@ -13,6 +13,8 @@ import { batchCommute, isMorningRush, routeTraffic, TRANSIT_ESTIMATE_NOTE, walkT
 import { measureAmenities, regionPois } from "@/lib/move/amenities";
 import { measureCustom } from "@/lib/move/custom";
 import { areaFuture, areaVoices } from "@/lib/move/outlook";
+import { getIso } from "@/lib/move/reach-iso";
+import { getHeat } from "@/lib/move/reach-heat";
 import { measureAir } from "@/lib/move/air";
 import { measureNoise } from "@/lib/move/noise";
 import { areaNews, constructionCriterion } from "@/lib/move/news";
@@ -117,6 +119,11 @@ export async function POST(req: Request) {
           return finish([]);
         }
         const work = intent.work;
+        // Pre-compute the drive-time maps while the areas are measured, so the map layer opens instantly.
+        void (async () => {
+          await getIso(work.lat, work.lng, 5).catch(() => undefined);
+          await Promise.allSettled([getIso(work.lat, work.lng, 1), getHeat(work.lat, work.lng, "region"), getHeat(work.lat, work.lng, "city")]);
+        })();
         send({ type: "stage", id: "understand", status: "done", detail: `Work: ${work.label}` });
 
         // ---- areas ----

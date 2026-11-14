@@ -234,7 +234,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
                   <span>Now, where to live?</span>
                 </span>
               </h1>
-              <p className={c.heroSub}>Tell the chat where you will work and what matters. Areas are ranked by commute and everyday life around them, with live listings. Every fact links to its source.</p>
+              <p className={c.heroSub}>Tell the chat where you will work and what matters. You get the best areas to rent or buy, ranked by your commute and everyday life, with live listings. Every fact links to its source.</p>
               <ol className={c.heroSteps}>
                 <li>
                   <strong>Areas</strong>
