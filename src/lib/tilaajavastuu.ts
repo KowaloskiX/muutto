@@ -48,7 +48,7 @@ const guideEv = (quote: string): Evidence => ({ url: TV_SOURCES.guide, quote, so
 // When PRH was unreachable the facts come from a public copy of the register page: cite that page.
 const regEv = (prh: PrhCompany, quote?: string): Evidence =>
   prh.fallback
-    ? { url: prh.fallback.url, quote: quote ?? `${prh.name} · ${prh.businessId}`, source: "registry", via: `${prh.fallback.site}; live register unreachable`, ...(prh.fallback.asOf ? { asOf: prh.fallback.asOf } : {}) }
+    ? { url: prh.fallback.url, quote: quote ?? (prh.fallback.registers ? `Active registers: ${prh.fallback.registers}` : `${prh.name} · ${prh.businessId}`), source: "registry", via: `${prh.fallback.site}; live register unreachable`, ...(prh.fallback.asOf ? { asOf: prh.fallback.asOf } : {}) }
     : { url: YTJ(prh.businessId), quote: quote ?? `${prh.name} · ${prh.businessId}`, source: "registry", via: "PRH open data (YTJ)" };
 
 /** A document the main contractor must collect before signing (≤ 3 months old). */

@@ -18,6 +18,9 @@ export type RegistryFallback = {
   url: string;
   /** Date the copy was taken (YYYY-MM-DD) when the page or Exa states it. */
   asOf?: string;
+  /** The page's own list of active registers, verbatim names + start dates ("Kaupparekisteri 03.08.2021 · …"):
+   *  the passage that proves which registers are (and are not) listed. */
+  registers?: string;
 };
 
 const YTJ = (id: string) => `https://tietopalvelu.ytj.fi/yritys/${id}`;
@@ -59,6 +62,7 @@ export function parseYtjPage(text: string, url: string, publishedDate?: string):
   const rows = [...regSec.matchAll(/^\|\s*([^|\n]+?)\s*\|\s*([^|\n]+?)\s*\|\s*(\d{1,2}\.\d{1,2}\.\d{4})\s*\|/gm)]
     .filter((m) => !/^rekisteri$|^-+$/i.test(m[1]) && !/rekisteröimätön|^ei\b|poistettu/i.test(m[2]));
   const active = rows.map((m) => m[1]);
+  const listed = rows.map((m) => `${clean(m[1])} ${m[3]}`).join(" · ");
   // PRH's registrationDate is the trade-register entry date; the Y-tunnus date otherwise.
   const tradeRegDate = rows.find((m) => /^kaupparekisteri/i.test(m[1]))?.[3];
   if (!active.length) return null;
@@ -82,8 +86,10 @@ export function parseYtjPage(text: string, url: string, publishedDate?: string):
   const web = row("Verkkosivut")?.[1];
   const boiler = text.replace(/#### Tietoa verovelkarekisteristä[\s\S]*?(?=\n## |$)/, "");
   const situation = SITUATION.exec(boiler)?.[1];
+  const b = base(id, url, "YTJ company page (Exa's stored copy)", fiDate(/Tiedot haettu\s+([\d.]+)/.exec(text)?.[1]) ?? isoDay(publishedDate));
   return {
-    ...base(id, url, "YTJ company page (Exa's stored copy)", fiDate(/Tiedot haettu\s+([\d.]+)/.exec(text)?.[1]) ?? isoDay(publishedDate)),
+    ...b,
+    fallback: { ...b.fallback!, registers: listed },
     name: clean(name),
     otherNames: aux.map(clean).filter((n) => n && n !== name),
     registrationDate: fiDate(tradeRegDate) ?? fiDate(row("Y-tunnus")?.[2]),
@@ -110,14 +116,19 @@ export function parseAsiakastietoPage(text: string, url: string, publishedDate?:
     ? [...table.matchAll(/^\|\s*([^|\n]+?)\s*\|/gm)].map((m) => m[1])
     : [...(/Aktiivinen:\s*\n((?:\s*-\s*[^\n]+\n?)+)/.exec(own)?.[1] ?? "").matchAll(/-\s*([^\n]+)/g)].map((m) => m[1].trim());
   if (!active.length) return null;
+  const listed = table
+    ? [...table.matchAll(/^\|\s*([^|\n]+?)\s*\|\s*([\d.]*)/gm)].map((m) => clean(`${m[1]} ${m[2]}`)).join(" · ")
+    : active.map(clean).join(" · ");
   const field = (label: string) => new RegExp(`(?:^|\\n)${label}\\s*\\n(?::\\s*)?\\n?([^\\n]+)`).exec(own)?.[1]?.replace(/^:\s*/, "").trim();
   const name = field("Toiminimi") ?? /^#\s+(.+?)\s*$/m.exec(own)?.[1];
   if (!name) return null;
   const year = /Toiminta käynnistynyt\s*\n:\s*(\d{4})/.exec(own)?.[1];
   const web = field("Kotisivu");
   const situation = SITUATION.exec(own)?.[1];
+  const b = base(id, url, "Asiakastieto (register data from YTJ, Exa's stored copy)", isoDay(publishedDate));
   return {
-    ...base(id, url, "Asiakastieto (register data from YTJ, Exa's stored copy)", isoDay(publishedDate)),
+    ...b,
+    fallback: { ...b.fallback!, registers: listed },
     name: clean(name),
     // Trade-register date from the register table; else the start year only (no invented day).
     registrationDate: fiDate(tradeRegDate) ?? year,

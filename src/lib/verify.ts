@@ -626,7 +626,7 @@ const reportKey = (i: VerifyInput) =>
     i.city?.toLowerCase() ?? "",
     i.householdWork ?? null,
     // B2B reports carry different checks; consumer keys stay exactly as before.
-    ...(i.audience === "b2b" ? ["b2b-v7", (i.trade ?? "").toLowerCase(), (i.scope ?? "").toLowerCase()] : []),
+    ...(i.audience === "b2b" ? ["b2b-v8", (i.trade ?? "").toLowerCase(), (i.scope ?? "").toLowerCase()] : []),
   ]);
 
 /** A cached report for this company+job, with `cachedAt` set, and its age. */
