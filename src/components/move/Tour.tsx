@@ -16,6 +16,8 @@ export type TourStep = {
   sources?: string[];
   /** Runs before the step is shown (open a drawer, switch a layer…). */
   before?: () => void | Promise<void>;
+  /** Show Pukki in full (the welcome step) instead of the small avatar. */
+  hero?: boolean;
 };
 
 type Rect = { top: number; left: number; width: number; height: number };
@@ -112,10 +114,17 @@ export function Tour({ steps, onClose }: { steps: TourStep[]; onClose: () => voi
   return (
     <div className={x.tour} role="dialog" aria-modal="true" aria-label={`Tour step ${i + 1} of ${steps.length}: ${step.title}`}>
       {rect && ready ? <div className={x.tourHole} style={rect} /> : <div className={x.tourDim} />}
-      <div ref={cardRef} className={`${x.tourCard} ${ready ? x.tourCardOn : ""}`} style={card}>
+      <div ref={cardRef} className={`${x.tourCard} ${ready ? x.tourCardOn : ""} ${step.hero ? x.tourHero : ""}`} style={card}>
+        {step.hero ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className={x.tourGoatFull} src="/media/goat-full.webp" alt="Pukki the goat, in a suit, on a market square" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={i} className={x.tourGoat} src="/media/logo-goat-256.png" alt="" aria-hidden />
+        )}
         <div className={x.tourTop}>
           <span>
-            {i + 1} / {steps.length}
+            <b>Pukki</b> · {i + 1} / {steps.length}
           </span>
           <button type="button" onClick={onClose} aria-label="End tour">
             <X weight="bold" />

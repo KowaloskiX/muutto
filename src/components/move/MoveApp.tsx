@@ -408,6 +408,15 @@ export default function MoveApp() {
     const file = () => onMobile && setSheet(true);
     const steps: TourStep[] = [
       {
+        hero: true,
+        title: "Hi, I'm Pukki",
+        body: "I'll walk you through how Muutto finds the best place for you to live, from where you work. I'll click for you; you just press Next.",
+        before: () => {
+          openView(undefined);
+          setSheet(false);
+        },
+      },
+      {
         target: '[data-tour="progress"]',
         title: "One question, a whole pipeline",
         body: "From one sentence the agent found your workplace, picked candidate areas by real commute, measured each one and pulled live listings. Exa is the layer that reads the live web; open data fills in the rest.",
