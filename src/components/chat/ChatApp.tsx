@@ -285,7 +285,11 @@ export default function ChatApp() {
             setCtx((c) => ({ ...c, ranked, selected: [], lastQuery: query, job: found.job ?? c.job, city: found.city ?? c.city }));
             // The candidates live in the case file; the chat only summarises them.
             const shown = ranked.slice(0, 8);
-            const flagged = shown.filter((r) => r.why.some((w) => w.status === "red" || w.status === "yellow")).length;
+            // Same rule as the case file's verdict, so the chat and the matrix tally agree.
+            const flagged = shown.filter((r) => {
+              const st = [...r.report.checks.filter((k) => !k.needsDocument).map((k) => k.status), ...r.why.map((w) => w.status)];
+              return st.includes("red") || st.includes("yellow") || (r.fit != null && r.fit < 60);
+            }).length;
             sayT(flagged ? "resultsFlags" : "results", { name: nameOf(ranked[0]), n: shown.length, flagged });
             const n = Math.min(3, ranked.length);
             const top = ranked.slice(0, n);
