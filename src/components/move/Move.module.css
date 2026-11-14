@@ -678,3 +678,37 @@
 .testSend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 12px 0 4px; padding: 12px; border-radius: 12px; background: var(--accent-muted); }
 .testSend .primaryBtn:disabled { opacity: .6; cursor: default; }
 .testSend .okWord { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ---- drawer: tiles, tabs, card sections (Minerva-style side panel) ---- */
+.dTiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-top: 6px; border-radius: 12px; background: var(--line); box-shadow: 0 0 0 1px var(--line); overflow: hidden; }
+.dTile { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 8px 10px; background: var(--surface); }
+.dTile span { color: var(--muted); font-size: 11px; letter-spacing: .02em; }
+.dTile strong { overflow: hidden; color: var(--ink); font-size: 15px; font-weight: 500; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dTile small { overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.dTabs { display: flex; gap: 2px; margin: 0 24px; padding: 3px; border-radius: 12px; background: var(--surface-strong); overflow-x: auto; scrollbar-width: none; flex: none; }
+.dTabs::-webkit-scrollbar { display: none; }
+.dTabs button { position: relative; display: inline-flex; flex: 1 1 0; min-width: 0; align-items: center; justify-content: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font: inherit; font-size: 12.5px; white-space: nowrap; cursor: pointer; transition: background-color .15s ease, color .15s ease; }
+.dTabs button svg { width: 15px; height: 15px; flex: none; }
+.dTabs button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dTabs button b, .dTabs button i { flex: none; }
+.dTabs button:not(.dTabOn) { flex: 0 0 auto; padding: 0 10px; }
+.dTabs button:not(.dTabOn) span { display: none; }
+.dTabs .dTabOn { flex: 1 1 auto; }
+.dTabs button:hover { color: var(--ink); }
+.dTabs .dTabOn { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(13 16 22 / .12); }
+.dTabs button b { min-width: 16px; padding: 0 5px; border-radius: 999px; background: var(--line); color: var(--ink-soft); font-size: 10px; font-weight: 500; line-height: 16px; text-align: center; }
+.dTabs .dTabOn b { background: var(--ink); color: var(--page); }
+.dTabs button i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-deep); }
+.dActions { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 8px; }
+.dActions .primaryBtn, .dActions .ghostBtn { display: inline-flex; align-items: center; gap: 6px; }
+.dActions svg { width: 14px; height: 14px; }
+.drawer > header { padding-bottom: 14px !important; border-bottom: 0 !important; }
+.drawer > div:last-child { padding-top: 16px !important; background: var(--page); }
+/* every drawer section becomes a card: rounded surface, quiet header */
+.drawer > div:last-child > section, .drawer > div:last-child > * > section { margin: 0 0 12px !important; padding: 16px !important; border: 0 !important; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.drawer > div:last-child > section > h3, .drawer > div:last-child > * > section > h3 { margin-top: 0 !important; }
+@media (max-width: 720px) { .dTiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dTabs { margin: 0 16px; }  }
+/* criterion rows: the label keeps its width, a long value wraps on the right instead of squeezing it */
+.critBtn { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 56px 12px !important; }
+.critLabel { white-space: normal !important; line-height: 1.35; }
+.critVal { min-width: 0; white-space: normal !important; text-align: right; line-height: 1.35; overflow-wrap: anywhere; }

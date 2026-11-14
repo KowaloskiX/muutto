@@ -4,10 +4,10 @@
 // places, local news, listings) or one LISTING (details, live deep research, the viewing request).
 // Only what the API returned is shown; a missing value reads "—" with the reason when we have one.
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, ArrowUpRight, CaretDown, Check, CircleNotch, Copy, Globe, WarningCircle, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowUpRight, CaretDown, Check, CircleNotch, ClockCounterClockwise, Copy, EnvelopeSimple, Globe, House, Key, ListChecks, MagnifyingGlass, Newspaper, Storefront, WarningCircle, X } from "@phosphor-icons/react";
 import { withTextFragment } from "@/lib/textFragment";
 import type { Area, Commute, Criterion, CriterionId, Listing, ListingResearch, MoveIntent, Source, ViewingDraft } from "@/lib/move/types";
-import { DASH, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, placeGroup, price, sizeLine } from "./model";
+import { DASH, eur, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, placeGroup, price, sizeLine } from "./model";
 import type { DraftState, ResearchState, View } from "./types";
 import { AreaStats, SettlingIn } from "./SettlingIn";
 import { Gallery } from "./ListingCard";
@@ -208,119 +208,172 @@ export function ListingRow({
   );
 }
 
-function AreaView({ a, view, tenure, onListing, onResearch, onDraft }: { a: Area; view: Extract<View, { kind: "area" }>; tenure?: MoveIntent["tenure"]; onListing: (l: Listing) => void; onResearch: (l: Listing) => void; onDraft: (l: Listing) => void }) {
+type AreaTab = "overview" | "criteria" | "life" | "news" | "listings";
+type ListingTab = "overview" | "history" | "research" | "viewing";
+type TabDef<T extends string> = { id: T; label: string; icon: React.ComponentType<{ weight?: "regular" | "bold"; "aria-hidden"?: boolean }>; count?: number | string; dot?: boolean };
+
+function Tabs<T extends string>({ tabs, value, onChange }: { tabs: TabDef<T>[]; value: T; onChange: (t: T) => void }) {
+  return (
+    <div className={x.dTabs} role="tablist">
+      {tabs.map((tb) => (
+        <button key={tb.id} type="button" role="tab" aria-selected={value === tb.id} aria-label={tb.label} title={tb.label} className={value === tb.id ? x.dTabOn : ""} onClick={() => onChange(tb.id)}>
+          <tb.icon aria-hidden />
+          <span>{tb.label}</span>
+          {tb.count != null && tb.count !== 0 && <b>{tb.count}</b>}
+          {tb.dot && <i aria-hidden />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function Tiles({ items }: { items: { label: string; value: React.ReactNode; sub?: string; tone?: string }[] }) {
+  return (
+    <div className={x.dTiles}>
+      {items.map((it) => (
+        <div key={it.label} className={x.dTile}>
+          <span>{it.label}</span>
+          <strong className={it.tone ?? ""}>{it.value ?? DASH}</strong>
+          {it.sub && <small>{it.sub}</small>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a: Area; view: Extract<View, { kind: "area" }>; tab: AreaTab; tenure?: MoveIntent["tenure"]; onListing: (l: Listing) => void; onResearch: (l: Listing) => void; onDraft: (l: Listing) => void }) {
   const places = [...a.places].sort((p, q) => p.distanceM - q.distanceM);
   const kinds = [...new Set(places.map(placeGroup))];
   return (
     <>
-      {a.why.length > 0 && (
+      {tab === "overview" && (
+        <>
+        {a.why.length > 0 && (
+          <section className={d.section}>
+            <h3 className={d.sh}>Why this area</h3>
+            <ul className={x.why}>
+              {a.why.map((w, i) => (
+                <li key={i}>
+                  <Dot tone={w.status === "poor" ? "red" : w.status === "unknown" ? "grey" : "green"} />
+                  <span>{w.text}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
         <section className={d.section}>
-          <h3 className={d.sh}>Why this area</h3>
-          <ul className={x.why}>
-            {a.why.map((w, i) => (
-              <li key={i}>
-                <Dot tone={w.status === "poor" ? "red" : w.status === "unknown" ? "grey" : "green"} />
-                <span>{w.text}</span>
-              </li>
-            ))}
-          </ul>
+          <h3 className={d.sh}>Commute to work</h3>
+          <CommuteGrid c={a.commute} />
         </section>
+        <AreaStats a={a} />
+        </>
       )}
-      <section className={d.section}>
-        <h3 className={d.sh}>Commute to work</h3>
-        <CommuteGrid c={a.commute} />
-      </section>
-      <AreaStats a={a} />
-      <section className={d.section}>
-        <h3 className={d.sh}>
-          Criteria <small>{a.criteria.length} measured</small>
-        </h3>
-        {a.criteria.length ? (
-          <ul className={x.crits}>
-            {a.criteria.map((c) => (
-              <CriterionRow key={c.id} c={c} focused={view.focus === c.id} n={view.focus === c.id ? view.n : undefined} />
-            ))}
-          </ul>
-        ) : (
-          <p className={x.noSrc}>No criteria were returned for this area.</p>
-        )}
-      </section>
-      <section className={d.section}>
-        <h3 className={d.sh}>
-          Nearby <small>{places.length ? `${places.length} places` : ""}</small>
-        </h3>
-        {places.length ? (
-          <div className={x.places}>
-            {kinds.map((k) => (
-              <div key={k} className={x.placeGroup}>
-                <h4>{k}</h4>
-                <ul>
-                  {places
-                    .filter((p) => placeGroup(p) === k)
-                    .slice(0, 4)
-                    .map((p, i) => (
-                      <li key={`${p.name}-${i}`}>
-                        {p.url && isHttp(p.url) ? (
-                          <a href={p.url} target="_blank" rel="noreferrer">
-                            {p.name}
-                          </a>
-                        ) : (
-                          <span>{p.name}</span>
-                        )}
-                        <span className={x.num}>{meters(p.distanceM) ?? DASH}</span>
-                      </li>
-                    ))}
-                </ul>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className={x.noSrc}>{DASH} No places were returned for this area.</p>
-        )}
-      </section>
-      <SettlingIn a={a} />
-      <section className={d.section}>
-        <h3 className={d.sh}>
-          Local news <small>{a.news.length ? `${a.news.length}` : ""}</small>
-        </h3>
-        {a.news.length ? (
-          <ul className={x.news}>
-            {a.news.map((n, i) => (
-              <li key={`${n.url}-${i}`}>
-                <span className={x.newsHead}>
-                  <Dot tone={n.tone === "negative" ? "red" : n.tone === "positive" ? "green" : "grey"} />
-                  {isHttp(n.url) ? (
-                    <a href={n.quote ? withTextFragment(n.url, n.quote) : n.url} target="_blank" rel="noreferrer">
-                      {n.title}
-                    </a>
-                  ) : (
-                    <span>{n.title}</span>
-                  )}
-                </span>
-                <span className={x.newsMeta}>{[host(n.url), fmtDate(n.date) ?? "date not given"].filter(Boolean).join(" · ")}</span>
-                {n.quote && <blockquote className={x.newsQuote}>{n.quote}</blockquote>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className={x.noSrc}>{DASH} No recent local news or city decisions were found.</p>
-        )}
-      </section>
-      <AreaOutlook a={a} />
-      <section className={d.section}>
-        <h3 className={d.sh}>
-          Listings <small>{a.listings.length ? `${a.listings.length} live` : ""}</small>
-        </h3>
-        {a.listings.length ? (
-          <ul className={x.listings}>
-            {a.listings.map((l) => (
-              <ListingRow key={l.url} l={l} tenure={tenure} compact onOpen={() => onListing(l)} onResearch={() => onResearch(l)} onDraft={() => onDraft(l)} />
-            ))}
-          </ul>
-        ) : (
-          <p className={x.noSrc}>{DASH} No live listings were found in this area.</p>
-        )}
-      </section>
+      {tab === "criteria" && (
+        <>
+        <section className={d.section}>
+          <h3 className={d.sh}>
+            Criteria <small>{a.criteria.length} measured</small>
+          </h3>
+          {a.criteria.length ? (
+            <ul className={x.crits}>
+              {a.criteria.map((c) => (
+                <CriterionRow key={c.id} c={c} focused={view.focus === c.id} n={view.focus === c.id ? view.n : undefined} />
+              ))}
+            </ul>
+          ) : (
+            <p className={x.noSrc}>No criteria were returned for this area.</p>
+          )}
+        </section>
+        </>
+      )}
+      {tab === "life" && (
+        <>
+        <section className={d.section}>
+          <h3 className={d.sh}>
+            Nearby <small>{places.length ? `${places.length} places` : ""}</small>
+          </h3>
+          {places.length ? (
+            <div className={x.places}>
+              {kinds.map((k) => (
+                <div key={k} className={x.placeGroup}>
+                  <h4>{k}</h4>
+                  <ul>
+                    {places
+                      .filter((p) => placeGroup(p) === k)
+                      .slice(0, 4)
+                      .map((p, i) => (
+                        <li key={`${p.name}-${i}`}>
+                          {p.url && isHttp(p.url) ? (
+                            <a href={p.url} target="_blank" rel="noreferrer">
+                              {p.name}
+                            </a>
+                          ) : (
+                            <span>{p.name}</span>
+                          )}
+                          <span className={x.num}>{meters(p.distanceM) ?? DASH}</span>
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className={x.noSrc}>{DASH} No places were returned for this area.</p>
+          )}
+        </section>
+        <SettlingIn a={a} />
+        </>
+      )}
+      {tab === "news" && (
+        <>
+        <section className={d.section}>
+          <h3 className={d.sh}>
+            Local news <small>{a.news.length ? `${a.news.length}` : ""}</small>
+          </h3>
+          {a.news.length ? (
+            <ul className={x.news}>
+              {a.news.map((n, i) => (
+                <li key={`${n.url}-${i}`}>
+                  <span className={x.newsHead}>
+                    <Dot tone={n.tone === "negative" ? "red" : n.tone === "positive" ? "green" : "grey"} />
+                    {isHttp(n.url) ? (
+                      <a href={n.quote ? withTextFragment(n.url, n.quote) : n.url} target="_blank" rel="noreferrer">
+                        {n.title}
+                      </a>
+                    ) : (
+                      <span>{n.title}</span>
+                    )}
+                  </span>
+                  <span className={x.newsMeta}>{[host(n.url), fmtDate(n.date) ?? "date not given"].filter(Boolean).join(" · ")}</span>
+                  {n.quote && <blockquote className={x.newsQuote}>{n.quote}</blockquote>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={x.noSrc}>{DASH} No recent local news or city decisions were found.</p>
+          )}
+        </section>
+        <AreaOutlook a={a} />
+        </>
+      )}
+      {tab === "listings" && (
+        <>
+        <section className={d.section}>
+          <h3 className={d.sh}>
+            Listings <small>{a.listings.length ? `${a.listings.length} live` : ""}</small>
+          </h3>
+          {a.listings.length ? (
+            <ul className={x.listings}>
+              {a.listings.map((l) => (
+                <ListingRow key={l.url} l={l} tenure={tenure} compact onOpen={() => onListing(l)} onResearch={() => onResearch(l)} onDraft={() => onDraft(l)} />
+              ))}
+            </ul>
+          ) : (
+            <p className={x.noSrc}>{DASH} No live listings were found in this area.</p>
+          )}
+        </section>
+        </>
+      )}
     </>
   );
 }
@@ -797,6 +850,17 @@ export function MoveDrawer({
   }, [onClose]);
 
   const tenure = intent?.tenure;
+  const [areaTab, setAreaTab] = useState<AreaTab>("overview");
+  const [listingTab, setListingTab] = useState<ListingTab>("overview");
+  const viewKey = view.kind === "area" ? `a:${view.id}` : `l:${view.url}`;
+  // Opening a different area/listing starts on Overview; a focus (criterion, research, draft) picks its tab.
+  useEffect(() => {
+    if (view.kind === "area") setAreaTab(view.focus ? "criteria" : "overview");
+    else setListingTab(view.focus === "research" ? "research" : view.focus === "draft" ? "viewing" : "overview");
+    body.current?.scrollTo({ top: 0 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewKey, view.kind === "area" ? view.focus : view.focus, view.n]);
+  let tabsBar: React.ReactNode = null;
   let head: React.ReactNode = null;
   let content: React.ReactNode = null;
   let back: { label: string; go: () => void } = { label: "Move file", go: onClose };
@@ -816,12 +880,34 @@ export function MoveDrawer({
           <span className={x[`w_${tone}`]}>{FIT_WORD[tone]}</span>
           <span>{[a.postalCode, a.municipality].filter(Boolean).join(" ")}</span>
         </p>
+        <Tiles
+          items={[
+            { label: "Fit", value: `${a.fit}`, sub: "of 100" },
+            { label: "Transit", value: mins(a.commute?.transitMin) ? `${a.commute?.estimate ? "≈" : ""}${mins(a.commute?.transitMin)}` : null, sub: "to work" },
+            { label: tenure === "buy" ? "Price" : "Rent", value: a.criteria.find((c) => c.id === "rent")?.value?.match(/€[\d,.]+(\/m²)?/)?.[0] ?? null, sub: "typical" },
+            { label: "Listings", value: `${a.listings.length}`, sub: "live" },
+          ]}
+        />
       </>
+    );
+    tabsBar = (
+      <Tabs<AreaTab>
+        value={areaTab}
+        onChange={setAreaTab}
+        tabs={[
+          { id: "overview", label: "Overview", icon: House },
+          { id: "criteria", label: "Criteria", icon: ListChecks, count: a.criteria.length },
+          { id: "life", label: "Daily life", icon: Storefront, count: a.places.length || undefined },
+          { id: "news", label: "News & plans", icon: Newspaper, count: (a.news.length + (a.future?.length ?? 0) + (a.voices?.length ?? 0)) || undefined },
+          { id: "listings", label: "Listings", icon: Key, count: a.listings.length || undefined },
+        ]}
+      />
     );
     content = (
       <AreaView
         a={a}
         view={view}
+        tab={areaTab}
         tenure={tenure}
         onListing={(l) => onView({ kind: "listing", url: l.url, from: a.id })}
         onResearch={(l) => {
@@ -856,33 +942,74 @@ export function MoveDrawer({
             </a>
           </span>
         </p>
+        <Tiles
+          items={[
+            { label: tenure === "buy" ? "Price" : "Rent", value: eur(l.price), sub: l.price && l.sizeM2 ? `€${Math.round(l.price / l.sizeM2)}/m²` : tenure === "buy" ? undefined : "per month" },
+            { label: "Size", value: l.sizeM2 ? `${Math.round(l.sizeM2 * 10) / 10} m²` : null, sub: l.rooms || undefined },
+            { label: "Transit", value: mins((l.commute ?? area?.commute)?.transitMin) ? `${(l.commute ?? area?.commute)?.estimate ? "≈" : ""}${mins((l.commute ?? area?.commute)?.transitMin)}` : null, sub: l.commute ? "from the address" : "from the area" },
+            { label: "Built", value: l.facts?.find((f) => f.key === "built")?.value ?? null, sub: l.facts?.find((f) => f.key === "floor")?.value ? `floor ${l.facts?.find((f) => f.key === "floor")?.value}` : undefined },
+          ]}
+        />
       </>
+    );
+    const rs = research[l.url];
+    const ds = drafts[l.url];
+    tabsBar = (
+      <Tabs<ListingTab>
+        value={listingTab}
+        onChange={setListingTab}
+        tabs={[
+          { id: "overview", label: "Overview", icon: House },
+          { id: "history", label: "History", icon: ClockCounterClockwise, count: l.history?.seen.length || undefined },
+          { id: "research", label: "Research", icon: MagnifyingGlass, count: rs?.research ? rs.findings.length || undefined : undefined, dot: rs?.running },
+          { id: "viewing", label: "Viewing", icon: EnvelopeSimple, dot: !!ds?.draft },
+        ]}
+      />
     );
     content = (
       <>
-        {(l.photos?.length ?? 0) > 0 && <Gallery photos={l.photos} alt={l.address || l.title} className={x.drawerGallery} />}
-        <section className={d.section}>
-          <h3 className={d.sh}>The listing</h3>
-          {l.title && l.address && <p className={x.listingTitle}>{l.title}</p>}
-          <Facts l={l} tenure={tenure} areaName={area?.name} />
-        </section>
-        <ListingFacts l={l} />
-        <ListingHistoryView l={l} />
-        <section className={d.section}>
-          <h3 className={d.sh}>Commute to work</h3>
-          <CommuteGrid c={l.commute ?? area?.commute} />
-          {!l.commute && area?.commute && <p className={x.noSrc}>Measured from the area centre, not this address.</p>}
-        </section>
-        <section className={`${d.section} ${x.anchor}`} ref={researchSec}>
-          <h3 className={d.sh}>
-            Deep research <small>{research[l.url]?.running ? "running" : research[l.url]?.research ? "done" : ""}</small>
-          </h3>
-          <ResearchView st={research[l.url]} onStart={() => onResearch(l)} />
-        </section>
-        <section className={`${d.section} ${x.anchor}`} ref={draftSec}>
-          <h3 className={d.sh}>Viewing request</h3>
-          <DraftView listingUrl={l.url} st={drafts[l.url]} onLang={(lang) => onDraftLang(l.url, lang)} onOpened={() => onDraftOpened(l.url)} onStart={() => onDraft(l)} />
-        </section>
+        {listingTab === "overview" && (
+          <>
+            {(l.photos?.length ?? 0) > 0 && <Gallery photos={l.photos} alt={l.address || l.title} className={x.drawerGallery} />}
+            <div className={x.dActions}>
+              <button type="button" className={x.primaryBtn} onClick={() => (setListingTab("research"), rs ? undefined : onResearch(l))}>
+                <MagnifyingGlass aria-hidden /> {rs ? "Open research" : "Research this flat"}
+              </button>
+              <button type="button" className={x.ghostBtn} onClick={() => (setListingTab("viewing"), ds ? undefined : onDraft(l))}>
+                <EnvelopeSimple aria-hidden /> Request viewing
+              </button>
+              <a className={x.ghostBtn} href={l.url} target="_blank" rel="noreferrer">
+                Open on {l.source || host(l.url)} <ArrowUpRight weight="bold" aria-hidden />
+              </a>
+            </div>
+            <ListingFacts l={l} />
+            <section className={d.section}>
+              <h3 className={d.sh}>The listing</h3>
+              {l.title && l.address && <p className={x.listingTitle}>{l.title}</p>}
+              <Facts l={l} tenure={tenure} areaName={area?.name} />
+            </section>
+            <section className={d.section}>
+              <h3 className={d.sh}>Commute to work</h3>
+              <CommuteGrid c={l.commute ?? area?.commute} />
+              {!l.commute && area?.commute && <p className={x.noSrc}>Measured from the area centre, not this address.</p>}
+            </section>
+          </>
+        )}
+        {listingTab === "history" && (l.history ? <ListingHistoryView l={l} /> : <p className={x.loadingLine}><CircleNotch className={x.spin} aria-hidden /> Checking the portals for earlier listings of this flat…</p>)}
+        {listingTab === "research" && (
+          <section className={`${d.section} ${x.anchor}`} ref={researchSec}>
+            <h3 className={d.sh}>
+              Deep research <small>{rs?.running ? "running" : rs?.research ? "done" : ""}</small>
+            </h3>
+            <ResearchView st={rs} onStart={() => onResearch(l)} />
+          </section>
+        )}
+        {listingTab === "viewing" && (
+          <section className={`${d.section} ${x.anchor}`} ref={draftSec}>
+            <h3 className={d.sh}>Viewing request</h3>
+            <DraftView listingUrl={l.url} st={ds} onLang={(lang) => onDraftLang(l.url, lang)} onOpened={() => onDraftOpened(l.url)} onStart={() => onDraft(l)} />
+          </section>
+        )}
       </>
     );
   }
@@ -908,6 +1035,7 @@ export function MoveDrawer({
             <X weight="bold" />
           </button>
         </header>
+        {tabsBar}
         <div className={d.body} ref={body}>
           {content}
         </div>
