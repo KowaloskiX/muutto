@@ -8,7 +8,8 @@ import dynamic from "next/dynamic";
 import { Check, CircleNotch } from "@phosphor-icons/react";
 import type { Area, CriterionId, Listing } from "@/lib/move/types";
 import { allListings, columnsFor, focusCols, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
-import { ListingRow, MoveDrawer } from "./MoveDrawer";
+import { MoveDrawer } from "./MoveDrawer";
+import { ListingCard } from "./ListingCard";
 import type { AreaPin, ListingDot } from "./MoveMap";
 import type { DraftState, ResearchState, RunState, View, WatchState } from "./types";
 import c from "@/components/case/Case.module.css";
@@ -41,6 +42,14 @@ type Props = {
   onPrompt: (text: string) => void;
 };
 
+type SortId = "match" | "price" | "commute" | "new";
+const SORTS: { id: SortId; label: string }[] = [
+  { id: "match", label: "Best area first" },
+  { id: "price", label: "Lowest price" },
+  { id: "commute", label: "Shortest commute" },
+  { id: "new", label: "Newest" },
+];
+
 const PROMPTS = [
   "I start at Wolt HQ, Arkadiankatu 6, Helsinki in January. Rent up to €1,300, 1–2 rooms, short commute, quiet, cafés, a gym and a climbing wall nearby",
   "New job at Nokia, Karakaari 7, Espoo — family with 2 kids, rent up to €2,000, schools, parks, clean air",
@@ -63,6 +72,17 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
   const cols = shown;
   const groups = useMemo(() => cols.reduce<{ name: string; span: number }[]>((g, c) => (g.at(-1)?.name === c.group ? (g.at(-1)!.span++, g) : [...g, { name: c.group, span: 1 }]), []), [cols]);
   const listings = useMemo(() => allListings(areas), [areas]);
+  const [sort, setSort] = useState<SortId>("match");
+  const sorted = useMemo(() => {
+    const key = (x: (typeof listings)[number]) => {
+      const l = x.listing;
+      if (sort === "price") return l.price ?? Infinity;
+      if (sort === "commute") return l.commute?.transitMin ?? x.area.commute?.transitMin ?? Infinity;
+      if (sort === "new") return -(l.publishedAt ? Date.parse(l.publishedAt) : 0);
+      return x.rank;
+    };
+    return [...listings].sort((a, b) => key(a) - key(b));
+  }, [listings, sort]);
   const work = intent?.work ? { lat: intent.work.lat, lng: intent.work.lng, label: intent.work.label } : undefined;
 
   const pins: AreaPin[] = areas.map((a, i) => {
@@ -360,25 +380,36 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
             {listings.length > 0 && <span className={c.tally}>{listings.length} live · from {[...new Set(listings.map((l) => l.listing.source || host(l.listing.url)))].join(", ")}</span>}
           </div>
           {listings.length ? (
-            <ul className={x.listingGrid}>
-              {listings.map(({ listing: l, area }) => (
-                <ListingRow
-                  key={l.url}
-                  l={l}
-                  tenure={intent?.tenure}
-                  areaName={area.name}
-                  onOpen={() => onView({ kind: "listing", url: l.url, from: area.id })}
-                  onResearch={() => {
-                    onView({ kind: "listing", url: l.url, from: area.id, focus: "research", n: Date.now() });
-                    onResearch(l);
-                  }}
-                  onDraft={() => {
-                    onView({ kind: "listing", url: l.url, from: area.id, focus: "draft", n: Date.now() });
-                    onDraft(l);
-                  }}
-                />
-              ))}
-            </ul>
+            <>
+              <div className={x.lcSort} role="radiogroup" aria-label="Sort listings">
+                {SORTS.map((s) => (
+                  <button key={s.id} type="button" role="radio" aria-checked={sort === s.id} className={sort === s.id ? x.lcSortOn : ""} onClick={() => setSort(s.id)}>
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              <ul className={x.lcGrid}>
+                {sorted.map(({ listing: l, area, rank }) => (
+                  <ListingCard
+                    key={l.url}
+                    l={l}
+                    tenure={intent?.tenure}
+                    areaName={area.name}
+                    areaTransit={area.commute?.transitMin}
+                    rank={rank}
+                    onOpen={() => onView({ kind: "listing", url: l.url, from: area.id })}
+                    onResearch={() => {
+                      onView({ kind: "listing", url: l.url, from: area.id, focus: "research", n: Date.now() });
+                      onResearch(l);
+                    }}
+                    onDraft={() => {
+                      onView({ kind: "listing", url: l.url, from: area.id, focus: "draft", n: Date.now() });
+                      onDraft(l);
+                    }}
+                  />
+                ))}
+              </ul>
+            </>
           ) : (
             <p className={c.empty}>{run.finished ? "No live listings were found in these areas." : "Live listings appear here as they are found."}</p>
           )}

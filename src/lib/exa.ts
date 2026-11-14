@@ -109,6 +109,9 @@ export type ExaResult = {
   highlights?: string[];
   text?: string;
   entities?: any[];
+  /** The page's main image (og:image), when Exa has one. */
+  image?: string;
+  extras?: { imageLinks?: string[] };
 };
 
 export async function search(body: Record<string, unknown>, trace?: ExaTrace[], opts?: { beta?: string }): Promise<{ results: ExaResult[]; output?: any }> {

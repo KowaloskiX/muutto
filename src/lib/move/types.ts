@@ -82,6 +82,8 @@ export type Listing = {
   contact?: { name?: string; company?: string; email?: string; phone?: string; formUrl?: string; source: Source };
   /** Area id this listing belongs to. */
   areaId?: string;
+  /** The listing's own photos as the portal publishes them (main image first); never stock images. */
+  photos?: string[];
   commute?: Commute;
 };
 

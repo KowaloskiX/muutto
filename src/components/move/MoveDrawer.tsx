@@ -10,6 +10,7 @@ import type { Area, Commute, Criterion, CriterionId, Listing, ListingResearch, M
 import { DASH, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, placeGroup, price, sizeLine } from "./model";
 import type { DraftState, ResearchState, View } from "./types";
 import { AreaStats, SettlingIn } from "./SettlingIn";
+import { Gallery } from "./ListingCard";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
 
@@ -808,6 +809,7 @@ export function MoveDrawer({
     );
     content = (
       <>
+        {(l.photos?.length ?? 0) > 0 && <Gallery photos={l.photos} alt={l.address || l.title} className={x.drawerGallery} />}
         <section className={d.section}>
           <h3 className={d.sh}>The listing</h3>
           {l.title && l.address && <p className={x.listingTitle}>{l.title}</p>}

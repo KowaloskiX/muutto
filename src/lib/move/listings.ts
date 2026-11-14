@@ -20,6 +20,16 @@ function first(text: string, res: RegExp[]): RegExpMatchArray | null {
   return null;
 }
 
+// Listing photos are the portal's own CDN images. Agency logos, agent portraits and site assets are
+// dropped; http is upgraded to https (the CDNs serve both) so the page has no mixed content.
+const PHOTO_OK = /cdn\.asunnot\.oikotie\.fi\/|cloudfront\.net\/[^ ]*etuovimedia\/images\/(rental|property)\//;
+const PHOTO_NOT = /logo|\/agent\/|\/ogroup\/|_next\/static|\/static\/media\//i;
+function photosOf(r: ExaResult): string[] | undefined {
+  const all = [r.image, ...(r.extras?.imageLinks ?? [])].filter((u): u is string => !!u && PHOTO_OK.test(u) && !PHOTO_NOT.test(u)).map((u) => u.replace(/^http:\/\//, "https://"));
+  const out = [...new Set(all)].slice(0, 5);
+  return out.length ? out : undefined;
+}
+
 export type ParsedListing = Listing & { kind: "rent" | "sale" | "unknown"; postalCode?: string; roomsN?: number; eurPerM2?: number; priceQuote?: string };
 
 export function parseListing(r: ExaResult): ParsedListing | null {
@@ -94,6 +104,7 @@ export function parseListing(r: ExaResult): ParsedListing | null {
     publishedAt: r.publishedDate?.slice(0, 10),
     source: hostOf(r.url).replace(/^asunnot\./, ""),
     contact,
+    photos: photosOf(r),
     kind,
     postalCode,
     eurPerM2,
@@ -151,7 +162,7 @@ export async function areaListings(
   const pick = hits.slice(0, 10);
   const all: ParsedListing[] = [];
   if (!pick.length) return { all, ok };
-  const page = await contents({ urls: pick.map((h) => h.url), text: { maxCharacters: 4000 } }, trace).catch(() => ({ results: [] as ExaResult[] }));
+  const page = await contents({ urls: pick.map((h) => h.url), text: { maxCharacters: 4000 }, extras: { imageLinks: 6 } }, trace).catch(() => ({ results: [] as ExaResult[] }));
   const byUrl = new Map(page.results.map((r) => [r.url.replace(/\?.*$/, ""), r]));
   for (const h of pick) {
     const full = byUrl.get(h.url);
@@ -171,9 +182,19 @@ export async function areaListings(
 export function pickListings(all: ParsedListing[], q: ListingQuery): ParsedListing[] {
   const fits = (l: ParsedListing) =>
     (q.budget == null || l.price == null || l.price <= q.budget) && (q.minRooms == null || l.roomsN == null || l.roomsN >= q.minRooms) && (q.maxRooms == null || l.roomsN == null || l.roomsN <= q.maxRooms);
+  // The same flat is often on two portals: keep one per street address + size (the one with photos).
+  const seen = new Set<string>();
   return all
     .filter(fits)
-    .sort((a, b) => Number(b.price != null) - Number(a.price != null) || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+    .sort((a, b) => Number(b.price != null) - Number(a.price != null) || Number(!!b.photos) - Number(!!a.photos) || (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""))
+    .filter((l) => {
+      const street = l.address?.split(",")[0].toLowerCase().replace(/\s+[a-z]\s*\d*$/i, "").replace(/\s+/g, " ").trim();
+      if (!street || !/\d/.test(street)) return true;
+      const k = `${street}|${l.sizeM2 ? Math.round(l.sizeM2) : ""}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
     .slice(0, 5);
 }
 
