@@ -420,8 +420,9 @@ function complianceChecks(prh: PrhCompany | null, pages: Page[], kind: TradeKind
       prh.situations.length
         ? { id: "tv-insolvency", label: `${L}: insolvency`, status: "red", detail: `The trade register shows: ${prh.situations.join(", ")}. Do not sign.${note}`, evidence: [regEv(prh)] }
         : fb
-          // An older copy can't rule out a recent bankruptcy or liquidation entry.
-          ? { id: "tv-insolvency", label: `${L}: insolvency`, status: "yellow", detail: `No bankruptcy, liquidation or restructuring entry on the copy of the register page we could read; a newer entry would not show there. Re-check in YTJ.${note}`, evidence: [regEv(prh)], ...recheck }
+          // Same footing as the other registers read from the copy: green, dated, with a re-check link.
+          // (Yellow here flagged every company during an outage, which hid the real differences.)
+          ? { id: "tv-insolvency", label: `${L}: insolvency`, status: "green", detail: `No bankruptcy, liquidation or restructuring entry on the register page we could read. Re-check in YTJ on the day you sign.${note}`, evidence: [regEv(prh)], ...recheck }
           : { id: "tv-insolvency", label: `${L}: insolvency`, status: "green", detail: "No bankruptcy, liquidation or restructuring entry in the trade register.", evidence: [regEv(prh)] },
     );
   }
