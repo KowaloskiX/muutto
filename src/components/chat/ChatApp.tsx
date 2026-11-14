@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUp, ClipboardText, NotePencil, Paperclip, ShieldCheck, SquaresFour, X } from "@phosphor-icons/react";
+import { ArrowUp, Buildings, CaretRight, CheckCircle, CircleNotch, ClipboardText, MagnifyingGlass, NotePencil, Paperclip, Question, ShieldCheck, SquaresFour, WarningCircle, X } from "@phosphor-icons/react";
 import CaseFile, { type OutboxItem } from "@/components/case/CaseFile";
 import { ActionCard, PlanCard, str } from "./Agent";
 import type { Ranked } from "@/lib/rationale";
@@ -27,7 +27,10 @@ const welcomeChips = (): Chip[] => [
   { label: "Which documents must I collect from a subcontractor?", action: "example", payload: "Which documents must I collect from a subcontractor before signing under the tilaajavastuulaki, and which can I check myself from public registers?" },
 ];
 
-const WELCOME_TEXT = "Find subcontractors for your project and vet them before you sign: tilaajavastuu, plus everything the registers can't show.";
+const WELCOME_TEXT = "Vet subcontractors before you sign.";
+const WELCOME_SUB = "Find, check against the tilaajavastuu registers, request quotes, watch. Nothing is sent without your OK.";
+const isStep = (m: Msg) => m.kind === "checking" || (m.kind === "text" && m.role === "bot" && m.tone === "progress");
+const chipIcon = (c: Chip) => (c.action === "find_again" ? MagnifyingGlass : c.action === "prefill" ? Buildings : Question);
 
 const welcome = (text = WELCOME_TEXT): Msg => ({
   id: uid(),
@@ -844,6 +847,16 @@ export default function ChatApp() {
       });
   };
   const lastChipMsg = [...msgs].reverse().find((m) => m.chips?.length && !m.chipsUsed)?.id;
+  // The step still running: the newest progress line, while nothing but the live checklist has followed it.
+  const activeStep = (() => {
+    if (!busy) return undefined;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if (m.kind === "text" && m.role === "bot" && m.tone === "progress") return m.id;
+      if (m.kind !== "checking") return undefined;
+    }
+    return undefined;
+  })();
 
   // ---- case file: derived from the conversation ------------------------------
   const outbox: OutboxItem[] = msgs.flatMap((m) => (m.kind === "draft" ? [{ id: m.id, draft: m.draft }] : []));
@@ -872,10 +885,22 @@ export default function ChatApp() {
             </div>
           );
         if (!m.text) return null; // chips-only message
+        if (m.tone === "progress")
+          return (
+            <div className={s.step}>
+              {m.id === activeStep ? <CircleNotch className={s.spin} aria-label="In progress" /> : <CheckCircle weight="fill" className={`${s.dot} ${s.stepDone}`} aria-label="Done" />}
+              <span>
+                {m.id === activeStep ? m.text : m.text.replace(/\s*(…|\.\.\.)$/, "")}
+                {m.exa && <> <ExaBadge /></>}
+                {m.sources?.length ? <Sources list={m.sources} /> : null}
+              </span>
+            </div>
+          );
         {
           const numbered = !!m.sources?.length && m.sources.every((x) => x.n != null);
           return (
             <div className={`${s.bot} ${m.tone ? s[m.tone] : ""}`}>
+              {m.tone === "error" && <WarningCircle weight="fill" className={`${s.dot} ${s.red} ${s.toneIcon}`} aria-hidden />}
               {numbered ? <CitedText text={m.text} sources={m.sources!} /> : <span className={s.text}>{m.text}</span>}
               {m.note && <small className={s.note}>{m.note}</small>}
               {numbered ? (
@@ -911,13 +936,8 @@ export default function ChatApp() {
       case "welcome":
         return (
           <div className={s.welcome}>
-            <p className={s.welcomeLead}>{m.text}</p>
-            <ol className={s.howList}>
-              <li><b>Find</b> subcontractors near the site.</li>
-              <li><b>Check</b> each against the tilaajavastuu registers, references, licences and news, with a source for every finding.</li>
-              <li><b>Request</b> quotes and missing documents. Nothing is sent without your OK.</li>
-              <li><b>Watch</b> the ones you sign with.</li>
-            </ol>
+            <h1 className={s.welcomeLead}>{m.text}</h1>
+            <p className={s.welcomeSub}>{WELCOME_SUB}</p>
           </div>
         );
       case "plan":
@@ -974,14 +994,42 @@ export default function ChatApp() {
         <div className={s.scroll} ref={scroller} role="log" aria-live="polite">
           {msgs.map((m, i) => {
             const prev = msgs[i - 1];
-            const content = body(m);
+            // Consecutive candidate cards render as one inset list.
+            if (m.kind === "company" && prev?.kind === "company") return null;
+            const run: Extract<Msg, { kind: "company" }>[] = [];
+            if (m.kind === "company") {
+              for (let j = i; j < msgs.length && msgs[j].kind === "company"; j++) run.push(msgs[j] as Extract<Msg, { kind: "company" }>);
+            }
+            const content = run.length ? (
+              <div className={s.list}>
+                {run.map((x) => (
+                  <CompanyCard key={x.id} item={x.item} rank={x.rank} selected={ctx.selected.includes(companyKey(x.item))} onToggle={() => togglePick(companyKey(x.item))} />
+                ))}
+              </div>
+            ) : (
+              body(m)
+            );
             const chips = m.chips && !m.chipsUsed && m.id === lastChipMsg;
             if (!content && !chips) return null;
             return (
-              <div key={m.id} className={`${s.row} ${m.role === "user" ? s.rowUser : s.rowBot} ${prev && prev.role !== m.role ? s.gap : ""}`}>
+              <div key={m.id} className={`${s.row} ${m.role === "user" ? s.rowUser : s.rowBot} ${prev && prev.role !== m.role ? s.gap : ""} ${isStep(m) && prev && isStep(prev) ? s.rowStep : ""}`}>
                 <div className={s.col}>
                   {content}
-                  {chips && (
+                  {chips && m.kind === "welcome" && (
+                    <div className={s.suggest}>
+                      {m.chips!.map((c) => {
+                        const Icon = chipIcon(c);
+                        return (
+                          <button key={c.label} type="button" className={`${s.suggestRow} ${c.primary ? s.suggestPrimary : ""}`} onClick={() => onChip(m.id, c)} disabled={busy}>
+                            <span className={s.suggestIcon} aria-hidden><Icon weight="bold" /></span>
+                            <span className={s.suggestLabel}>{c.label}</span>
+                            <CaretRight weight="bold" className={s.suggestCaret} aria-hidden />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {chips && m.kind !== "welcome" && (
                     <div className={s.chips}>
                       {m.chips!.map((c) => (
                         <button key={c.label} type="button" className={`${s.chip} ${c.primary ? s.chipPrimary : ""}`} onClick={() => onChip(m.id, c)} disabled={busy}>
@@ -994,7 +1042,7 @@ export default function ChatApp() {
               </div>
             );
           })}
-          {busy && !(msgs[msgs.length - 1]?.kind === "plan" && !(msgs[msgs.length - 1] as { finished?: boolean }).finished) && (
+          {busy && !activeStep && !(msgs[msgs.length - 1]?.kind === "plan" && !(msgs[msgs.length - 1] as { finished?: boolean }).finished) && (
             <div className={`${s.row} ${s.rowBot}`}>
               <div className={s.typing} aria-label="Kilpi is working"><i /><i /><i /></div>
             </div>

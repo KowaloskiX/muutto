@@ -1,17 +1,17 @@
 // Kilpi's own chat lines. English is the source; any other language is translated
 // once by /api/chat-route (mode "translate") and cached in localStorage.
 export const EN = {
-  starting: "On it. Reading the project and searching for subcontractors with Exa…",
+  starting: "Reading the project, searching with Exa…",
   looking: "Looking for {service} subcontractors around {city}…",
-  checkingCompany: "Checking {name}: trade register, tilaajavastuu registers, their own site, references, licences and news…",
-  found: "Found {found} candidates. Checking {n} against the tilaajavastuu registers, their sites and references…",
+  checkingCompany: "Checking {name}: registers, site, references, news…",
+  found: "Found {found} candidates, checking {n} against the registers…",
   foundNone: "Exa found no subcontractor websites for that yet.",
   noneTrusted: "I couldn't find a subcontractor I'd trust for that. Could you describe the trade a bit differently, or widen the area around the site?",
-  ranking: "Ranking them by trust…",
-  results: "Here are the top {n}, best fit first. {name} looks strongest. All of them are pinned on the map in the case file; the first line on each card is the finding that matters most, with its source.",
-  resultsFlags: "Here are the top {n}, best fit first. {name} looks strongest. I found something to clarify at {flagged} of them: it's the first line on each card, with its source. Open any of them in the case file for the full tilaajavastuu checklist.",
-  askTop: "Next step: I'll draft a subcontract RFQ to {names} (itemised price, resources, references, YSE 1998 terms) plus a tilaajavastuu document request for what the registers can't confirm. Nothing is sent until you approve. Draft them?",
-  askTopFlags: "Next step: I'll draft a subcontract RFQ to {names} (itemised price, resources, references, YSE 1998 terms) with a question about each warning I found ({asks} of them), plus a tilaajavastuu document request. Nothing is sent until you approve. Draft them?",
+  ranking: "Ranking by trust…",
+  results: "Top {n}, best fit first. {name} looks strongest. Each card leads with the finding that matters most.",
+  resultsFlags: "Top {n}, best fit first. {name} looks strongest. Something to clarify at {flagged} of them, shown on each card. The full checklist is in the case file.",
+  askTop: "Draft an RFQ (YSE 1998) and a tilaajavastuu document request to {names}? Nothing is sent until you approve.",
+  askTopFlags: "Draft an RFQ (YSE 1998) and a tilaajavastuu document request to {names}, with a question about each of the {asks} warnings? Nothing is sent until you approve.",
   chipAskTop: "Yes, draft RFQs for the top {n}",
   chipPick: "Pick myself",
   chipNotNow: "Not now",
@@ -20,8 +20,8 @@ export const EN = {
   companyResult: "That's everything I checked for {name}, with the tilaajavastuu items still to request. Want me to watch them during the project?",
   companyFailed: "I couldn't verify that subcontractor: {msg}",
   chipWatchIt: "Watch {name}",
-  drafting: "Drafting RFQs and tilaajavastuu document requests to {names}…",
-  drafts: "Drafts ready ({n}): quote requests and document requests, with questions about anything that looked off. They're in the case file's Outbox too. Nothing is sent until you tap Approve and send.",
+  drafting: "Drafting RFQs and document requests to {names}…",
+  drafts: "{n} drafts ready, also in the case file's Outbox. Nothing is sent until you tap Approve and send.",
   afterDrafts: "When quotes come back, paste them here and I'll check and compare them. Collect the documents before signing; none may be older than 3 months.",
   chipPasteQuote: "I'll paste one",
   draftError: "I couldn't draft the requests: {msg}",
@@ -97,7 +97,7 @@ export function format(tpl: string, vars: Record<string, string | number> = {}) 
   return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-const STORE = "kilpi-chat-i18n-b2b-v1";
+const STORE = "kilpi-chat-i18n-b2b-v2";
 const cache: Record<string, Table> = {};
 const pending: Record<string, Promise<Table>> = {};
 

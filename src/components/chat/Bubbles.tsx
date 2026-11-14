@@ -120,38 +120,44 @@ export function CompanyCard({ item, rank, selected, onToggle }: { item: Ranked; 
   const fitCls = item.fit >= 70 ? s.fitHigh : item.fit >= 45 ? s.fitMid : s.fitLow;
   const key = findingOf(fromRanked(item, rank));
   return (
-    <div className={s.card}>
-      <div className={s.cardHead}>
-        <span className={s.rank}>{rank}</span>
-        <div className={s.cardTitle}>
-          <strong>{name}</strong>
-          {site && <a href={site} target="_blank" rel="noopener noreferrer">{host(site)}</a>}
-        </div>
-        <span className={`${s.fit} ${fitCls}`} title="Fit score: service proof, register, reputation, rating">{item.fit}<small>/100</small></span>
-      </div>
-      {key && (
-        <p className={s.findingText}>
-          <Dot status={key.status} /> <span>{key.text}</span>
-        </p>
-      )}
-      <div className={s.cardFoot}>
-        {phone && (
-          <a href={`tel:${phone.replace(/\s/g, "")}`} className={s.meta}>
-            <Phone weight="fill" /> {phone}
-          </a>
-        )}
-        {item.place.rating && (
-          <span className={s.meta}>
-            <Star weight="fill" /> {item.place.rating.score.toFixed(1)} <small>({item.place.rating.count})</small>
+    <div className={s.cand}>
+      <span className={s.candRank}>{rank}</span>
+      <div className={s.candMain}>
+        <div className={s.candTop}>
+          <div className={s.candName}>
+            <strong>{name}</strong>
+            {site && <a href={site} target="_blank" rel="noopener noreferrer">{host(site)}</a>}
+          </div>
+          <span className={`${s.candFit} ${fitCls}`} title="Fit score: service proof, register, reputation, rating">
+            {item.fit}
+            <small>/100</small>
           </span>
+        </div>
+        {key && (
+          <p className={s.candFinding}>
+            <Dot status={key.status} />
+            <span>{key.text}</span>
+          </p>
         )}
-        <ExaBadge />
-        {onToggle && (
-          <button type="button" className={`${s.pickBtn} ${selected ? s.picked : ""}`} onClick={onToggle} aria-pressed={selected}>
-            {selected ? <CheckCircle weight="fill" /> : null}
-            {selected ? "Picked" : "Pick"}
-          </button>
-        )}
+        <div className={s.candFoot}>
+          {phone && (
+            <a href={`tel:${phone.replace(/\s/g, "")}`} className={s.meta}>
+              <Phone weight="fill" /> {phone}
+            </a>
+          )}
+          {item.place.rating && (
+            <span className={s.meta}>
+              <Star weight="fill" /> {item.place.rating.score.toFixed(1)} <small>({item.place.rating.count})</small>
+            </span>
+          )}
+          <ExaBadge />
+          {onToggle && (
+            <button type="button" className={`${s.pickBtn} ${selected ? s.picked : ""}`} onClick={onToggle} aria-pressed={selected}>
+              {selected ? <CheckCircle weight="fill" /> : null}
+              {selected ? "Picked" : "Pick"}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
