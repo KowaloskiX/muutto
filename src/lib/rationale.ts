@@ -42,7 +42,51 @@ function ratingShare(p: Place): number | null {
   return 0.5 + (quality - 0.5) * trust;
 }
 
+// ---- B2B fit -------------------------------------------------------------------
+// A main contractor weighs compliance (tilaajavastuu registers) and capability
+// (does the job, has the crew, real references, licence) over map ratings.
+const W_B2B = { service: 25, compliance: 25, capacity: 15, references: 10, licence: 10, reputation: 10, identity: 5 };
+const MAX_B2B = Object.values(W_B2B).reduce((a, b) => a + b, 0);
+const PUBLIC_TV = ["tv-prepayment", "tv-employer", "tv-vat", "tv-trade-register", "tv-tax", "tv-insolvency", "tv-registers"];
+const share = (s: Status | undefined, m: Partial<Record<Status, number>>, dflt: number) => (s ? m[s] ?? 0 : dflt);
+
+export const isB2B = (r: CompanyReport) => r.audience === "b2b";
+
+/** Public tilaajavastuu items verified green / total public items checked. */
+export function complianceTally(r: CompanyReport): { ok: number; total: number; red: number; toRequest: number } {
+  const pub = r.checks.filter((c) => PUBLIC_TV.includes(c.id));
+  return {
+    ok: pub.filter((c) => c.status === "green").length,
+    total: pub.length,
+    red: pub.filter((c) => c.status === "red").length,
+    toRequest: r.checks.filter((c) => c.needsDocument).length,
+  };
+}
+
+function fitScoreB2B(report: CompanyReport): number {
+  const st = (id: string) => find(report, id)?.status;
+  const pub = report.checks.filter((c) => PUBLIC_TV.includes(c.id));
+  const compliance = pub.length ? pub.reduce((a, c) => a + (share(c.status, { green: 1, yellow: 0.4, grey: 0.3, red: 0 }, 0)), 0) / pub.length : 0;
+  let pts =
+    W_B2B.service * share(st("service"), { green: 1, yellow: 0.3 }, 0.4) +
+    W_B2B.compliance * compliance +
+    W_B2B.capacity * share(st("cap-capacity"), { green: 1, yellow: 0.35, grey: 0.3 }, 0.3) +
+    W_B2B.references * share(st("cap-references"), { green: 1, grey: 0.5 }, 0.2) +
+    // No licence check = the trade needs none: neutral rather than full marks.
+    W_B2B.licence * share(st("cap-licence"), { green: 1, grey: 0.3 }, 0.7) +
+    W_B2B.reputation * share(st("reputation"), { green: 1, grey: 0.5, yellow: 0.25 }, 0.5) +
+    W_B2B.identity * share(st("identity"), { green: 1, yellow: 0.5 }, 0);
+  if (st("tv-insolvency") === "red" || st("situation") === "red") pts -= 40;
+  if (st("id-checksum") === "red") pts -= 40;
+  if (st("tv-prepayment") === "red") pts -= 25;
+  if (st("tv-tax") === "red") pts -= 20;
+  if (st("reputation") === "red") pts -= 15;
+  pts -= 3 * report.checks.filter((c) => c.id.startsWith("claim-") && c.status === "yellow").length;
+  return Math.max(0, Math.min(100, Math.round((pts / MAX_B2B) * 100)));
+}
+
 export function fitScore(place: Place, report: CompanyReport): number {
+  if (isB2B(report)) return fitScoreB2B(report);
   let pts = 0;
   for (const id of ["service", "identity", "prepayment", "reputation", "age"] as const) {
     const c = find(report, id);
@@ -72,7 +116,69 @@ function complaints(c: Check): { n: number; hosts: string[]; positive: number } 
   return { n, hosts: [...new Set(neg.map((e) => sourceOf(e.url)).filter(Boolean))], positive: pos.length };
 }
 
+const DOC_SHORT: Record<string, string> = {
+  "tv-pension": "TyEL certificate",
+  "tv-tes": "collective agreement",
+  "tv-occ-health": "occupational health",
+  "tv-accident": "accident insurance",
+  "tv-tax": "tax debt certificate",
+  "tv-trade-register": "trade register extract",
+  "tv-registers": "register extract",
+  "cap-licence": "licence/certificate",
+};
+
+function candidatesB2B(r: CompanyReport, service: string): Cand[] {
+  const out: Cand[] = [];
+  const add = (weight: number, status: Status, sentence: string, evidence: Evidence[]) => out.push({ weight, status, sentence, evidence });
+  const c = (id: string) => find(r, id);
+
+  for (const id of ["id-checksum", "tv-insolvency", "situation", "tv-prepayment", "tv-tax"]) {
+    const x = c(id);
+    if (x?.status === "red") add(100, "red", x.detail.split(/(?<=\.)\s/)[0], x.evidence);
+  }
+  const rep = c("reputation");
+  if (rep?.status === "red") add(95, "red", `Serious issues in news or reviews${complaints(rep).hosts.length ? ` (${complaints(rep).hosts.slice(0, 2).join(", ")})` : ""}`, rep.evidence);
+
+  const svc = c("service");
+  if (svc?.status === "green") add(90, "green", `Their own site covers this work (${service})`, svc.evidence);
+  else if (svc) add(80, "grey", `Their site doesn't clearly mention ${service}; confirm scope`, svc.evidence);
+
+  const cap = c("cap-capacity");
+  if (cap && cap.status !== "grey") add(cap.status === "yellow" ? 85 : 75, cap.status, cap.detail.split(/(?<=\.)\s/)[0], cap.evidence);
+
+  const t = complianceTally(r);
+  const pubEv = r.checks.filter((x) => PUBLIC_TV.includes(x.id) && x.status === "green").flatMap((x) => x.evidence.slice(0, 1)).slice(0, 2);
+  if (t.total && t.red === 0) {
+    const missing = r.checks.filter((x) => PUBLIC_TV.includes(x.id) && x.status === "yellow");
+    if (!missing.length) add(70, "green", `Tilaajavastuu public checks clear: ${t.ok} of ${t.total} (tax registers, trade register${find(r, "tv-tax")?.status === "green" ? ", no tax debt" : ""}, no insolvency)`, pubEv);
+    else add(78, "yellow", `${missing[0].label.replace(/^Tilaajavastuu: /, "")}: ${missing[0].detail.split(/(?<=\.)\s/)[0]}`, missing[0].evidence);
+  }
+
+  const refs = c("cap-references");
+  if (refs?.status === "green") add(72, "green", refs.detail, refs.evidence);
+  else if (refs && refs.evidence.length) add(40, "grey", refs.detail.split(/(?<=\.)\s/)[0], refs.evidence);
+
+  const lic = c("cap-licence");
+  if (lic?.status === "green") add(68, "green", lic.detail.split(/(?<=\.)\s/)[0], lic.evidence);
+  else if (lic) add(66, "grey", lic.detail.split(/(?<=;)\s|(?<=\.)\s/)[0].replace(/;$/, ""), lic.evidence);
+
+  const lk = c("tv-reliable-partner");
+  if (lk) add(60, "green", "Luotettava Kumppani member: one Tilaajavastuu report covers the documents", lk.evidence);
+
+  const docs = r.checks.filter((x) => x.needsDocument);
+  if (docs.length)
+    add(
+      50,
+      "grey",
+      `Request before signing: ${[...new Set(docs.map((d) => DOC_SHORT[d.id] ?? d.label))].slice(0, 4).join(", ")}`,
+      docs.flatMap((d) => d.evidence.slice(0, 1)).slice(0, 2),
+    );
+  if (rep?.status === "yellow") add(64, "yellow", `Some complaints found${complaints(rep).hosts.length ? ` on ${complaints(rep).hosts.slice(0, 2).join(" and ")}` : ""}`, rep.evidence);
+  return out.sort((a, b) => b.weight - a.weight);
+}
+
 function candidates(place: Place, r: CompanyReport, service: string): Cand[] {
+  if (isB2B(r)) return candidatesB2B(r, service);
   const out: Cand[] = [];
   const add = (weight: number, status: Status, sentence: string, evidence: Evidence[]) => out.push({ weight, status, sentence, evidence });
 
@@ -146,6 +252,14 @@ function comparative(list: Ranked[], service: string): Why | null {
   if (list.length < 2) return null;
   const [top, second] = list;
   const n = list.length;
+  if (isB2B(top.report)) {
+    const ev = (id: string) => find(top.report, id)?.evidence ?? [];
+    const only = (id: string) => find(top.report, id)?.status === "green" && list.filter((x) => find(x.report, id)?.status === "green").length === 1;
+    if (only("cap-references")) return { sentence: `Only candidate of ${n} with a reference confirmed by an independent source`, status: "green", evidence: ev("cap-references") };
+    if (only("cap-licence")) return { sentence: `Only candidate of ${n} whose site shows the relevant licence or certificate`, status: "green", evidence: ev("cap-licence") };
+    if (only("service")) return { sentence: `Only candidate of ${n} whose own site mentions ${service}`, status: "green", evidence: ev("service") };
+    return null;
+  }
   const has = (x: Ranked, id: string, s: Status = "green") => find(x.report, id)?.status === s;
   const ev = (id: string) => find(top.report, id)?.evidence ?? [];
   if (has(top, "service") && list.filter((x) => has(x, "service")).length === 1)
@@ -188,6 +302,7 @@ export function buildRanking(items: { place: Place; report: CompanyReport }[], s
 
 // ---- optional polish ------------------------------------------------------
 const Polished = z.object({ items: z.array(z.object({ i: z.number(), sentences: z.array(z.string()) })) });
+const TERMS = [/tilaajavastuu/i, /\bTyEL\b/, /\bTukes\b/, /luotettava kumppani/i, /ennakkoperintä/i];
 const facts = (s: string) => new Set((s.match(/\d+(?:[.,]\d+)?|[a-z0-9-]+\.[a-z]{2,}/gi) ?? []).map((x) => x.toLowerCase()));
 
 /**
@@ -202,7 +317,7 @@ export async function polishWhy(list: Ranked[], ms = 9000): Promise<Ranked[]> {
     const { value: out } = await withTimeout(
       cached("polish", user, 6 * HOUR, () => askJson({
         system:
-          "Rewrite short reasons a customer sees next to a ranking of local businesses. Never mention tax credits unless the original sentence does. Keep comparisons exact: 'Only company of 4 confirmed in X' means this company is the single one of the 4 with X. Keep each reason's meaning, keep every number, company name and website exactly, add no new facts, max 14 words each, plain English, no exclamation marks. Return the same number of sentences per item in the same order.",
+          "Rewrite short reasons shown next to a ranking of businesses (for a consumer hiring locally, or a main contractor vetting construction subcontractors). Keep Finnish legal and register terms (tilaajavastuu, TyEL, Tukes, Luotettava Kumppani) as written. Never mention tax credits unless the original sentence does. Keep comparisons exact: 'Only company of 4 confirmed in X' means this company is the single one of the 4 with X. Keep each reason's meaning, keep every number, company name and website exactly, add no new facts, max 14 words each, plain English, no exclamation marks. Return the same number of sentences per item in the same order.",
         user,
         schema: Polished,
       })),
@@ -216,7 +331,9 @@ export async function polishWhy(list: Ranked[], ms = 9000): Promise<Ranked[]> {
         const s = p.sentences[j]?.trim();
         if (!s) return w;
         const orig = facts(w.sentence);
-        return [...facts(s)].every((f) => orig.has(f)) ? { ...w, sentence: s } : w;
+        // Legal/register terms must survive verbatim (the model once wrote "Tilaavastuu").
+        const termsKept = TERMS.every((t) => !t.test(w.sentence) || t.test(s));
+        return termsKept && [...facts(s)].every((f) => orig.has(f)) ? { ...w, sentence: s } : w;
       });
       return { ...x, why };
     });

@@ -381,4 +381,101 @@ export async function findCompaniesWeb(service: string, city: string, trace?: Ex
   for (let i = 0; i < Math.max(a.length, b.length); i++) for (const w of [a[i], b[i]]) if (w && !out.has(w.website)) out.set(w.website, w);
   return [...out.values()];
 }
+
+// ---- B2B: subcontractor sourcing + Exa company index ----------------------
+// Exa's `category: "company"` index returns an entity per company site with
+// headcount (workforce.total), annual revenue and founding year: capacity signals
+// the open trade register (PRH) does not publish.
+
+export type CompanyProfile = {
+  name: string;
+  website: string;
+  /** Exa company-index page the figures come from (cite it as the source). */
+  entityUrl?: string;
+  foundedYear?: number;
+  employees?: number;
+  /** Annual revenue as Exa reports it (currency not stated by the index). */
+  revenue?: number;
+  city?: string;
+  description?: string;
+};
+
+export function companyProfileOf(r: ExaResult): CompanyProfile | null {
+  const ent = (r.entities ?? []).find((e: any) => e.type === "company");
+  const p = ent?.properties;
+  if (!p?.name) return null;
+  let website: string;
+  try {
+    website = new URL(r.url).origin;
+  } catch {
+    return null;
+  }
+  const num = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x > 0 ? x : undefined);
+  return {
+    name: String(p.name),
+    website,
+    entityUrl: typeof ent.id === "string" ? ent.id : undefined,
+    foundedYear: num(p.foundedYear),
+    employees: num(p.workforce?.total),
+    revenue: num(p.financials?.revenueAnnual),
+    city: p.headquarters?.city ?? undefined,
+    description: typeof p.description === "string" ? p.description.slice(0, 600) : undefined,
+  };
+}
+
+/** Exa company-index profile for one company site (null when Exa has none). */
+export async function companyProfile(domain: string, name: string, trace?: ExaTrace[]): Promise<CompanyProfile | null> {
+  const data = await search({ query: name || domain, category: "company", numResults: 3, includeDomains: [domain] }, trace).catch(() => ({ results: [] as ExaResult[] }));
+  for (const r of data.results ?? []) {
+    const p = companyProfileOf(r);
+    if (p) return p;
+  }
+  return null;
+}
+
+export type SubcontractorHit = WebCompany & { profile?: CompanyProfile };
+
+/**
+ * Construction subcontractors for a trade in an area: Exa's company index (with headcount
+ * and revenue) plus semantic search over company sites for references to similar projects
+ * (taloyhtiö / linjasaneeraus / urakka), in Finnish and English. Interleaved, de-duplicated.
+ */
+export async function findSubcontractorsWeb(
+  service: string,
+  city: string,
+  trace?: ExaTrace[],
+  opts?: { serviceFi?: string; tradeFi?: string; scope?: string },
+): Promise<SubcontractorHit[]> {
+  const fi = opts?.serviceFi?.trim() || opts?.tradeFi?.trim() || service;
+  const scope = opts?.scope?.trim();
+  const companyIdx = search(
+    { query: `${fi} urakointi ${city}`, category: "company", numResults: 15, userLocation: "FI" },
+    trace,
+  ).catch(() => ({ results: [] as ExaResult[] }));
+  const site = (query: string, hl: string) =>
+    searchDynamic(
+      { query, type: "auto", numResults: 12, userLocation: "FI", excludeDomains: NOT_A_CONTRACTOR },
+      { query: hl, maxTotalCharacters: 2500, fallbackMaxCharacters: 500 },
+      trace,
+    ).catch(() => ({ results: [] as ExaResult[] }));
+  const [idx, fiRefs, en] = await Promise.all([
+    companyIdx,
+    site(`${fi} urakoitsija ${city} referenssit taloyhtiöt${scope ? ` ${scope}` : ""}`, `${fi} urakka referenssit ${city}`),
+    site(`construction subcontractor company for ${service} in ${city}, Finland, references of apartment building projects`, `${service} contractor ${city} references`),
+  ]);
+  const profiles = new Map<string, CompanyProfile>();
+  for (const r of idx.results ?? []) {
+    const p = companyProfileOf(r);
+    if (p && !isDirectory(r.url)) profiles.set(p.website, p);
+  }
+  const fromIdx: SubcontractorHit[] = [...profiles.values()].map((p) => ({ name: p.name, website: p.website, url: p.website, title: p.name, highlight: p.description?.slice(0, 300), profile: p }));
+  const lists: SubcontractorHit[][] = [fromIdx, webCompanies(fiRefs.results ?? []), webCompanies(en.results ?? [])];
+  const out = new Map<string, SubcontractorHit>();
+  for (let i = 0; i < Math.max(...lists.map((l) => l.length)); i++)
+    for (const l of lists) {
+      const w = l[i];
+      if (w && !out.has(w.website)) out.set(w.website, { ...w, profile: w.profile ?? profiles.get(w.website) });
+    }
+  return [...out.values()];
+}
 /* eslint-enable @typescript-eslint/no-explicit-any */

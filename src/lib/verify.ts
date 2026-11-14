@@ -5,6 +5,8 @@ import { contents, search, type ExaTrace } from "./exa";
 import { groundedReputation, groundedServiceProof, priceHistory, withTimeout, type Confidence } from "./exa-grounded";
 import { domainOf, prhByBusinessId, prhByName, type PrhCompany } from "./prh";
 import { extractYTunnukset, isValidYTunnus, normalizeYTunnus } from "./ytunnus";
+import { b2bChecks, type DocRequest } from "./tilaajavastuu";
+import type { CompanyProfile } from "./exa";
 
 export type Status = "green" | "yellow" | "red" | "grey";
 export type Evidence = {
@@ -20,7 +22,27 @@ export type Evidence = {
   /** For historical evidence: the Exa Snapshot cutoff date (YYYY-MM-DD). */
   asOf?: string;
 };
-export type Check = { id: string; label: string; status: Status; detail: string; evidence: Evidence[] };
+export type Check = {
+  id: string;
+  label: string;
+  status: Status;
+  detail: string;
+  evidence: Evidence[];
+  /** B2B grouping: the tilaajavastuulaki checklist, or capability (capacity, references, licences). */
+  group?: "tilaajavastuu" | "capability";
+  /**
+   * Can't be verified from public data: the main contractor must request this document.
+   * Status stays "grey" so existing UIs render it; show it as "request".
+   */
+  needsDocument?: boolean;
+  /** The exact document to ask for (Finnish + English). */
+  document?: { fi: string; en: string };
+  /** Legal basis, e.g. "1233/2006 5 § 4 kohta". */
+  law?: string;
+  /** A one-click manual check the user can do (e.g. YTJ tax-debt register, Tukes register). */
+  action?: { label: string; url: string };
+};
+export type Audience = "consumer" | "b2b";
 export type CompanyReport = {
   name: string;
   website?: string;
@@ -35,6 +57,12 @@ export type CompanyReport = {
   trace: ExaTrace[];
   /** Set when this report is served from the cache: ISO time of the live checks that produced it. */
   cachedAt?: string;
+  /** "b2b": vetted as a construction subcontractor (tilaajavastuu + capability checks). */
+  audience?: Audience;
+  /** B2B: Exa company-index figures (headcount, revenue, founded); `source` is the page to cite. */
+  profile?: CompanyProfile & { source: string };
+  /** B2B: tilaajavastuulaki documents still to collect before signing (from checks with needsDocument). */
+  documents?: DocRequest[];
 };
 
 const POINTS: Record<Status, number> = { green: 2, yellow: 0, grey: 0, red: -4 };
@@ -80,14 +108,17 @@ async function findIdOnDomain(domain: string, trace: ExaTrace[]): Promise<Page[]
   }
 }
 
-async function fetchSite(domain: string, trace: ExaTrace[]): Promise<Page[]> {
+async function fetchSite(domain: string, trace: ExaTrace[], b2b = false): Promise<Page[]> {
   try {
     const data = await contents(
       {
         urls: [`https://${domain}`],
         text: { maxCharacters: 20000 },
-        subpages: 4,
-        subpageTarget: ["yhteystiedot", "ota-yhteytta", "contact", "tietosuojaseloste", "yritys", "meista", "about", "palvelut"],
+        // B2B also reads the references and certificates pages (referenssit, laatu, sertifikaatit).
+        subpages: b2b ? 6 : 4,
+        subpageTarget: b2b
+          ? ["referenssit", "referenssi", "references", "projektit", "yhteystiedot", "yritys", "meista", "sertifikaatit", "laatu", "palvelut"]
+          : ["yhteystiedot", "ota-yhteytta", "contact", "tietosuojaseloste", "yritys", "meista", "about", "palvelut"],
         // Use Exa's cached copy when it has one; never wait long for a live crawl.
         livecrawlTimeout: 3000,
       },
@@ -178,10 +209,18 @@ function identityChecks(pages: Page[], domain: string | null, prh: PrhCompany | 
   return checks;
 }
 
-function registryChecks(prh: PrhCompany | null, householdWork: boolean): Check[] {
+function registryChecks(prh: PrhCompany | null, householdWork: boolean, b2b = false): Check[] {
   if (!prh) return [];
   const ev = [{ url: PRH_URL(prh.businessId), source: "registry" as const }];
   const checks: Check[] = [];
+  // B2B: the registers are part of the tilaajavastuu checklist (tv-*); keep only company age here.
+  if (b2b) {
+    if (prh.registrationDate) {
+      const ageYears = (Date.now() - new Date(prh.registrationDate).getTime()) / (365.25 * 24 * 3600 * 1000);
+      checks.push({ id: "age", label: "Company age", status: ageYears < 2 ? "yellow" : "green", detail: `Registered ${prh.registrationDate} (${ageYears < 1 ? "less than a year ago" : `${Math.floor(ageYears)} year${Math.floor(ageYears) === 1 ? "" : "s"} ago`}).${ageYears < 2 ? " A young company: weigh references and guarantees more." : ""}`, evidence: ev });
+    }
+    return checks;
+  }
   // The household tax credit (kotitalousvähennys) only exists for work done in your home
   // (cleaning, renovation, care, IT support at home...). For everything else the prepayment
   // register is still a useful "registered, tax-compliant business" signal, but no tax credit is at stake.
@@ -399,7 +438,20 @@ function extractContact(pages: Page[], domain: string | null) {
 
 // ---- main ---------------------------------------------------------------
 
-export async function verifyCompany(input: { name?: string; website?: string; businessId?: string; service: string; city?: string; householdWork?: boolean }): Promise<CompanyReport> {
+export async function verifyCompany(input: {
+  name?: string;
+  website?: string;
+  businessId?: string;
+  service: string;
+  city?: string;
+  householdWork?: boolean;
+  /** "b2b": vet as a construction subcontractor (tilaajavastuu checklist + capability). */
+  audience?: Audience;
+  /** B2B: trade (e.g. "electrician") and scope ("40-apartment pipe renovation") for licence and capacity checks. */
+  trade?: string;
+  scope?: string;
+}): Promise<CompanyReport> {
+  const b2b = input.audience === "b2b";
   const trace: ExaTrace[] = [];
   const claimedId = input.businessId ? normalizeYTunnus(input.businessId) ?? input.businessId : undefined;
   // Only a business ID given: the register usually knows the website (and the real name).
@@ -417,7 +469,7 @@ export async function verifyCompany(input: { name?: string; website?: string; bu
   const servicePromise = domain && input.service.trim() ? serviceProof(domain, input.service, trace) : Promise.resolve<Check | null>(null);
   const reputationPromise = reputationCheck(input.name ?? domain ?? "", domain, claimedId, trace);
   const pricesPromise = domain && process.env.EXA_SNAPSHOT === "1" ? priceHistoryCheck(domain, trace) : Promise.resolve<Check | null>(null);
-  const [sitePages, idPages] = domain ? await Promise.all([fetchSite(domain, trace), findIdOnDomain(domain, trace)]) : [[], []];
+  const [sitePages, idPages] = domain ? await Promise.all([fetchSite(domain, trace, b2b), findIdOnDomain(domain, trace)]) : [[], []];
   const pages = [...sitePages, ...(sitePages.some((p) => extractYTunnukset(p.text).length) ? [] : idPages)];
 
   const siteIds = new Map<string, Page>();
@@ -440,14 +492,18 @@ export async function verifyCompany(input: { name?: string; website?: string; bu
   }
 
   // Callers that predate the flag (quote checker, /api/verify) are about home renovation work.
-  const householdWork = input.householdWork ?? true;
+  const householdWork = b2b ? false : input.householdWork ?? true;
   const name = prh?.name ?? legalNames[0] ?? input.name ?? domain ?? "Unknown company";
-  const [service, claims, reputation, prices] = await Promise.all([servicePromise, siteClaimChecks(pages, prh), reputationPromise, pricesPromise]);
+  const b2bPromise = b2b
+    ? b2bChecks({ name, domain, prh, pages, service: input.service, trade: input.trade, scope: input.scope }, trace).catch(() => null)
+    : Promise.resolve(null);
+  const [service, claims, reputation, prices, sub] = await Promise.all([servicePromise, siteClaimChecks(pages, prh), reputationPromise, pricesPromise, b2bPromise]);
 
   const checks = [
     ...identityChecks(pages, domain, prh, siteIds, claimedId),
-    ...registryChecks(prh, householdWork),
+    ...registryChecks(prh, householdWork, b2b),
     ...(service ? [service] : []),
+    ...(sub?.checks ?? []),
     ...claims,
     reputation,
     ...(prices ? [prices] : []),
@@ -460,6 +516,7 @@ export async function verifyCompany(input: { name?: string; website?: string; bu
     registry: prh ? { name: prh.name, registrationDate: prh.registrationDate, website: prh.website, mainBusinessLine: prh.mainBusinessLine, addresses: prh.addresses } : undefined,
     checks,
     householdWork,
+    ...(b2b ? { audience: "b2b" as const, profile: sub?.profile, documents: sub?.documents ?? [] } : {}),
     contact: extractContact(pages, domain),
     score: checks.reduce((s, c) => s + POINTS[c.status], 0),
     trace,
@@ -483,6 +540,8 @@ const reportKey = (i: VerifyInput) =>
     i.service.toLowerCase().replace(/\s+/g, " ").trim(),
     i.city?.toLowerCase() ?? "",
     i.householdWork ?? null,
+    // B2B reports carry different checks; consumer keys stay exactly as before.
+    ...(i.audience === "b2b" ? ["b2b-v3", (i.trade ?? "").toLowerCase(), (i.scope ?? "").toLowerCase()] : []),
   ]);
 
 /** A cached report for this company+job, with `cachedAt` set, and its age. */
