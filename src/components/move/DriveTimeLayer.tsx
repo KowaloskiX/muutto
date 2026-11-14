@@ -10,6 +10,7 @@ import L from "leaflet";
 import { contours } from "d3-contour";
 import { CircleMarker, Marker, Pane, Polygon, Polyline, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import type { HeatResponse, HeatScale } from "@/app/api/move/heat/route";
+import type { IsoResponse } from "@/app/api/move/iso/route";
 import m from "@/components/case/Map.module.css";
 import x from "./Move.module.css";
 
@@ -45,6 +46,31 @@ const OSRM = "https://router.project-osrm.org";
 const NOTE = "OSRM, typical, no live traffic";
 
 export type HeatState = { key: string; data?: HeatResponse; error?: string };
+export type IsoState = { key: string; data?: IsoResponse; error?: string };
+
+/** Road-network isochrones (Valhalla), fetched once per workplace while the city layer is shown. */
+export function useIso(work: Pt | undefined, active: boolean): IsoState | undefined {
+  const [iso, setIso] = useState<IsoState | undefined>();
+  const key = work ? `${work.lat.toFixed(3)},${work.lng.toFixed(3)}` : "";
+  useEffect(() => {
+    if (!active || !work || iso?.key === key) return;
+    let stop = false;
+    setIso({ key });
+    fetch(`/api/move/iso?lat=${work.lat}&lng=${work.lng}`)
+      .then(async (r) => {
+        const j = await r.json();
+        if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
+        return j as IsoResponse;
+      })
+      .then((data) => !stop && setIso({ key, data }))
+      .catch((e: Error) => !stop && setIso({ key, error: e.message }));
+    return () => {
+      stop = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, key]);
+  return iso;
+}
 
 /** Fetches the drive-time grid once per workplace, only while the layer is shown. */
 export function useHeat(work: Pt | undefined, active: boolean, scale: HeatScale = "city"): HeatState | undefined {
@@ -83,8 +109,16 @@ export function DriveLegend({ scale = "city" }: { scale?: HeatScale }) {
   );
 }
 
-export function driveCaption(heat: HeatState | undefined, hasWork: boolean): React.ReactNode {
+export function driveCaption(heat: HeatState | undefined, hasWork: boolean, iso?: IsoState, scale: HeatScale = "city"): React.ReactNode {
   if (!hasWork) return "No workplace location, so no drive times.";
+  if (scale === "city" && iso?.data)
+    return `Car, typical — isochrones along the road network (${iso.data.source.label}), no live traffic. Listing times: OSRM. Click the map for a route.`;
+  if (scale === "city" && iso && !iso.error)
+    return (
+      <span className={x.capBusy}>
+        <i aria-hidden /> Tracing drive times along the road network…
+      </span>
+    );
   if (heat?.error) return <span className={x.capErr}>{heat.error}</span>;
   if (!heat?.data)
     return (
@@ -151,6 +185,30 @@ function bands(d: HeatResponse) {
       return { band, polys, label };
     })
     .sort((a, b) => b.band.max - a.band.max);
+}
+
+/** GeoJSON (lng/lat) Polygon or MultiPolygon → Leaflet polygons of [lat, lng] rings. */
+function toPolys(g: IsoResponse["contours"][number]["geometry"]): Ring[][] {
+  const flip = (r: number[][]) => r.map(([lng, lat]) => [lat, lng] as [number, number]);
+  return g.type === "Polygon" ? [g.coordinates.map(flip)] : g.coordinates.map((p) => p.map(flip));
+}
+const northmost = (polys: Ring[][]) => {
+  let best: Ring | undefined;
+  for (const p of polys) if (!best || p[0].length > best.length) best = p[0];
+  return best?.reduce((a, b) => (b[0] > a[0] ? b : a));
+};
+function isoBands(d: IsoResponse) {
+  return DRIVE_BANDS.map((band) => {
+    const c = d.contours.find((x) => x.min === band.max);
+    const polys = c ? toPolys(c.geometry) : [];
+    return { band: band as Band, polys, label: northmost(polys) };
+  })
+    .filter((b) => b.polys.length)
+    .sort((a, b) => b.band.max - a.band.max);
+}
+function isoZone(d: IsoResponse, t: number): Ring[][] {
+  const c = d.contours.find((x) => x.min === t);
+  return c ? toPolys(c.geometry) : [];
 }
 
 /** One reach zone: everything routable within `t` minutes. */
@@ -250,6 +308,7 @@ function FitScale({ heat, scale, work }: { heat?: HeatState; scale: HeatScale; w
 
 export default function DriveTimeLayer({
   heat,
+  iso,
   work,
   dots,
   areas,
@@ -259,6 +318,7 @@ export default function DriveTimeLayer({
   onSelectListing,
 }: {
   heat?: HeatState;
+  iso?: IsoState;
   work?: Pt;
   dots: Dot[];
   areas: AreaPt[];
@@ -267,8 +327,11 @@ export default function DriveTimeLayer({
   onScale: (s: HeatScale) => void;
   onSelectListing: (key: string) => void;
 }) {
-  const ui = SCALE_UI[scale];
-  const shapes = useMemo(() => (heat?.data ? bands(heat.data) : []), [heat?.data]);
+  const roads = scale === "city" && !!iso?.data;
+  const ui = roads ? { ...SCALE_UI.city, step: 5 } : SCALE_UI[scale];
+  const ready = roads || !!heat?.data;
+  const status = scale === "city" ? (iso?.error ? heat : iso) : heat;
+  const shapes = useMemo(() => (roads ? isoBands(iso!.data!) : heat?.data ? bands(heat.data) : []), [roads, iso?.data, heat?.data]);
   const [route, setRoute] = useState<Route | undefined>();
   // Listings and area centres, each routed to work (one OSRM table call).
   const targets = useMemo(() => [...dots.map((d) => ({ key: d.key, lat: d.lat, lng: d.lng })), ...areas.map((a) => ({ key: `area:${a.key}`, lat: a.lat, lng: a.lng }))], [dots, areas]);
@@ -279,9 +342,12 @@ export default function DriveTimeLayer({
   // The time slider: the reach zone for "within T minutes", recomputed live from the grid.
   const [t, setT] = useState<number>(ui.start);
   useEffect(() => setT(SCALE_UI[scale].start), [scale]);
+  useEffect(() => {
+    if (roads) setT((v) => Math.max(5, Math.round(v / 5) * 5));
+  }, [roads]);
   const [playing, setPlaying] = useState(false);
   const raf = useRef<number | undefined>(undefined);
-  const zone = useMemo(() => (heat?.data ? reach(heat.data, t) : []), [heat?.data, t]);
+  const zone = useMemo(() => (roads ? isoZone(iso!.data!, t) : heat?.data ? reach(heat.data, t) : []), [roads, iso?.data, heat?.data, t]);
   const zoneLabel = useMemo(() => {
     let best: Ring | undefined;
     for (const p of zone) if (!best || p[0].length > best.length) best = p[0];
@@ -309,7 +375,7 @@ export default function DriveTimeLayer({
     if (!panel.current) return;
     L.DomEvent.disableClickPropagation(panel.current);
     L.DomEvent.disableScrollPropagation(panel.current);
-  }, [!!heat]);
+  }, [!!status]);
   const known = dots.filter((d) => lm[d.key] != null);
   const inL = known.filter((d) => lm[d.key]! <= t).length;
   const knownA = areas.filter((a) => lm[`area:${a.key}`] != null);
@@ -391,7 +457,7 @@ export default function DriveTimeLayer({
         );
       })}
       <FitScale heat={heat} scale={scale} work={work} />
-      {heat && (
+      {status && (
         <div ref={panel} className={x.reachPanel}>
           <div className={x.scaleSwitch} role="radiogroup" aria-label="Reach scale">
             {(Object.keys(SCALE_UI) as HeatScale[]).map((s) => (
@@ -404,7 +470,7 @@ export default function DriveTimeLayer({
             <label htmlFor="reach-t">
               Reachable by car in <b>{fmtT(t)}</b>
             </label>
-            <button type="button" className={x.playBtn} onClick={play} disabled={playing || !heat.data} aria-label={`Play 0 to ${fmtT(ui.max)}`}>
+            <button type="button" className={x.playBtn} onClick={play} disabled={playing || !ready} aria-label={`Play 0 to ${fmtT(ui.max)}`}>
               {playing ? "Playing" : "Play"}
             </button>
           </div>
@@ -414,7 +480,7 @@ export default function DriveTimeLayer({
             min={0}
             max={ui.max}
             step={ui.step}
-            disabled={!heat.data}
+            disabled={!ready}
             value={t}
             onChange={(e) => {
               if (raf.current) cancelAnimationFrame(raf.current);
@@ -424,10 +490,10 @@ export default function DriveTimeLayer({
             style={{ "--p": `${(t / ui.max) * 100}%` } as React.CSSProperties}
           />
           <small>
-            {!heat.data ? (heat.error ? "Unavailable" : scale === "region" ? "Routing ~2,000 points across southern Finland…" : "Routing…") : null}
-            {heat.data && (dots.length ? `${inL} of ${dots.length} listings` : "No listings")}
-            {heat.data && areas.length ? ` · ${inA} of ${areas.length} areas` : ""}
-            {heat.data && (known.length < dots.length || knownA.length < areas.length) ? " (routing…)" : ""}
+            {!ready ? (status.error ? "Unavailable" : scale === "region" ? "Routing ~2,000 points across southern Finland…" : "Tracing the road network…") : null}
+            {ready && (dots.length ? `${inL} of ${dots.length} listings` : "No listings")}
+            {ready && areas.length ? ` · ${inA} of ${areas.length} areas` : ""}
+            {ready && (known.length < dots.length || knownA.length < areas.length) ? " (routing…)" : ""}
           </small>
         </div>
       )}

@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { Circle, MapContainer, Marker, Pane, Polygon, TileLayer, Tooltip, WMSTileLayer, useMap } from "react-leaflet";
 import type { Area, Place } from "@/lib/move/types";
-import DriveTimeLayer, { DriveLegend, driveCaption, useHeat } from "./DriveTimeLayer";
+import DriveTimeLayer, { DriveLegend, driveCaption, useHeat, useIso } from "./DriveTimeLayer";
 import type { HeatScale } from "@/app/api/move/heat/route";
 import { FIT_WORD, PLACE_WORD, placeGroup, type Tone } from "./model";
 import m from "@/components/case/Map.module.css";
@@ -310,7 +310,9 @@ export default function MoveMap({
 
   // Drive-time grid: fetched once per workplace, only when the layer is opened.
   const [scale, setScale] = useState<HeatScale>("city");
-  const heat = useHeat(work, layer === "drive", scale);
+  // City scale: road-network isochrones (Valhalla); the OSRM grid is the region scale and the fallback.
+  const iso = useIso(work, layer === "drive" && scale === "city");
+  const heat = useHeat(work, layer === "drive" && (scale === "region" || !!iso?.error), scale);
 
   const points = useMemo<[number, number][]>(() => [...(work ? [[work.lat, work.lng] as [number, number]] : []), ...pins.map((p) => [p.lat, p.lng] as [number, number])], [work, pins]);
   // Daily life zooms to the focused area: its places and the 500 m circle.
@@ -337,7 +339,7 @@ export default function MoveMap({
   let caption: React.ReactNode = null;
   if (layer === "drive") {
     legend = <DriveLegend scale={scale} />;
-    caption = driveCaption(heat, !!work);
+    caption = driveCaption(heat, !!work, iso, scale);
   } else if (layer === "noise") {
     legend = (
       <>
@@ -434,7 +436,7 @@ export default function MoveMap({
           {layer === "fit" && <Shapes pins={pins} hover={hover} active={active} dark={dark} onSelect={onSelect} onHover={onHover} />}
           {layer === "daily" && <Shapes pins={pins} hover={hover} active={active} dark={dark} onSelect={onSelect} onHover={onHover} outline />}
           {layer === "drive" && (
-            <DriveTimeLayer heat={heat} work={work} dots={dots} areas={pins.map((p) => ({ key: p.key, lat: p.lat, lng: p.lng, label: p.label }))} dark={dark} scale={scale} onScale={setScale} onSelectListing={onSelectListing} />
+            <DriveTimeLayer heat={heat} iso={iso} work={work} dots={dots} areas={pins.map((p) => ({ key: p.key, lat: p.lat, lng: p.lng, label: p.label }))} dark={dark} scale={scale} onScale={setScale} onSelectListing={onSelectListing} />
           )}
           {layer === "daily" && circle && (
             <Circle center={[circle.lat, circle.lng]} radius={500} interactive={false} pathOptions={{ color: dark ? "#f2f1ed" : "#0d1016", weight: 1.25, opacity: 0.6, dashArray: "4 5", fillOpacity: dark ? 0.06 : 0.04 }} />
