@@ -27,7 +27,8 @@ export const cacheEnabled = () => process.env.KILP_CACHE !== "0";
 // identical Exa calls are de-duplicated for 2 minutes so one run never pays twice.
 // KILP_LIVE=0 turns the full replay cache back on (offline backup for a flaky venue network).
 export const liveMode = () => process.env.KILP_LIVE !== "0";
-const LIVE_MAX_AGE: Record<string, number> = { geo: HARD_MAX_AGE, exa: 120_000 };
+// Static open datasets (postal areas, sensor/station metadata) may be reused for 24 h.
+const LIVE_MAX_AGE: Record<string, number> = { geo: HARD_MAX_AGE, exa: 120_000, paavo: HARD_MAX_AGE, "digitraffic-tms": HARD_MAX_AGE, "digitraffic-rail": HARD_MAX_AGE, "osm-pois": HARD_MAX_AGE };
 
 function load() {
   if (store.loaded) return;

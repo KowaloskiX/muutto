@@ -33,6 +33,8 @@ export type MoveIntent = {
   /** Max commute the user accepts, minutes (default 35). */
   maxCommuteMin?: number;
   summary: string;
+  /** Where the work location came from (Exa page with the office address, Nominatim geocode). */
+  workSources?: Source[];
 };
 
 /** A criterion measured for an area. `id` is stable so the UI can build matrix columns. */
@@ -89,14 +91,14 @@ export type ListingResearch = {
   risks: { text: string; severity: "low" | "medium" | "high"; source: Source }[];
   questions: string[]; // what to ask at the viewing, derived from findings
   steps: { label: string; detail?: string; at: number }[]; // research trace for the live UI
-};
-
   /** Key terms read off the listing page (rent, deposit, lease term, energy class, availability…), each quoted. */
   facts?: { label: string; value: string; source: Source }[];
   /** What we looked for and did not find: shown as "unknown", never filled in. */
   unknowns?: string[];
   /** Run stats for the trace footer. `agent`: whether the Exa Agent deep-research run was merged in time. */
   meta?: { tookMs: number; exaCalls: number; llmCalls: number; agent: "merged" | "timeout" | "failed" | "off"; dropped: number; costDollars?: number };
+};
+
 /** NDJSON from POST /api/move/research (body: { listing: Listing; intent: MoveIntent }). */
 export type ResearchEvent =
   | { type: "step"; label: string; detail?: string }
@@ -164,14 +166,76 @@ export type Area = {
   commute?: Commute;
   /** 1–3 one-line reasons, best first, each tied to a criterion. */
   why: { text: string; status: Status; criterion?: CriterionId }[];
+  /** Postal-area outline (Statistics Finland Paavo), WGS84 [lng, lat], simplified to ≤ ~200 points. */
+  polygon?: { type: "Polygon"; coordinates: number[][][] } | { type: "MultiPolygon"; coordinates: number[][][][] };
+  /** Postal-area statistics (Statistics Finland Paavo), when available. */
+  stats?: {
+    population: number;
+    /** Median income of residents, €/yr. */
+    medianIncome?: number;
+    /** Median household disposable income, €/yr. */
+    medianHouseholdIncome?: number;
+    meanAge?: number;
+    /** % of residents under 18 / 65 and over. */
+    under18Share?: number;
+    over65Share?: number;
+    /** % of households renting / with children. */
+    rentedShare?: number;
+    familiesShare?: number;
+    year?: number;
+    source: Source;
+  };
 };
 
 /** NDJSON events streamed by POST /api/move (body: { query: string }). */
 export type MoveEvent =
   | { type: "stage"; id: "understand" | "areas" | "measure" | "listings" | "rank"; status: "active" | "done"; detail?: string }
   | { type: "intent"; intent: MoveIntent }
-  | { type: "areas"; areas: Pick<Area, "id" | "name" | "municipality" | "center">[] } // candidates before measuring
+  | { type: "areas"; areas: Pick<Area, "id" | "name" | "municipality" | "center" | "polygon">[] } // candidates before measuring
   | { type: "area"; area: Area } // one area fully measured (stream as each finishes)
   | { type: "notice"; message: string }
   | { type: "error"; message: string }
   | { type: "done"; ranked: Area[]; tookMs: number };
+
+/** GET /api/move/services?areaId=&lat=&lng=&municipality= — real contacts for settling in, each cited. */
+export type ServiceGroup = "health" | "kids" | "everyday" | "official" | "landlords";
+export type ServiceKind =
+  | "health-centre"
+  | "pharmacy"
+  | "child-health"
+  | "daycare"
+  | "school"
+  | "library"
+  | "swimming"
+  | "newcomer"
+  | "registration"
+  | "kela"
+  | "landlord";
+export type ServiceContact = {
+  kind: ServiceKind;
+  group: ServiceGroup;
+  name: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  email?: string;
+  /** Opening hours as the source states them (verbatim, may be Finnish). */
+  hours?: string;
+  distanceM?: number;
+  /** Short qualifier as the source states it, e.g. "private", "Swedish-language", "has rental homes in Espoo". */
+  note?: string;
+  source: Source;
+};
+export type AreaServices = {
+  areaId: string;
+  municipality: string;
+  center: LatLng;
+  contacts: ServiceContact[];
+  /** What we looked for and did not find (shown as unknown, never filled in). */
+  unknowns: string[];
+  /** Which registers answered, e.g. ["Helsinki region Service Map", "OpenStreetMap", "Exa"]. */
+  sources: string[];
+  tookMs: number;
+  fetchedAt: string;
+  cached?: boolean;
+};
