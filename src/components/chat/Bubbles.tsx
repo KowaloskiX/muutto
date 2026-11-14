@@ -190,6 +190,7 @@ export function DraftCard({ draft, onChange }: { draft: Draft; onChange: (d: Dra
       <div className={s.draftHead}>
         <Envelope weight="fill" />
         <div>
+          {draft.kind && <small className={s.draftKind}>{draft.kind === "docs" ? "Tilaajavastuu document request" : "Subcontract quote request (RFQ)"}</small>}
           <strong>To {draft.name}</strong>
           <small>{draft.email ?? "No email found on their site: add one in your mail app"}</small>
         </div>
@@ -290,7 +291,7 @@ export function CompareCard({ rows, recommendation }: { rows: QuoteRow[]; recomm
                 </td>
                 <td>{eur(r.totalWithVat ?? r.total)}</td>
                 <td className={(r.upfrontPct ?? 0) > 30 ? s.bad : ""}>{r.upfrontPct != null ? `${r.upfrontPct}%` : "?"}</td>
-                <td className={r.labourItemised ? s.good : s.bad} title={r.labourItemised ? "Labour itemised: household tax credit possible" : "Labour not itemised: no household tax credit"}>
+                <td className={r.labourItemised ? s.good : s.bad} title={r.labourItemised ? "Labour itemised" : "Labour not itemised"}>
                   {r.labourItemised ? <CheckCircle weight="fill" className={s.dot} /> : <XCircle weight="fill" className={s.dot} />}
                 </td>
               </tr>
@@ -320,7 +321,7 @@ export function CompareCard({ rows, recommendation }: { rows: QuoteRow[]; recomm
       )}
       <div className={s.cardFoot}>
         <ExaBadge />
-        <small className={s.muted}>Checked against the trade register, their sites and consumer-authority guidance</small>
+        <small className={s.muted}>Checked against the trade register and their own sites</small>
       </div>
     </div>
   );

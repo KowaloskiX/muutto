@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUp, NotePencil, Paperclip, ShieldCheck, SquaresFour } from "@phosphor-icons/react";
+import { ArrowUp, ClipboardText, NotePencil, Paperclip, ShieldCheck, SquaresFour, X } from "@phosphor-icons/react";
+import CaseFile, { type OutboxItem } from "@/components/case/CaseFile";
 import { ActionCard, PlanCard, str } from "./Agent";
 import type { Ranked } from "@/lib/rationale";
 import type { QuoteInput, QuoteRow, Recommendation } from "@/lib/compare";
@@ -10,22 +11,21 @@ import type { QuoteReport } from "@/lib/quote";
 import { keywordIntent, type RouteArgs, type RouteOut } from "./intent";
 import { CheckingCard, CitedText, CompanyCard, CompanyDetailCard, CompareCard, DraftCard, ExaBadge, NumberedSources, QuoteCheckCard, Sources, WatchCard, companyKey, host } from "./Bubbles";
 import { loadTable, t, type Key, type Table } from "./i18n";
-import { EMPTY_CTX, type Action, type AgentAction, type Chip, type Ctx, type Draft, type Evidence, type Msg, type NewMsg, type PlanStep, type Source } from "./types";
+import { EMPTY_CTX, type Action, type AgentAction, type Chip, type Ctx, type Draft, type Evidence, type LiveCand, type Msg, type NewMsg, type PlanStep, type Project, type Source } from "./types";
 import s from "./Chat.module.css";
 
-const STORE = "kilpi-chat-v3";
+const STORE = "kilpi-contractors-v1";
 const uid = () => Math.random().toString(36).slice(2, 10);
 
-const EXAMPLE = "I need the bathroom pipes relined in my flat in Espoo, English-speaking company please";
+const EXAMPLE = "Electrical subcontractor for a 40-apartment pipe renovation (linjasaneeraus) in Espoo, start March";
 
 const welcomeChips = (): Chip[] => [
-  { label: "Bathroom pipes relined in Espoo, English-speaking", action: "example", payload: EXAMPLE, primary: true },
-  { label: "Is this company legit? <paste name>", action: "prefill", payload: "Is this company legit? " },
-  { label: "My contractor wants 100% upfront — is that OK?", action: "example", payload: "My contractor wants 100% of the price upfront before starting the renovation. Is that OK in Finland, and what should I do?" },
+  { label: "Electrical subcontractor for a 40-apartment pipe renovation in Espoo, start March", action: "example", payload: EXAMPLE, primary: true },
+  { label: "Check subcontractor: <paste company>", action: "prefill", payload: "Check subcontractor: " },
+  { label: "Which documents must I collect from a subcontractor?", action: "example", payload: "Which documents must I collect from a subcontractor before signing under the tilaajavastuulaki, and which can I check myself from public registers?" },
 ];
 
-
-const WELCOME_TEXT = "Hiring someone for your home in Finland? I'll find them, check them, and get you safe quotes — with proof.";
+const WELCOME_TEXT = "Find subcontractors for your project and vet them before you sign: tilaajavastuu, plus everything the registers can't show.";
 
 const welcome = (text = WELCOME_TEXT): Msg => ({
   id: uid(),
@@ -103,6 +103,8 @@ export default function ChatApp() {
   const [busy, setBusy] = useState(false);
   const [input, setInput] = useState("");
   const [ready, setReady] = useState(false);
+  /** Mobile: the case file opens as a bottom sheet. */
+  const [sheet, setSheet] = useState(false);
   const scroller = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -189,7 +191,8 @@ export default function ChatApp() {
     const progressId = sayT(mode === "company" ? "checkingCompany" : "starting", { name: label || query.replace(/^Verify the company /, "") }, { tone: "progress", exa: true });
     const progress = (text: string) => patch(progressId, (m) => (m.kind === "text" ? { ...m, text } : m));
     try {
-      const resP = fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query }) });
+      // Kilpi for contractors: every search and company check is a B2B subcontractor vetting.
+      const resP = fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, audience: "b2b" }) });
       const res = await resP;
       if (!res.ok || !res.body) throw new Error(`search failed (${res.status})`);
       const reader = res.body.getReader();
@@ -210,7 +213,24 @@ export default function ChatApp() {
             kind = e.kind === "company" ? "company" : "job";
             if (kind === "company") progress(tr("checkingCompany", { name: label || query.replace(/^Verify the company /, "") }));
             else progress(tr("looking", { service: label || e.service, city: e.city }));
-            if (kind === "job") found = { job: e.service, city: e.city };
+            if (kind === "job") {
+              found = { job: e.service, city: e.city };
+              const loc = e.location as { lat: number; lng: number; label: string; source?: string } | undefined;
+              const pr = (e.project ?? {}) as Partial<Project>;
+              const project: Project = {
+                summary: e.summary,
+                service: e.service,
+                trade: pr.trade || undefined,
+                scope: pr.scope || undefined,
+                place: pr.place || e.city,
+                startDate: pr.startDate || undefined,
+                contractValueEur: pr.contractValueEur || undefined,
+                audience: e.audience,
+                site: loc && Number.isFinite(loc.lat) && Number.isFinite(loc.lng) ? { lat: loc.lat, lng: loc.lng, label: loc.label, source: loc.source } : undefined,
+                tilaajavastuu: e.tilaajavastuu,
+              };
+              setCtx((c) => ({ ...c, project, live: [], searching: true }));
+            }
           } else if (e.type === "notice") {
             say(e.message, { tone: e.level === "warning" ? "error" : "progress" });
           } else if (e.type === "stage" && e.id === "find" && e.status === "done" && kind === "job") {
@@ -223,6 +243,16 @@ export default function ChatApp() {
             if (i < 0) checking.push(row);
             else checking[i] = row;
             const items = [...checking];
+            if (kind === "job") {
+              const lc: LiveCand = { domain: e.domain, name: row.name, status: e.status, place: e.place, report: e.report ? { ...e.report, trace: [] } : undefined };
+              setCtx((c) => {
+                const live = [...(c.live ?? [])];
+                const j = live.findIndex((x) => x.domain === lc.domain);
+                if (j < 0) live.push(lc);
+                else live[j] = { ...live[j], ...lc, report: lc.report ?? live[j].report };
+                return { ...c, live };
+              });
+            }
             if (!checkingId) checkingId = push({ role: "bot", kind: "checking", items });
             else patch(checkingId, (m) => ({ ...m, items }) as Msg);
           } else if (e.type === "stage" && e.id === "rank" && e.status === "active" && kind === "job") {
@@ -269,6 +299,8 @@ export default function ChatApp() {
       }
     } catch (err) {
       sayT(kind === "company" ? "companyFailed" : "searchError", { msg: (err as Error).message }, { tone: "error", chips: retry });
+    } finally {
+      if (ctxRef.current.searching || ctxRef.current.live?.length) setCtx((c) => ({ ...c, searching: false, live: [] }));
     }
   }
 
@@ -279,24 +311,42 @@ export default function ChatApp() {
       return;
     }
     const c = ctxRef.current;
-    const job = [c.job, c.city && `in ${c.city}`].filter(Boolean).join(" ") || c.lastQuery || "home repair job";
+    const job = [c.project?.scope || c.job, c.city && `in ${c.city}`].filter(Boolean).join(" ") || c.lastQuery || "construction subcontract";
+    const p = c.project;
     await table;
     sayT("drafting", { names: companies.map(nameOf).join(", ") }, { tone: "progress" });
     try {
+      type DraftOut = Omit<Draft, "lang" | "kind"> & { documentRequestFi?: string; documentRequestEn?: string; documents?: { fi: string; en: string; law?: string }[] };
       const [{ drafts }] = await Promise.all([
-        postJson<{ drafts: Omit<Draft, "lang">[] }>("/api/draft", {
+        postJson<{ drafts: DraftOut[] }>("/api/draft", {
           job,
-          companies: companies.map((r) => ({
-            name: nameOf(r),
-            email: r.report.contact.emails[0],
-            concerns: r.why.filter((w) => w.status === "yellow" || w.status === "red").map((w) => w.sentence),
-          })),
+          audience: "b2b",
+          project: p ? { trade: p.trade ?? "", scope: p.scope ?? p.service ?? "", place: p.place ?? "", startDate: p.startDate ?? "", contractValueEur: p.contractValueEur } : undefined,
+          companies: companies.map((r) => {
+            const b2bChecks = r.report.checks.some((k) => k.group);
+            return {
+              name: nameOf(r),
+              email: r.report.contact.emails[0],
+              concerns: r.why.filter((w) => w.status === "yellow" || w.status === "red").map((w) => w.sentence),
+              businessId: r.report.businessId,
+              // The documents this company still owes; without a B2B report the route asks for the full § 5 list.
+              ...(r.report.documents?.length ? { documents: r.report.documents } : b2bChecks ? { checks: r.report.checks } : {}),
+            };
+          }),
         }),
         table,
       ]);
-      sayT("drafts", { n: drafts.length });
       const lang = ctxRef.current.lang === "fi" ? "fi" : "en";
-      drafts.forEach((d) => push({ role: "bot", kind: "draft", draft: { ...d, lang } }));
+      // B2B: one RFQ and one tilaajavastuu document request per company.
+      const out: Draft[] = drafts.flatMap((d) => {
+        const { documentRequestFi, documentRequestEn, documents, ...rfq } = d;
+        const list: Draft[] = [{ ...rfq, lang, kind: documentRequestFi ? "rfq" : undefined }];
+        if (documentRequestFi && documentRequestEn)
+          list.push({ name: d.name, email: d.email, subject: `Tilaajavastuulain selvitykset / Contractor's Liability Act documents: ${d.name}`, bodyFi: documentRequestFi, bodyEn: documentRequestEn, lang, kind: "docs", documents });
+        return list;
+      });
+      sayT("drafts", { n: out.length });
+      out.forEach((draft) => push({ role: "bot", kind: "draft", draft }));
       sayT("afterDrafts", undefined, {
         chips: [
           { label: tr("chipPasteQuote"), action: "paste_another", primary: true },
@@ -657,7 +707,7 @@ export default function ChatApp() {
         case "find_contractor":
           return runFind(a.query || text, "job", table, r.lang !== "en" ? a.jobLabel : undefined);
         case "check_company": {
-          const raw = a.company || text;
+          const raw = (a.company || text).replace(/^\s*(check|verify|vet|tarkista)(\s+(the\s+)?(subcontractor|company|aliurakoitsija|yritys))?\s*:?\s*/i, "").trim() || text;
           // A URL is looked up by its bare domain ("vesiniitty.fi"); names and Y-tunnus as given.
           const company = /^(https?:\/\/|www\.)|^[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}(\/|$)/i.test(raw) ? host(raw) : raw;
           return runFind(`Verify the company ${company}`, "company", table, company);
@@ -792,6 +842,17 @@ export default function ChatApp() {
   };
   const lastChipMsg = [...msgs].reverse().find((m) => m.chips?.length && !m.chipsUsed)?.id;
 
+  // ---- case file: derived from the conversation ------------------------------
+  const outbox: OutboxItem[] = msgs.flatMap((m) => (m.kind === "draft" ? [{ id: m.id, draft: m.draft }] : []));
+  const lastCompare = [...msgs].reverse().find((m): m is Extract<Msg, { kind: "compare" }> => m.kind === "compare");
+  const caseCount = (ctx.searching ? ctx.live?.length ?? 0 : ctx.ranked.length) + outbox.filter((o) => !o.draft.sent).length;
+  const caseFromPanel = (fn: () => Promise<void>) => {
+    if (busy) return;
+    retireChips();
+    setSheet(false);
+    void work(fn);
+  };
+
   function body(m: Msg) {
     switch (m.kind) {
       case "text":
@@ -850,16 +911,17 @@ export default function ChatApp() {
               <div className={s.flagTop}>
                 <ShieldCheck weight="fill" />
                 <div>
-                  <small>Kilpi · check before you pay</small>
+                  <small>Kilpi for contractors</small>
                   <strong>{m.text}</strong>
                 </div>
               </div>
               <ol className={s.howList}>
-                <li><b>Find</b> local firms that do your exact job</li>
-                <li><b>Check</b> each one against the trade and tax registers, their own site and reviews, with a source for every finding</li>
-                <li><b>Quote safely</b>: I draft the requests, then check and compare the quotes and the payment terms</li>
+                <li><b>Find</b> subcontractors for your project, pinned on a map with their distance from the site</li>
+                <li><b>Check</b> each one against the tilaajavastuu registers, and what registers can&apos;t show: references, licences, news and reviews. A source for every finding</li>
+                <li><b>Request</b> quotes and the missing tilaajavastuu documents: I draft the RFQ and the document request</li>
+                <li><b>Watch</b> the ones you sign with for the length of the project</li>
               </ol>
-              <small className={s.muted}>Nothing is sent without your OK.</small>
+              <small className={s.muted}>Everything lands in the case file. Nothing is sent without your OK.</small>
             </div>
           </>
         );
@@ -884,23 +946,37 @@ export default function ChatApp() {
 
   return (
     <div className={s.stage}>
-      <aside className={s.aside}>
-        <span className={s.asideMark}><ShieldCheck weight="fill" /></span>
-        <h1>Hiring someone for your home? Check before you pay.</h1>
-        <p>Kilpi finds contractors in Finland, checks each one against the trade and tax registers, their own site and reviews, and gets you safe quotes. Every finding links to its source, found with Exa. Nothing is sent without your OK.</p>
-        <Link href="/" className={s.asideLink}><SquaresFour weight="bold" /> Open the classic view</Link>
-      </aside>
-
       <main className={s.phone} aria-label="Chat with Kilpi">
         <header className={s.header}>
           <span className={s.avatar} aria-hidden><ShieldCheck weight="fill" /></span>
           <div className={s.who}>
-            <strong>Kilpi</strong>
-            <small>{busy ? "working on it…" : "check before you pay"}</small>
+            <strong>Kilpi for contractors</strong>
+            <small>{busy ? "working on it…" : "vet subcontractors before you sign"}</small>
           </div>
-          <Link href="/" className={s.headBtn} title="Classic view"><SquaresFour weight="bold" /><span>Classic</span></Link>
-          <button type="button" className={s.headBtn} onClick={newChat} disabled={busy} title="New chat"><NotePencil weight="bold" /><span>New chat</span></button>
+          <button type="button" className={`${s.headBtn} ${s.caseBtn}`} onClick={() => setSheet(true)} title="Case file" aria-label="Open case file">
+            <ClipboardText weight="bold" />
+            <span>Case file</span>
+            {caseCount > 0 && <b className={s.caseCount}>{caseCount}</b>}
+          </button>
+          <Link href="/" className={`${s.headBtn} ${s.iconOnly}`} title="Classic view" aria-label="Classic view"><SquaresFour weight="bold" /></Link>
+          <button type="button" className={s.headBtn} onClick={newChat} disabled={busy} title="New project"><NotePencil weight="bold" /><span>New project</span></button>
         </header>
+        {(ctx.project || ctx.ranked.length > 0 || outbox.length > 0) && (
+          <button type="button" className={s.caseStrip} onClick={() => setSheet(true)}>
+            <ClipboardText weight="fill" />
+            <span>
+              <b>Case file</b>
+              {[
+                ctx.searching ? `${ctx.live?.length ?? 0} checking` : ctx.ranked.length ? `${Math.min(8, ctx.ranked.length)} candidates on the map` : "",
+                outbox.length ? `${outbox.filter((o) => !o.draft.sent).length} drafts to approve` : "",
+                ctx.watched.length ? `${ctx.watched.length} watched` : "",
+              ]
+                .filter(Boolean)
+                .join(" · ") || ctx.project?.scope || "project"}
+            </span>
+            <em>Open</em>
+          </button>
+        )}
 
         <div className={s.scroll} ref={scroller} role="log" aria-live="polite">
           {msgs.map((m, i) => {
@@ -946,7 +1022,7 @@ export default function ChatApp() {
             ref={inputRef}
             value={input}
             rows={1}
-            placeholder={ctx.ranked.length ? "Message Kilpi, or paste a quote…" : "What needs doing, and where?"}
+            placeholder={ctx.ranked.length ? "Message Kilpi, or paste a subcontractor quote…" : "Trade, project and site, e.g. waterproofing for a school in Vantaa"}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -959,6 +1035,29 @@ export default function ChatApp() {
           <button type="submit" className={s.sendBtn} disabled={busy || !input.trim()} aria-label="Send"><ArrowUp weight="bold" /></button>
         </form>
       </main>
+
+      <section className={`${s.casePane} ${sheet ? s.sheetOpen : ""}`} aria-label="Case file">
+        <div className={s.sheetBar}>
+          <span className={s.grip} aria-hidden />
+          <strong>Case file</strong>
+          <button type="button" className={s.headBtn} onClick={() => setSheet(false)} aria-label="Close case file"><X weight="bold" /></button>
+        </div>
+        <CaseFile
+          ctx={ctx}
+          outbox={outbox}
+          compare={lastCompare ? { rows: lastCompare.rows, recommendation: lastCompare.recommendation } : undefined}
+          busy={busy}
+          onDraft={(r) => caseFromPanel(() => runDrafts([r], loadTable(ctxRef.current.lang ?? "en")))}
+          onWatch={(target) => caseFromPanel(() => runWatch(target))}
+          onDraftChange={(id, d) => patch(id, (x) => ({ ...x, draft: d }) as Msg)}
+          onPrefill={(text) => {
+            setSheet(false);
+            setInput(text);
+            requestAnimationFrame(() => inputRef.current?.focus());
+          }}
+        />
+      </section>
+      {sheet && <button type="button" className={s.sheetScrim} onClick={() => setSheet(false)} aria-label="Close case file" />}
     </div>
   );
 }

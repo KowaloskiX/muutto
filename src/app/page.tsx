@@ -616,8 +616,8 @@ export default function Home() {
       <main className="home-shell">
         <header className="app-header"><Brand /><Link href="/chat" className="kp-chat-pill"><ChatCircleDots weight="fill" />Chat</Link></header>
         <section className="search-hero">
-          <h1>Check before you pay.</h1>
-          <p className="kp-sub">Hiring someone for your home in Finland? I&apos;ll find them, check them, and get you safe quotes — with proof. Every finding links to its source.</p>
+          <h1>Vet subcontractors before you sign.</h1>
+          <p className="kp-sub">Kilpi for contractors finds subcontractors for your project in Finland, checks them against tilaajavastuu and what registers can&apos;t show (references, licences, news, reviews), drafts the quote and document requests, and watches them during the project. Every finding links to its source.</p>
           <Link href="/chat" className="kp-chat-cta"><ChatCircleDots weight="fill" />Open Kilpi chat<ArrowRight weight="bold" /></Link>
           <div className="search-composer">
             <div className="composer-entry">

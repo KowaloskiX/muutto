@@ -1,6 +1,8 @@
 import type { Ranked } from "@/lib/rationale";
 import type { QuoteRow, Recommendation, QuoteInput } from "@/lib/compare";
 import type { QuoteReport } from "@/lib/quote";
+import type { CompanyReport } from "@/lib/verify";
+import type { Place } from "@/lib/exa";
 
 export type Source = { url: string; quote?: string; n?: number; title?: string };
 
@@ -31,7 +33,29 @@ export type Draft = {
   editing?: boolean;
   edited?: string;
   sent?: boolean;
+  /** B2B: "rfq" = subcontract quote request, "docs" = tilaajavastuu document request. */
+  kind?: "rfq" | "docs";
+  /** B2B document request: the documents it lists. */
+  documents?: { fi: string; en: string; law?: string }[];
 };
+
+/** B2B project parsed from the search (from /api/find's `intent` event). */
+export type Project = {
+  summary?: string;
+  service?: string;
+  trade?: string;
+  scope?: string;
+  place?: string;
+  startDate?: string;
+  contractValueEur?: number;
+  audience?: string;
+  /** The geocoded site / search centre. */
+  site?: { lat: number; lng: number; label: string; source?: string };
+  tilaajavastuu?: { applies: string; note: string; obligations: string[]; evidence: { url: string; quote?: string }[] };
+};
+
+/** A candidate still being checked during a search (from /api/find's `company` events). */
+export type LiveCand = { domain: string; name: string; status: "scanning" | "done" | "failed"; place: Place; report?: CompanyReport };
 
 // ---- general errands: events from /api/agent (NDJSON) ----------------------------
 export type StepStatus = "pending" | "active" | "done" | "failed" | "skipped";
@@ -82,6 +106,11 @@ export type Ctx = {
   agentState?: unknown;
   /** The errand in progress (for the router: follow-ups like "AY1234" or "yes, do it" belong to it). */
   errand?: { topic: string; last?: string };
+  /** The project this case file is about (B2B search). */
+  project?: Project;
+  /** Candidates of the search in progress, before the ranking arrives. */
+  live?: LiveCand[];
+  searching?: boolean;
 };
 
 export const EMPTY_CTX: Ctx = { ranked: [], selected: [], quotes: [], watched: [] };
