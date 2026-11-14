@@ -5,13 +5,14 @@ import Image from "next/image";
 import s from "@/app/landing.module.css";
 import { usePageHidden } from "./usePageHidden";
 
-/* Three AI-generated scenes crossfading on one 21 s CSS timeline (7 s each, 1.4 s crossfade,
+/* Four AI-generated scenes crossfading on one 28 s CSS timeline (7 s each, 1.4 s crossfade,
    slow Ken Burns). Scenes, names and progress hairlines share the per-scene delay, so pausing
    them together (tab hidden) keeps them in step. */
 const SCENES = [
-  { src: "/media/aerial.webp", name: "Courtyard blocks · Helsinki", pos: "56% 50%" },
-  { src: "/media/facade.webp", name: "Facade renovation · Helsinki", pos: "50% 38%" },
-  { src: "/media/corridor.webp", name: "Ventilation works · school", pos: "50% 45%" },
+  { src: "/media/move/street.webp", name: "A tram street in winter", pos: "50% 55%" },
+  { src: "/media/move/interior.webp", name: "Moving day", pos: "62% 50%" },
+  { src: "/media/move/shore.webp", name: "Seaside blocks at dusk", pos: "40% 50%" },
+  { src: "/media/aerial.webp", name: "Courtyards from above", pos: "56% 50%" },
 ];
 
 export function HeroMedia() {

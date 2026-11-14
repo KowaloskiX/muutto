@@ -1,34 +1,82 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { ArrowRight, ArrowDown } from "@phosphor-icons/react/dist/ssr";
+import {
+  ArrowRight,
+  ArrowDown,
+  Train,
+  Storefront,
+  Wind,
+  Crane,
+  HouseLine,
+  Buildings,
+} from "@phosphor-icons/react/dist/ssr";
 import { HeroMedia } from "@/components/landing/HeroMedia";
 import { Reveal } from "@/components/landing/Reveal";
 import { SourceCardMock } from "@/components/landing/SourceCardMock";
 import s from "./landing.module.css";
 
 export const metadata: Metadata = {
-  title: "Kilpi for contractors | Vet subcontractors before you sign",
+  title: "Muutto | Find where to live in Helsinki before you land",
   description:
-    "For main contractors in Finland: find subcontractors with Exa, check them against the tilaajavastuu registers with a source for every finding, draft quote and document requests, and watch them during the project.",
+    "For people moving to the Helsinki region for work: areas ranked by real commute and daily life, live listings found with Exa, deep research on the flat you like, and a source for every fact.",
 };
 
 const STEPS = [
   {
-    title: "Describe the job",
-    text: "Trade, site and timing, in plain words. Finnish or English.",
+    title: "Tell us where you’ll work",
+    text: "Your workplace and what matters to you, in plain words. Budget, rooms, kids, a dog, a gym nearby.",
   },
   {
-    title: "Exa finds local subcontractors",
-    text: "Exa searches the web for firms that actually do the work near your site.",
+    title: "Areas ranked by real commute and daily life",
+    text: "Travel times by public transport, car, bike and on foot, then the distance to a pharmacy, groceries, cafés, schools and parks, with air quality and noise.",
   },
   {
-    title: "Every register check cited to its source",
-    text: "Trade, VAT, prepayment and employer registers, each linked to the passage it came from.",
+    title: "Live listings, and deep research on the one you like",
+    text: "Rentals and homes for sale found with Exa. Pick one and Muutto looks into the building’s renovations, the landlord’s reviews and any works planned on the street.",
   },
   {
-    title: "Draft requests, then watch",
-    text: "Quote and missing-document requests drafted for your approval; Exa Monitors watch the firms you hire during the project.",
+    title: "A viewing request for your OK, and a watch on your areas",
+    text: "A message to the real contact on the listing is drafted for you to approve. Exa Monitors keep looking and tell you when something new appears.",
+  },
+];
+
+const CHECKS = [
+  {
+    icon: Train,
+    title: "Commute",
+    text: "Public transport, car (rush hour where it can be measured), bike and walking, to your workplace.",
+    from: "Digitransit journey planner and routing",
+  },
+  {
+    icon: Storefront,
+    title: "Daily life",
+    text: "How far to the nearest pharmacy, grocery store, café, school, park and stop.",
+    from: "OpenStreetMap",
+  },
+  {
+    icon: Wind,
+    title: "Environment",
+    text: "Air quality near the address, and whether the street is known to be loud.",
+    from: "Finnish Meteorological Institute, city data and local news",
+  },
+  {
+    icon: Crane,
+    title: "Change",
+    text: "Street works, blasting, new tram and metro lines, buildings going up next door.",
+    from: "City decisions and local news via Exa",
+  },
+  {
+    icon: HouseLine,
+    title: "Listings",
+    text: "Live rentals and homes for sale, each linked back to the original ad.",
+    from: "Finnish listing sites via Exa",
+  },
+  {
+    icon: Buildings,
+    title: "Landlord & building",
+    text: "What tenants say about the landlord, and past or planned renovations in the building.",
+    from: "Reviews, housing company pages and news via Exa",
   },
 ];
 
@@ -56,38 +104,39 @@ export default function Landing() {
     <div className={s.page}>
       <header className={s.bar}>
         <div className={s.barIn}>
-          <Link href="/" className={s.word} aria-label="Kilpi home">
-            Kilpi
+          <Link href="/" className={s.word} aria-label="Muutto home">
+            Muutto
           </Link>
-          <Link href="/chat" className={s.barCta}>
+          <Link href="/move" className={s.barCta}>
             Open app
           </Link>
         </div>
       </header>
 
       <main>
-        {/* 1 · hero */}
+        {/* hero */}
         <section className={s.hero}>
           <div className={s.wrap}>
             <p className={`${s.eyebrow} ${s.in1}`}>
-              For main contractors in Finland
+              For people moving to Helsinki for work
             </p>
             <div className={s.heroGrid}>
               <h1 className={s.h1}>
                 <span className={s.line}>
-                  <span className={s.in2}>Vet subcontractors</span>
+                  <span className={s.in2}>Find where to live</span>
                 </span>{" "}
                 <span className={s.line}>
-                  <span className={s.in3}>before you sign.</span>
+                  <span className={s.in3}>before you land.</span>
                 </span>
               </h1>
               <div className={`${s.heroRow} ${s.in4}`}>
                 <p className={s.lead}>
-                  Kilpi finds subcontractors for your project and checks them
-                  against the public registers, with a source for every finding.
+                  Tell Muutto where you&rsquo;ll work. It ranks areas by your
+                  real commute and daily life, finds live listings, and links
+                  every fact to its source.
                 </p>
                 <div className={s.ctaRow}>
-                  <Cta href="/chat">Start a search</Cta>
+                  <Cta href="/move">Start with your workplace</Cta>
                   <a href="#how" className={s.textLink}>
                     See how it works <ArrowDown weight="bold" aria-hidden />
                   </a>
@@ -100,14 +149,14 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* 2 · how it works */}
+        {/* how it works */}
         <section id="how" className={s.section}>
           <div className={`${s.wrap} ${s.how}`}>
             <div className={s.howText}>
               <Reveal>
                 <p className={s.eyebrow}>How it works</p>
                 <h2 className={s.h2}>
-                  From a job description to a vetted shortlist.
+                  From a job offer to a viewing request.
                 </h2>
               </Reveal>
               <ol className={s.steps}>
@@ -132,12 +181,12 @@ export default function Landing() {
             <Reveal className={s.howImg} delay={120}>
               <figure className={s.photo}>
                 <Image
-                  src="/media/facade.webp"
-                  alt="Scaffolded apartment facade under renovation in Helsinki"
+                  src="/media/move/interior.webp"
+                  alt="An empty flat on moving day, boxes on the floor and keys on the window sill"
                   fill
                   sizes="(min-width: 960px) 40vw, 100vw"
                   unoptimized
-                  style={{ objectPosition: "50% 40%" }}
+                  style={{ objectPosition: "62% 50%" }}
                 />
                 <figcaption className={s.credit}>
                   Image: AI-generated
@@ -147,71 +196,61 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* 3 · why it matters */}
-        <section className={s.law}>
+        {/* what we check */}
+        <section className={s.band}>
           <div className={s.wrap}>
-            <Reveal className={s.lawHead}>
-              <p className={s.eyebrow}>Why it matters</p>
+            <Reveal className={s.bandHead}>
+              <p className={s.eyebrow}>What we check</p>
               <h2 className={s.h2}>
-                The Contractor&rsquo;s Liability Act puts the checks on you.
+                The things you&rsquo;d only learn after living there.
               </h2>
-              <p className={s.lawLead}>
-                Tilaajavastuulaki (1233/2006) applies to subcontracts worth over
-                €9,000, excl. VAT.
+              <p className={s.bandLead}>
+                Each check names where its answer comes from.
               </p>
             </Reveal>
-            <div className={s.lawGrid}>
-              <Reveal className={s.lawItem} delay={0}>
-                <span className={s.lawRef}>§ 5</span>
-                <h3 className={s.h3}>Collect the documents first</h3>
-                <p>
-                  Register entries, trade register extract, tax and pension
-                  certificates, the collective agreement, and for construction
-                  accident insurance and occupational health care. None older
-                  than three months.
-                </p>
-              </Reveal>
-              <Reveal className={s.lawItem} delay={90}>
-                <span className={s.lawRef}>§ 9</span>
-                <h3 className={s.h3}>Neglect has a price</h3>
-                <p>
-                  The main contractor can be fined (laiminlyöntimaksu) for not
-                  collecting them.
-                </p>
-              </Reveal>
-              <Reveal className={s.lawItem} delay={180}>
-                <span className={s.lawRef}>Beyond</span>
-                <h3 className={s.h3}>Registers are not the whole story</h3>
-                <p>
-                  Registers can&rsquo;t show references, licences or news. Kilpi
-                  checks those too.
-                </p>
-              </Reveal>
+            <div className={s.checkGrid}>
+              {CHECKS.map((c, i) => (
+                <Reveal
+                  key={c.title}
+                  className={s.check}
+                  delay={(i % 3) * 90}
+                >
+                  <c.icon className={s.checkIcon} weight="light" aria-hidden />
+                  <h3 className={s.h3}>{c.title}</h3>
+                  <p className={s.checkText}>{c.text}</p>
+                  <p className={s.checkFrom}>
+                    <span>From</span> {c.from}
+                  </p>
+                </Reveal>
+              ))}
             </div>
           </div>
         </section>
 
-        {/* 4 · proof */}
+        {/* sources */}
         <section className={s.section}>
           <div className={`${s.wrap} ${s.proof}`}>
             <Reveal className={s.proofText}>
-              <p className={s.eyebrow}>Proof, not claims</p>
-              <h2 className={s.h2}>Every finding shows where it came from.</h2>
+              <p className={s.eyebrow}>Every answer has a source</p>
+              <h2 className={s.h2}>Nothing you have to take on trust.</h2>
               <ul className={s.proofList}>
-                <li>The page that was read, and when.</li>
-                <li>The exact passage, highlighted.</li>
-                <li>What is missing is shown as missing, never guessed.</li>
+                <li>The page it came from, and when it was read.</li>
+                <li>The exact passage, quoted.</li>
+                <li>
+                  When something can&rsquo;t be found, it says so instead of
+                  guessing.
+                </li>
               </ul>
             </Reveal>
             <Reveal className={s.proofStage} delay={120}>
               <div className={s.proofBg} aria-hidden>
                 <Image
-                  src="/media/corridor.webp"
+                  src="/media/move/street.webp"
                   alt=""
                   fill
                   sizes="(min-width: 960px) 55vw, 100vw"
                   unoptimized
-                  style={{ objectPosition: "50% 45%" }}
+                  style={{ objectPosition: "60% 60%" }}
                 />
               </div>
               <SourceCardMock />
@@ -222,25 +261,25 @@ export default function Landing() {
           </div>
         </section>
 
-        {/* 5 · final call */}
+        {/* final call */}
         <section className={s.final}>
           <Reveal className={s.finalBand}>
             <Image
-              src="/media/aerial.webp"
+              src="/media/move/shore.webp"
               alt=""
               fill
               sizes="100vw"
               unoptimized
               className={s.finalImg}
-              style={{ objectPosition: "56% 50%" }}
+              style={{ objectPosition: "40% 50%" }}
             />
             <div className={s.finalIn}>
-              <h2 className={s.finalTitle}>Start with a real project.</h2>
+              <h2 className={s.finalTitle}>Start with where you&rsquo;ll work.</h2>
               <p className={s.finalLead}>
-                Describe the job. Kilpi does the searching and the checking.
+                Muutto does the searching, the checking and the first message.
               </p>
-              <Cta href="/chat" light>
-                Start a search
+              <Cta href="/move" light>
+                Start with your workplace
               </Cta>
             </div>
             <span className={`${s.credit} ${s.creditCorner}`}>
@@ -252,11 +291,10 @@ export default function Landing() {
 
       <footer className={s.foot}>
         <div className={`${s.wrap} ${s.footIn}`}>
-          <span className={s.word}>Kilpi</span>
+          <span className={s.word}>Muutto</span>
           <span className={s.footNote}>Built at Junction 2026 with Exa</span>
           <nav className={s.footNav} aria-label="Footer">
-            <Link href="/chat">App</Link>
-            <Link href="/classic">Classic</Link>
+            <Link href="/move">App</Link>
           </nav>
         </div>
       </footer>

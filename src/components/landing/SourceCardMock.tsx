@@ -1,57 +1,60 @@
-import { ArrowUpRight, FileText } from "@phosphor-icons/react/dist/ssr";
+import { ArrowUpRight, Globe } from "@phosphor-icons/react/dist/ssr";
 import s from "@/app/landing.module.css";
 
-/* A static copy of the drawer's source card, filled with the real register passage for
-   Helsingin ilmanvaihto Oy (3226458-8) from the recorded check of 14 Nov 2026. */
-const FOUND = [
-  ["Kaupparekisteri", "Trade register", "03.08.2021"],
-  ["Verohallinnon perustiedot", "Tax Administration", "03.08.2021"],
-  ["Arvonlisäverovelvollisuus", "VAT register", "31.07.2021"],
-];
-const MISSING = [
-  ["Ennakkoperintärekisteri", "Prepayment register"],
-  ["Työnantajarekisteri", "Employer register"],
-];
+/* The shape of a source card, with field names in place of values: the landing does not show
+   invented facts, so every value is a neutral placeholder bar. */
+function Bar({ w }: { w: string }) {
+  return <span className={s.srcBar} style={{ width: w }} aria-hidden />;
+}
 
 export function SourceCardMock() {
   return (
-    <figure className={s.src} aria-label="Example source card for Helsingin ilmanvaihto Oy">
+    <figure className={s.src} aria-label="Structure of a source card: claim, source, published date, date read and quoted passage">
       <div className={s.srcFinding}>
         <span className={s.srcDot} aria-hidden />
-        <div>
-          <p className={s.srcVerdict}>Clarify before signing</p>
-          <p className={s.srcSentence}>Helsingin ilmanvaihto Oy is not listed in the prepayment or employer register.</p>
+        <div className={s.srcFindingBody}>
+          <p className={s.srcLabel}>Claim</p>
+          <p className={s.srcSentence}>
+            <Bar w="92%" />
+            <Bar w="58%" />
+          </p>
         </div>
+        <span className={s.srcRef} aria-hidden>
+          1
+        </span>
       </div>
       <div className={s.srcCard}>
-        <figcaption className={s.srcHead}>
+        <div className={s.srcHead}>
           <span className={s.srcFav} aria-hidden>
-            <FileText weight="bold" />
+            <Globe weight="bold" />
           </span>
           <span className={s.srcWho}>
-            <strong>Asiakastieto · asiakastieto.fi</strong>
-            <span>YTJ register data · cited passage highlighted</span>
+            <span className={s.srcLabel}>Source</span>
+            <span className={s.srcWhoName}>Publisher · domain</span>
           </span>
-        </figcaption>
-        <blockquote className={s.srcPassage}>
-          <p className={s.srcPHead}>Active registers</p>
-          {FOUND.map(([fi, en, date]) => (
-            <span key={fi} className={`${s.srcRow} ${s.srcFound}`}>
-              <span>
-                {fi} <span className={s.srcEn}>({en})</span>
-              </span>
-              <span className={s.srcDate}>{date}</span>
-            </span>
-          ))}
-          {MISSING.map(([fi, en]) => (
-            <span key={fi} className={`${s.srcRow} ${s.srcMissing}`}>
-              <span>
-                {fi} <span className={s.srcEn}>({en})</span>
-              </span>
-              <span className={s.srcDate}>Not listed</span>
-            </span>
-          ))}
-        </blockquote>
+        </div>
+        <dl className={s.srcMeta}>
+          <div>
+            <dt className={s.srcLabel}>Published</dt>
+            <dd>
+              <Bar w="72px" />
+            </dd>
+          </div>
+          <div>
+            <dt className={s.srcLabel}>Read</dt>
+            <dd>
+              <Bar w="72px" />
+            </dd>
+          </div>
+        </dl>
+        <div className={s.srcQuoteWrap}>
+          <p className={s.srcLabel}>Quote</p>
+          <blockquote className={s.srcQuote}>
+            <Bar w="100%" />
+            <Bar w="96%" />
+            <Bar w="70%" />
+          </blockquote>
+        </div>
         <div className={s.srcFoot}>
           <span className={s.srcPill}>
             Open at this passage
@@ -59,6 +62,9 @@ export function SourceCardMock() {
           </span>
         </div>
       </div>
+      <figcaption className={s.srcCaption}>
+        The shape of a source card. Values appear when you run a search.
+      </figcaption>
     </figure>
   );
 }
