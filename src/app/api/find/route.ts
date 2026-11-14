@@ -9,6 +9,7 @@ import { cachedReport, REPORT_FRESH_MS, verifyCompanyCached, type Audience, type
 import { applicability, type Applicability } from "@/lib/tilaajavastuu";
 import { cached, cacheGet, cacheSet, HOUR } from "@/lib/cache";
 import { DEFAULT_PLACE, resolvePlace, type GeoPoint } from "@/lib/geo";
+import { areaStems, preScore, registryFor, siteFit, tradeProfile, tradeWords, type FitContext, type FitInput } from "@/lib/sitefit";
 
 /** One row of the final ranking: `fit` is 0-100, `why` has 2-4 evidence-backed reasons (most important first). */
 export type RankedItem = Ranked;
@@ -361,18 +362,6 @@ export async function POST(req: Request) {
         // inflection ("Porvoossa", "Jyväskylän").
         const fold = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
         const stems = [...new Set([city, ...area.split(/,\s*/)].map(fold).filter((x) => x.length >= 3).map((x) => x.slice(0, Math.max(4, x.length - 2))))];
-        // Trade words from the parsed request ("asbestos removal", "asbestipurku", "vedeneristys"),
-        // as folded prefixes so Finnish inflection and compounds still match; generic work words
-        // (installation, urakointi, saneeraus...) say nothing about the trade and are dropped.
-        const GENERIC = /^(instal|contra|servic|compan|subcon|work|urako|asenn|asent|palve|yrity|renov|repai|korja|remon|saneer|constr|rakenn|build|proje|remov|tyot|tyo$|for$|and$|the$|with)/;
-        const tradeStems = [...new Set(
-          [intent.service, intent.serviceFi, intent.tradeFi, intent.trade]
-            .join(" ")
-            .split(/[\s,/()-]+/)
-            .map(fold)
-            .filter((x) => x.length >= 4 && !GENERIC.test(x))
-            .map((x) => x.slice(0, Math.max(4, Math.min(6, x.length - 2)))),
-        )];
         const local = (w: SubcontractorHit) => stems.some((st) => fold(`${w.title ?? ""} ${w.highlight ?? ""} ${w.url} ${w.profile?.city ?? ""}`).includes(st));
         // The municipality's own site (tampere.fi, hameenlinna.fi) is not a company to vet.
         const cityStem = fold(city);
@@ -381,32 +370,87 @@ export async function POST(req: Request) {
         const placeCount = places.filter((p) => p.website && !isCitySite(p.website)).length;
         // A cached or malformed hit without a real host ("https://https") is not a company site.
         const realSite = (w: SubcontractorHit) => (domainOf(w.website) ?? "").includes(".");
-        const localWeb = webCos.filter((w) => realSite(w) && !isCitySite(w.website) && local(w));
-        // B2B: firms whose own text names the trade go first, then firms with a real crew (Exa
-        // company index headcount >= 5); order is otherwise kept. Headcount alone let big
-        // off-trade firms from the company index (a lab, a tool grinder) outrank specialists.
-        if (b2b) {
-          const onTopic = (w: SubcontractorHit) => tradeStems.some((st) => fold(`${w.name} ${w.title ?? ""} ${w.highlight ?? ""} ${w.profile?.description ?? ""} ${w.url}`).includes(st));
-          const score = (w: SubcontractorHit) => (tradeStems.length && onTopic(w) ? 2 : 0) + Number((w.profile?.employees ?? 0) >= 5);
-          localWeb.sort((a, b) => score(b) - score(a));
-        }
-        // Out-of-town sites only fill slots that local sites and map listings can't.
-        const farWeb = localWeb.length + placeCount >= want * 2 ? [] : webCos.filter((w) => realSite(w) && !isCitySite(w.website) && !local(w));
-        const webList = [...localWeb, ...farWeb].map((w) => {
-          const p = placeByDomain.get(domainOf(w.website));
-          return { ...(p ?? { categories: [] }), name: p?.name ?? w.name, website: w.website } as Place;
-        });
-        // B2B: map listings (consumer ratings) only fill slots the company search can't.
-        const placeList = places.filter((p) => p.website && !isCitySite(p.website)).slice(0, b2b ? Math.max(0, want - webList.length) : undefined);
-        for (let i = 0; i < Math.max(webList.length, placeList.length); i++) {
-          for (const p of [webList[i], placeList[i]]) {
-            const d = p && domainOf(p.website);
-            if (!d || merged.has(d) || seenNames.has(nameKey(p.name))) continue;
-            merged.set(d, p);
-            seenNames.add(nameKey(p.name));
+        let candidates: Place[];
+        // B2B: per-candidate trade/locality signals, reused to annotate the verified reports.
+        const fitInputs = new Map<string, FitInput>();
+        const fitCtx: FitContext | null = b2b
+          ? {
+              site: { lat: loc.lat, lng: loc.lng },
+              areaStems: areaStems(loc, [city, ...area.split(/,\s*/)]),
+              words: tradeWords([intent.service, intent.serviceFi, intent.tradeFi, intent.trade]),
+              job: tradeProfile([intent.service, intent.serviceFi, intent.trade, intent.tradeFi].join(" ")),
+            }
+          : null;
+        if (b2b && fitCtx) {
+          // B2B: score the whole pool (company sites + map listings), not just sites that happen
+          // to mention the town. Trade fit comes from their own text and, for the best text
+          // matches, the registered line of business; locality from the registered address or
+          // listing coordinates. Both registry lookups and scoring are free (no LLM, no Exa).
+          type Cand = { place: Place; input: FitInput; order: number; prh?: PrhCompany | null };
+          const pool: Cand[] = [];
+          const add = (place: Place, input: FitInput) => {
+            const d = domainOf(place.website);
+            if (!d || pool.some((c) => domainOf(c.place.website) === d || nameKey(c.place.name) === nameKey(place.name))) return;
+            pool.push({ place, input, order: pool.length });
+          };
+          for (const w of webCos) {
+            if (!realSite(w) || isCitySite(w.website)) continue;
+            const p = placeByDomain.get(domainOf(w.website));
+            add(
+              { ...(p ?? { categories: [] }), name: p?.name ?? w.name, website: w.website } as Place,
+              { name: w.name, website: w.website, text: [w.title, w.highlight, w.profile?.description].filter(Boolean).join(" "), employees: w.profile?.employees, profileCity: w.profile?.city, lat: p?.lat, lng: p?.lng, address: p?.address },
+            );
           }
+          for (const p of places) if (p.website && !isCitySite(p.website)) add(p, { name: p.name, website: p.website, text: [p.name, ...p.categories].join(" "), lat: p.lat, lng: p.lng, address: p.address });
+          const rank = (c: Cand) => preScore(siteFit(c.input, fitCtx), c.input.employees);
+          const byScore = (a: Cand, b: Cand) => rank(b) - rank(a) || a.order - b.order;
+          // Registry lookups for the strongest text matches (bounded: PRH slows and refuses
+          // connections under load; without it, text and listing signals still rank).
+          const lookup = [...pool].sort(byScore).slice(0, Math.max(12, want * 3));
+          let next = 0;
+          await withTimeout(
+            Promise.all(
+              Array.from({ length: 3 }, async () => {
+                while (next < lookup.length) {
+                  const c = lookup[next++];
+                  c.prh = await registryFor(c.input.name, c.place.website).catch(() => null);
+                  if (c.prh) c.input = { ...c.input, registry: c.prh };
+                }
+              }),
+            ),
+            9000,
+            "registry lookups",
+          ).catch(() => undefined);
+          // One company can run several domains: keep the first per business ID.
+          const seenIds = new Set<string>();
+          const ranked = [...pool].sort(byScore).filter((c) => !c.prh || (!seenIds.has(c.prh.businessId) && !!seenIds.add(c.prh.businessId)));
+          candidates = ranked.slice(0, want).map((c) => c.place);
+          for (const c of ranked) fitInputs.set(domainOf(c.place.website)!, c.input);
+        } else {
+          const localWeb = webCos.filter((w) => realSite(w) && !isCitySite(w.website) && local(w));
+          // Out-of-town sites only fill slots that local sites and map listings can't.
+          const farWeb = localWeb.length + placeCount >= want * 2 ? [] : webCos.filter((w) => realSite(w) && !isCitySite(w.website) && !local(w));
+          const webList = [...localWeb, ...farWeb].map((w) => {
+            const p = placeByDomain.get(domainOf(w.website));
+            return { ...(p ?? { categories: [] }), name: p?.name ?? w.name, website: w.website } as Place;
+          });
+          const placeList = places.filter((p) => p.website && !isCitySite(p.website));
+          for (let i = 0; i < Math.max(webList.length, placeList.length); i++) {
+            for (const p of [webList[i], placeList[i]]) {
+              const d = p && domainOf(p.website);
+              if (!d || merged.has(d) || seenNames.has(nameKey(p.name))) continue;
+              merged.set(d, p);
+              seenNames.add(nameKey(p.name));
+            }
+          }
+          candidates = [...merged.values()].slice(0, want);
         }
-        const candidates = [...merged.values()].slice(0, want);
+        // B2B: add trade/locality fit to a verified report (the register entry it found wins).
+        const annotate = (r: CompanyReport, place: Place): CompanyReport => {
+          const input = fitCtx && fitInputs.get(domainOf(place.website) ?? "");
+          if (!fitCtx || !input || r.audience !== "b2b") return r;
+          return { ...r, siteFit: siteFit({ ...input, registry: r.registry ?? input.registry }, fitCtx) };
+        };
         send({ type: "stage", id: "find", status: "done", detail: `${webCos.length} company sites + ${places.length} local listings, checking ${candidates.length}` });
         if (!candidates.length) {
           send({ type: "notice", level: "info", message: `Exa found no company websites for ${intent.service} in ${area}. Try a broader description or a nearby city.` });
@@ -419,11 +463,12 @@ export async function POST(req: Request) {
           candidates.map(async (place, i) => {
             const domain = domainOf(place.website) ?? place.name;
             send({ type: "company", domain, status: "scanning", place });
-            const report = await checkCompany(
+            const checked = await checkCompany(
               { name: place.name, website: place.website, service: intent.service, city: loc.municipality, householdWork: intent.householdWork, ...b2bInput },
-              (r) => send({ type: "company", domain, status: "done", place, report: r }),
+              (r) => send({ type: "company", domain, status: "done", place, report: annotate(r, place) }),
             );
-            if (!report) return send({ type: "company", domain, status: "failed", place });
+            if (!checked) return send({ type: "company", domain, status: "failed", place });
+            const report = annotate(checked, place);
             trace.push(...report.trace);
             slots[i] = { place, report };
           }),

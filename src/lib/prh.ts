@@ -8,6 +8,8 @@ export type PrhCompany = {
   registrationDate?: string;
   website?: string;
   mainBusinessLine?: string;
+  /** TOL code of the main line of business, e.g. "43210" (electrical installation). */
+  mainBusinessLineCode?: string;
   inPrepaymentRegister: boolean; // ennakkoperintärekisteri (register code 5)
   inTradeRegister: boolean;
   vatLiable: boolean;
@@ -41,6 +43,7 @@ function parseCompany(c: any): PrhCompany {
     registrationDate: c.registrationDate ?? c.businessId?.registrationDate,
     website: c.website?.url ?? undefined,
     mainBusinessLine: pickText(c.mainBusinessLine?.descriptions),
+    mainBusinessLineCode: c.mainBusinessLine?.type ? String(c.mainBusinessLine.type) : undefined,
     inPrepaymentRegister: hasReg("5"),
     inTradeRegister: hasReg("1"),
     vatLiable: hasReg("6"),
@@ -60,10 +63,21 @@ function parseCompany(c: any): PrhCompany {
 
 const cache = new Map<string, Promise<PrhCompany[]>>();
 
+// Last time the register could not be reached (outage, 5xx, timeout): callers that cache
+// results built on register data (verification reports) skip caching after a failure.
+let lastFailureAt = 0;
+export const prhFailedSince = (t: number) => lastFailureAt >= t;
+
 async function queryOnce(url: string): Promise<PrhCompany[]> {
-  const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) });
+  const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) }).catch((e) => {
+    lastFailureAt = Date.now();
+    throw e;
+  });
   if (res.status === 404) return [];
-  if (!res.ok) throw new Error(`PRH ${res.status} for ${url}`);
+  if (!res.ok) {
+    lastFailureAt = Date.now();
+    throw new Error(`PRH ${res.status} for ${url}`);
+  }
   const data = await res.json();
   return (data.companies ?? []).map(parseCompany);
 }

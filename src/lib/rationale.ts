@@ -7,6 +7,7 @@ import type { Place } from "./exa";
 import { withTimeout } from "./exa-grounded";
 import { cached, HOUR } from "./cache";
 import type { Check, CompanyReport, Evidence, Status } from "./verify";
+import { fitAdjust } from "./sitefit";
 
 export type Why = { sentence: string; status: Status; evidence: Evidence[] };
 export type Ranked = { place: Place; report: CompanyReport; why: Why[]; fit: number };
@@ -82,7 +83,9 @@ function fitScoreB2B(report: CompanyReport): number {
   if (st("tv-tax") === "red") pts -= 20;
   if (st("reputation") === "red") pts -= 15;
   pts -= 3 * report.checks.filter((c) => c.id.startsWith("claim-") && c.status === "yellow").length;
-  return Math.max(0, Math.min(100, Math.round((pts / MAX_B2B) * 100)));
+  // Job search: off-trade registered line or a firm far from the site ranks lower.
+  const adj = report.siteFit ? fitAdjust(report.siteFit) : 0;
+  return Math.max(0, Math.min(100, Math.round((pts / MAX_B2B) * 100) + adj));
 }
 
 export function fitScore(place: Place, report: CompanyReport): number {
@@ -164,6 +167,30 @@ function candidatesB2B(r: CompanyReport, service: string): Cand[] {
 
   const lk = c("tv-reliable-partner");
   if (lk) add(60, "green", "Luotettava Kumppani member: one Tilaajavastuu report covers the documents", lk.evidence);
+
+  // Trade and locality fit from the trade register (job search only).
+  const sf = r.siteFit;
+  if (sf) {
+    const regEv: Evidence[] = r.businessId
+      ? [{ url: `https://tietopalvelu.ytj.fi/yritys/${r.businessId}`, quote: [r.registry?.mainBusinessLine, ...(r.registry?.addresses ?? []).slice(0, 2)].filter(Boolean).join(" · "), source: "registry" }]
+      : [];
+    const m = sf.tradeLine?.match;
+    const line = sf.tradeLine?.label;
+    if (m === "off" && sf.textTrade < 2) add(88, "yellow", `Registered line of business is "${line}", not this trade; confirm they do ${service} with their own crew`, regEv);
+    else if (m === "general" && sf.textTrade < 2) add(84, "yellow", `Registered as a general building contractor ("${line}"): likely to subcontract ${service} onwards`, regEv);
+    else if (m === "trade") add(62, "green", `Registered line of business matches the trade: ${line}`, regEv);
+    const where = sf.municipality ? `Registered address in ${sf.municipality}` : "Map listing";
+    const postal = sf.postalMunicipality ? ` (postal address ${sf.postalMunicipality})` : "";
+    if (sf.local === "far" && sf.distanceKm != null)
+      add(
+        86,
+        "yellow",
+        `${where}${postal}, about ${sf.distanceKm} km from the site${sf.servesArea === "area" ? "; their site names the area as served" : sf.servesArea === "nationwide" ? "; they say they work nationwide" : ": ask whether they cover this site"}`,
+        regEv,
+      );
+    else if (sf.local === "near" && sf.distanceKm != null) add(56, "green", `${where}${postal}, ${sf.distanceKm < 15 ? "in the site's area" : `about ${sf.distanceKm} km from the site`}`, regEv);
+    else if (sf.local === "region" && sf.distanceKm != null) add(46, "grey", `${where}${postal}, about ${sf.distanceKm} km from the site`, regEv);
+  }
 
   const docs = r.checks.filter((x) => x.needsDocument);
   if (docs.length)

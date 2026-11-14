@@ -3,10 +3,11 @@ import { askJson } from "./llm";
 import { cacheGet, cacheSet, HOUR } from "./cache";
 import { contents, search, type ExaTrace } from "./exa";
 import { groundedReputation, groundedServiceProof, priceHistory, withTimeout, type Confidence } from "./exa-grounded";
-import { domainOf, prhByBusinessId, prhByName, type PrhCompany } from "./prh";
+import { domainOf, prhByBusinessId, prhByName, prhFailedSince, type PrhCompany } from "./prh";
 import { extractYTunnukset, isValidYTunnus, normalizeYTunnus } from "./ytunnus";
 import { b2bChecks, type DocRequest } from "./tilaajavastuu";
 import type { CompanyProfile } from "./exa";
+import type { SiteFit } from "./sitefit";
 
 export type Status = "green" | "yellow" | "red" | "grey";
 export type Evidence = {
@@ -48,7 +49,7 @@ export type CompanyReport = {
   website?: string;
   domain?: string;
   businessId?: string;
-  registry?: Pick<PrhCompany, "name" | "registrationDate" | "website" | "mainBusinessLine" | "addresses">;
+  registry?: Pick<PrhCompany, "name" | "registrationDate" | "website" | "mainBusinessLine" | "addresses"> & { mainBusinessLineCode?: string };
   checks: Check[];
   /** True when the job is household work that qualifies for kotitalousvähennys (cleaning, renovation, care, IT support at home...). */
   householdWork?: boolean;
@@ -63,6 +64,11 @@ export type CompanyReport = {
   profile?: CompanyProfile & { source: string };
   /** B2B: tilaajavastuulaki documents still to collect before signing (from checks with needsDocument). */
   documents?: DocRequest[];
+  /**
+   * B2B job search: trade and locality fit against this job and site (registered line of
+   * business, registered street/postal municipality, distance, service area on their site).
+   */
+  siteFit?: SiteFit;
 };
 
 const POINTS: Record<Status, number> = { green: 2, yellow: 0, grey: 0, red: -4 };
@@ -528,7 +534,7 @@ export async function verifyCompany(input: {
     website: input.website,
     domain: domain ?? undefined,
     businessId: prh?.businessId ?? claimedId,
-    registry: prh ? { name: prh.name, registrationDate: prh.registrationDate, website: prh.website, mainBusinessLine: prh.mainBusinessLine, addresses: prh.addresses } : undefined,
+    registry: prh ? { name: prh.name, registrationDate: prh.registrationDate, website: prh.website, mainBusinessLine: prh.mainBusinessLine, mainBusinessLineCode: prh.mainBusinessLineCode, addresses: prh.addresses } : undefined,
     checks,
     householdWork,
     ...(b2b ? { audience: "b2b" as const, profile: sub?.profile, documents: sub?.documents ?? [] } : {}),
@@ -571,8 +577,13 @@ export function cachedReport(input: VerifyInput, maxAgeMs = REPORT_STALE_MS): { 
 
 /** Run the live checks and remember the result, unless a transient failure degraded it. */
 export async function verifyCompanyCached(input: VerifyInput): Promise<CompanyReport> {
+  const t0 = Date.now();
   const report = await verifyCompany(input);
-  const degraded = report.trace.some((t) => !t.ok && !t.summary.includes("[beta")) || report.checks.some((c) => c.id === "reputation" && /search failed/i.test(c.detail));
+  // A register outage leaves the tilaajavastuu checks empty: show the report, don't keep it.
+  const degraded =
+    report.trace.some((t) => !t.ok && !t.summary.includes("[beta")) ||
+    report.checks.some((c) => c.id === "reputation" && /search failed/i.test(c.detail)) ||
+    (!report.registry && prhFailedSince(t0));
   if (!degraded) cacheSet("report", reportKey(input), report);
   return report;
 }
