@@ -213,7 +213,6 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                 </li>
               </ol>
             </div>
-            <HeroPreview />
           </section>
         ) : (
         <>
@@ -683,89 +682,5 @@ function HeroBackdrop() {
         <span className={s.heroCredit}>Image: AI-generated</span>
       </div>
     </div>
-  );
-}
-
-/* A product preview beside the welcome: a snapshot of a real recorded run (live check, 14 Nov 2026,
-   ventilation for a school in Katajanokka). The register cells resolve one by one, the one company
-   missing from two registers turns amber, then the register passage that proves it slides in.
-   Nothing here is invented; it is replayed from that run. A 250 ms tick drives it (12 s loop). */
-const PREVIEW_COLS = ["Trade", "VAT", "Prepay.", "Employer"];
-const PREVIEW_ROWS: { name: string; id: string; cells: ("ok" | "missing")[] }[] = [
-  { name: "Saipu Oy", id: "0678395-8", cells: ["ok", "ok", "ok", "ok"] },
-  { name: "Pylon Rakennus Oy", id: "0738421-1", cells: ["ok", "ok", "ok", "ok"] },
-  { name: "Helsingin ilmanvaihto Oy", id: "3226458-8", cells: ["ok", "ok", "missing", "missing"] },
-];
-const TICK = 250;
-const LOOP = 48; // 12 s
-const FIRST = 3; // cell k resolves at tick FIRST + k
-const FLAGGED = FIRST + 12 + 1; // the amber row lights up
-const PASSAGE = FLAGGED + 2; // the passage slides in
-const OUT = 44; // everything settles back before the loop restarts
-
-function HeroPreview() {
-  const hidden = usePageHidden();
-  const [tick, setTick] = useState(0);
-  const [still, setStill] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const on = () => setStill(mq.matches);
-    on();
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  useEffect(() => {
-    if (still || hidden) return;
-    const id = window.setInterval(() => setTick((x) => (x + 1) % LOOP), TICK);
-    return () => window.clearInterval(id);
-  }, [still, hidden]);
-  const at = still ? OUT - 1 : tick;
-  const live = at < OUT;
-  return (
-    <figure className={s.preview} aria-hidden>
-      <div className={s.pvCard}>
-        <figcaption className={s.pvCaption}>
-          <span>Ventilation · Katajanokka</span>
-          <span>Example from a real check · 14 Nov 2026</span>
-        </figcaption>
-        <table className={s.pvTable}>
-          <thead>
-            <tr>
-              <th>Company</th>
-              {PREVIEW_COLS.map((c) => (
-                <th key={c}>{c}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {PREVIEW_ROWS.map((r, ri) => (
-              <tr key={r.id} className={r.cells.includes("missing") && live && at >= FLAGGED ? s.pvFlag : ""}>
-                <td>
-                  <span className={s.pvName}>{r.name}</span>
-                  <span className={s.pvId}>{r.id}</span>
-                </td>
-                {r.cells.map((c, ci) => {
-                  const done = live && at >= FIRST + ri * 4 + ci;
-                  return (
-                    <td key={ci}>
-                      <span className={`${s.pvCell} ${done ? s.pvDone : ""} ${c === "missing" ? s.pvMissing : ""}`}>
-                        <CircleNotch className={s.pvSpin} />
-                        <span className={s.pvVal}>{c === "ok" ? <CheckIcon weight="bold" /> : "Missing"}</span>
-                      </span>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div className={`${s.pvPassage} ${live && at >= PASSAGE ? s.pvShow : ""}`}>
-          <p className={s.pvWait}>{live && at >= FIRST ? "Reading the public registers…" : "Opening the public registers…"}</p>
-          <p className={s.pvSrc}>Helsingin ilmanvaihto Oy · Asiakastieto (YTJ register data)</p>
-          <p className={s.pvQuote}>Active registers: Kaupparekisteri 03.08.2021 · Verohallinnon perustiedot 03.08.2021 · Arvonlisäverovelvollisuus 31.07.2021</p>
-          <p className={s.pvNot}>Not listed: Ennakkoperintärekisteri · Työnantajarekisteri</p>
-        </div>
-      </div>
-    </figure>
   );
 }
