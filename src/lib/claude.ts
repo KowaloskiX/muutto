@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { z } from "zod";
 
-export const MODEL = "claude-opus-5-5";
+export const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
 
 let client: Anthropic | null = null;
 function getClient(): Anthropic {
@@ -20,8 +20,8 @@ export async function askJson<T extends z.ZodType>(opts: {
   const res = await getClient().beta.messages.parse({
     model: MODEL,
     max_tokens: 16000,
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    // Server-side refusal fallback where the model supports it (Haiku has none).
+    ...(MODEL.includes("haiku") ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }),
     output_config: { effort: opts.effort ?? "low", format: betaZodOutputFormat(opts.schema) },
     system: opts.system,
     messages: [{ role: "user", content: opts.user }],

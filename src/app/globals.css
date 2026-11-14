@@ -785,3 +785,27 @@ img { display: block; max-width: 100%; }
 .kp-connect-btn:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
 .kp-connect-btn svg { width: 15px; height: 15px; }
 .kp-connect-cost { padding: 0 12px; color: var(--muted); font-size: 11px; list-style: none; }
+/* ---- Quote comparison ---- */
+.kp-cmp { padding: 22px; border: 1px solid var(--line); border-radius: 24px; background: var(--surface); }
+.kp-cmp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.kp-cmp-head h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; letter-spacing: -.03em; }
+.kp-cmp-ghost { padding: 7px 12px; border: 1px solid var(--line); border-radius: var(--pill-radius); background: none; color: var(--accent-deep); font-size: 12px; font-weight: 650; }
+.kp-cmp-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.kp-cmp-inputs label { display: grid; gap: 6px; font-size: 12px; font-weight: 650; color: var(--ink-soft); }
+.kp-cmp-inputs textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--page); font: 12.5px/1.45 var(--font-geist-mono), monospace; resize: vertical; }
+.kp-cmp-table-wrap { overflow-x: auto; margin-top: 18px; }
+.kp-cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.kp-cmp-table th, .kp-cmp-table td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+.kp-cmp-table thead th { font-size: 14px; }
+.kp-cmp-table thead th.kp-cmp-pick { color: var(--ok); }
+.kp-cmp-table th svg, .kp-cmp-table td svg { width: 15px; height: 15px; margin-right: 6px; vertical-align: -2px; }
+.kp-cmp-table tbody th { color: var(--muted); font-weight: 600; width: 200px; }
+.kp-cmp-ok svg { color: var(--ok); } .kp-cmp-warn svg { color: var(--warn); } .kp-cmp-bad svg { color: var(--bad); }
+.kp-cmp-rec { display: grid; gap: 10px; margin-top: 18px; padding: 18px; border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); border-radius: 18px; background: color-mix(in srgb, var(--ok) 8%, var(--surface)); }
+.kp-cmp-rec.none { border-color: color-mix(in srgb, var(--warn) 40%, transparent); background: color-mix(in srgb, var(--warn) 8%, var(--surface)); }
+.kp-cmp-rec strong { display: flex; align-items: center; gap: 8px; font-size: 18px; letter-spacing: -.02em; }
+.kp-cmp-rec strong svg { width: 22px; height: 22px; color: var(--ok); }
+.kp-cmp-rec ul { margin: 0; padding-left: 20px; font-size: 13.5px; line-height: 1.5; }
+.kp-cmp-rec a { color: var(--accent-deep); font-size: 12px; }
+.kp-cmp-sub { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.kp-cmp-foot { color: var(--muted); font-size: 11px; }

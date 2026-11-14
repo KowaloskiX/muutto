@@ -33,6 +33,7 @@ import type { DraftOut } from "./api/draft/route";
 import CriteriaMatrix from "@/components/CriteriaMatrix";
 import WatchPanel from "@/components/WatchPanel";
 import QuoteChecker from "@/components/QuoteChecker";
+import QuoteCompare from "@/components/QuoteCompare";
 
 type View = "home" | "searching" | "results";
 type StageId = "understand" | "find" | "verify" | "rank";
@@ -342,8 +343,8 @@ function ConnectRecord({ report }: { report: CompanyReport }) {
   );
 }
 
-function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch, setRef }: {
-  item: Ranked; rank: number; active: boolean; selected: boolean; onToggle: () => void;
+function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch, setRef, advanced = false }: {
+  item: Ranked; rank: number; active: boolean; selected: boolean; onToggle: () => void; advanced?: boolean;
   watching: "idle" | "busy" | "on" | "error"; onWatch: () => void; setRef: (n: HTMLElement | null) => void;
 }) {
   const { place, report } = item;
@@ -377,7 +378,7 @@ function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch
         <ul className="kp-checks">
           {exaChecks.map((c) => <CheckRow key={c.id} check={c} />)}
           <RegistryRow checks={registry} />
-          <ConnectRecord report={report} />
+          {advanced && <ConnectRecord report={report} />}
         </ul>
         <div className="kp-actions">
           <button type="button" className={`offer-link-button ${selected ? "" : "kp-secondary"}`} onClick={onToggle}>
@@ -454,6 +455,7 @@ export default function Home() {
   const [trace, setTrace] = useState<ExaTrace[]>([]);
   const [intent, setIntent] = useState<{ service: string; city: string }>({ service: "", city: "" });
   const [showCompare, setShowCompare] = useState(true);
+  const [advanced, setAdvanced] = useState(false);
 
   async function startWatch(i: number) {
     const r = ranked[i]?.report;
@@ -632,6 +634,11 @@ export default function Home() {
             <Lightning weight="fill" />{showCompare ? "Hide" : "Show"} without vs with Exa
           </button>
         )}
+        {ranked.length > 0 && (
+          <button type="button" className={`kp-compare-toggle ${advanced ? "on" : ""}`} onClick={() => setAdvanced((v) => !v)} aria-pressed={advanced}>
+            {advanced ? "Hide" : "Show"} advanced Exa tools
+          </button>
+        )}
       </section>
       <div className="kp-results-meta"><ExaSummary trace={trace} /></div>
       {showCompare && ranked[0] && <WithWithout top={ranked[0]} service={intent.service || summary} city={intent.city} />}
@@ -647,7 +654,13 @@ export default function Home() {
                 selected={!!selected[i]}
                 onToggle={() => setSelected((s) => ({ ...s, [i]: !s[i] }))}
                 watching={watch[i] ?? "idle"}
-                onWatch={() => { go(i); setActive(i); document.getElementById("kp-watch")?.scrollIntoView({ behavior: "smooth" }); }}
+                advanced={advanced}
+                onWatch={() => {
+                  if (!advanced) return void startWatch(i);
+                  go(i);
+                  setActive(i);
+                  document.getElementById("kp-watch")?.scrollIntoView({ behavior: "smooth" });
+                }}
                 setRef={(n) => { cardRefs.current[i] = n; }}
               />
             ))}
@@ -657,26 +670,34 @@ export default function Home() {
             <span>{active + 1} / {ranked.length}</span>
             <button onClick={() => go(active + 1)} aria-label="Next"><ArrowRight weight="bold" /></button>
           </div>
-          {ranked[active] && (
+          <section className="kp-more" id="kp-compare">
+            <QuoteCompare
+              key={Object.keys(selected).filter((k) => selected[Number(k)]).join(",") || "top"}
+              companies={(Object.values(selected).some(Boolean) ? ranked.filter((_, i) => selected[i]) : ranked.slice(0, 2)).map((r) => ({ name: r.report.name, website: r.place.website }))}
+            />
+          </section>
+          {advanced && ranked[active] && (
             <section className="kp-more" id="kp-watch">
               <WatchPanel key={ranked[active].report.name} name={ranked[active].report.name} domain={ranked[active].report.domain} />
             </section>
           )}
-          {ranked[active] && (
+          {advanced && ranked[active] && (
             <section className="kp-more">
               <details className="kp-quote-home kp-quote-results">
-                <summary>Got a quote from {ranked[active].report.name}? Check it</summary>
+                <summary>Check a single quote from {ranked[active].report.name}</summary>
                 <QuoteChecker key={ranked[active].report.name} defaultWebsite={ranked[active].place.website} />
               </details>
             </section>
           )}
-          <section className="kp-more">
-            <CriteriaMatrix
-              job={intent.service || summary}
-              city={intent.city || "Espoo"}
-              exclude={ranked.map((r) => ({ name: r.report.name, website: r.place.website }))}
-            />
-          </section>
+          {advanced && (
+            <section className="kp-more">
+              <CriteriaMatrix
+                job={intent.service || summary}
+                city={intent.city || "Espoo"}
+                exclude={ranked.map((r) => ({ name: r.report.name, website: r.place.website }))}
+              />
+            </section>
+          )}
           {Object.values(selected).some(Boolean) && (
             <div className="kp-floating">
               <span>{Object.values(selected).filter(Boolean).length} selected</span>
