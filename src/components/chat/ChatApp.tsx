@@ -1072,7 +1072,7 @@ export default function ChatApp() {
               <CaretLeft weight="bold" />
             </button>
           )}
-          <Link href="/" className={`${s.headBtn} ${s.iconOnly}`} title="Classic view" aria-label="Classic view"><SquaresFour weight="bold" /></Link>
+          <Link href="/classic" className={`${s.headBtn} ${s.iconOnly}`} title="Classic view" aria-label="Classic view"><SquaresFour weight="bold" /></Link>
           <button type="button" className={`${s.headBtn} ${s.iconOnly}`} onClick={newChat} disabled={busy} title="New project" aria-label="New project"><NotePencil weight="bold" /></button>
         </header>
         {(ctx.project || ctx.ranked.length > 0 || outbox.length > 0) && (
