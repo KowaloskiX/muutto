@@ -160,6 +160,14 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
                 ))}
               </div>
             </div>
+            <figure className={x.heroFig}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/media/move/reach.webp" alt="Helsinki from above in winter, with rings of light spreading from the city centre" />
+              <figcaption>
+                <span>How far you get from work: drive-time rings for the city, or the whole weekend region in up to 3 hours.</span>
+                <small>Image: AI-generated</small>
+              </figcaption>
+            </figure>
           </section>
         </div>
       </div>

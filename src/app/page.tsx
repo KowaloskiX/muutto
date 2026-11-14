@@ -99,6 +99,23 @@ function Cta({
   );
 }
 
+const EXTRAS = [
+  {
+    title: "Your criteria, too",
+    text: "A gym, a climbing wall, a Lidl, a dog park: name it in your own words and every area gets a column for the nearest one, with its address.",
+    from: "Exa Places",
+    img: "/media/move/climb.webp",
+    alt: "A bright bouldering gym in a converted brick hall",
+  },
+  {
+    title: "How far is the weekend?",
+    text: "Drag the slider up to 3 hours and watch the map fill with everywhere the car gets you from work, lakes and cottages included.",
+    from: "OSRM routing on OpenStreetMap",
+    img: "/media/move/cottage.webp",
+    alt: "A small wooden lakeside cottage and sauna in a misty Finnish forest",
+  },
+];
+
 export default function Landing() {
   return (
     <div className={s.page}>
@@ -220,6 +237,31 @@ export default function Landing() {
                   <p className={s.checkText}>{c.text}</p>
                   <p className={s.checkFrom}>
                     <span>From</span> {c.from}
+                  </p>
+                </Reveal>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* beyond the checklist */}
+        <section className={s.section}>
+          <div className={s.wrap}>
+            <Reveal>
+              <p className={s.eyebrow}>Beyond the checklist</p>
+              <h2 className={s.h2}>Ask for what matters to you.</h2>
+            </Reveal>
+            <div className={s.duo}>
+              {EXTRAS.map((e, i) => (
+                <Reveal key={e.title} className={s.duoCard} delay={i * 120}>
+                  <figure className={s.duoPhoto}>
+                    <Image src={e.img} alt={e.alt} fill sizes="(min-width: 960px) 50vw, 100vw" unoptimized />
+                    <figcaption className={s.credit}>Image: AI-generated</figcaption>
+                  </figure>
+                  <h3 className={s.h3}>{e.title}</h3>
+                  <p className={s.duoText}>{e.text}</p>
+                  <p className={s.duoFrom}>
+                    <span>From</span> {e.from}
                   </p>
                 </Reveal>
               ))}

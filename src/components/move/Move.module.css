@@ -521,3 +521,15 @@
 .scaleSwitch .scaleOn { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(13 16 22 / .15); }
 .scaleSwitch button:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 1px; }
 .reachPanel input[type="range"]:disabled { opacity: .4; cursor: default; }
+
+/* ---- welcome hero image ---- */
+.heroFig { position: relative; margin: 0; aspect-ratio: 4 / 4.4; max-height: min(72dvh, 640px); border-radius: 6px; overflow: hidden; background: var(--line); animation: heroFigIn .9s cubic-bezier(.2, .8, .2, 1) .15s both; }
+.heroFig img { width: 100%; height: 100%; object-fit: cover; filter: saturate(.85) contrast(.97); animation: heroFigDrift 24s ease-in-out infinite alternate; }
+.heroFig::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(13 16 22 / 0) 55%, rgb(13 16 22 / .55)); pointer-events: none; }
+.heroFig figcaption { position: absolute; left: 20px; right: 20px; bottom: 16px; z-index: 1; display: flex; flex-direction: column; gap: 6px; color: #f6f5f1; font-size: 14px; line-height: 1.4; }
+.heroFig figcaption small { color: rgb(246 245 241 / .7); font-size: 11px; }
+@keyframes heroFigIn { from { opacity: 0; transform: translateY(12px); } }
+@keyframes heroFigDrift { from { transform: scale(1.02); } to { transform: scale(1.09) translate(-1%, -1%); } }
+@media (prefers-color-scheme: dark) { .heroFig img { filter: saturate(.8) brightness(.85); } }
+@media (max-width: 720px) { .heroFig { display: none; } }
+@media (prefers-reduced-motion: reduce) { .heroFig, .heroFig img { animation: none; } }
