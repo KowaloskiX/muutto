@@ -402,7 +402,6 @@ export default function MoveMap({
               {FIT_WORD[t]}
             </span>
           ))}
-        {pins.some((p) => p.tag) && <span className={x.legendTag}>min = transit to work</span>}
       </>
     );
     caption = !hasShapes && pins.length ? "Postal-area outlines not available; areas shown as pins." : null;

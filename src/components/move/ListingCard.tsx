@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { CaretLeft, CaretRight, House, Images } from "@phosphor-icons/react";
 import type { Listing, MoveIntent } from "@/lib/move/types";
-import { fmtDate, host, mins, price } from "./model";
+import { host, mins, price } from "./model";
 import x from "./Move.module.css";
 import { historyLine } from "./Insights";
 
@@ -77,8 +77,7 @@ export function ListingCard({
   const p = price(l, tenure);
   const perM2 = l.price && l.sizeM2 ? Math.round(l.price / l.sizeM2) : undefined;
   const t = l.commute?.transitMin;
-  const car = l.commute?.carMin;
-  const pub = fmtDate(l.publishedAt);
+  const pub = l.publishedAt ? new Date(l.publishedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : null;
   const contact = l.contact && (l.contact.email || l.contact.phone || l.contact.formUrl);
   const facts = [l.rooms, l.sizeM2 ? `${Math.round(l.sizeM2 * 10) / 10} m²` : null].filter(Boolean);
   return (
@@ -108,21 +107,18 @@ export function ListingCard({
             ) : null;
           })()}
           <p className={x.lcMeta}>
-            {[areaName && `${rank ? `#${rank} ` : ""}${areaName}`, t != null ? `${l.commute?.estimate ? "≈" : ""}${mins(t)} transit` : areaTransit != null ? `≈${mins(areaTransit)} transit (area)` : null, car != null ? `${mins(car)} car` : null].filter(Boolean).join(" · ")}
-          </p>
-          <p className={x.lcFoot}>
-            <span>{pub ? `Published ${pub}` : "Date not stated"}</span>
-            <span className={contact ? x.lcContact : ""}>{contact ? "Contact listed" : "No contact in listing"}</span>
+            {[areaName, t != null ? `${l.commute?.estimate ? "≈" : ""}${mins(t)} transit` : areaTransit != null ? `≈${mins(areaTransit)} transit` : null, pub].filter(Boolean).join(" · ")}
           </p>
         </div>
       </div>
       <div className={x.lcActions}>
-        <button type="button" className={x.lcPrimary} onClick={onResearch}>
+        <button type="button" className={x.lcLink} onClick={onResearch}>
           Research
         </button>
-        <button type="button" className={x.ghostBtn} onClick={onDraft}>
+        <button type="button" className={x.lcLink} onClick={onDraft}>
           Request viewing
         </button>
+        {contact && <span className={x.lcContact}>Contact listed</span>}
       </div>
     </li>
   );

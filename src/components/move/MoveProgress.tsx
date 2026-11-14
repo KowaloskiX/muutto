@@ -53,7 +53,6 @@ export function MoveProgress({ run }: { run: RunState }) {
           <span>{line}</span>
           <CaretDown weight="bold" className={s.caret} aria-hidden />
         </button>
-        {notes}
       </div>
     );
   }

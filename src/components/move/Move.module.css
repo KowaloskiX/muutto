@@ -777,3 +777,17 @@
 .placeLinks { display: inline-flex; align-items: center; gap: 8px; flex: none; }
 .placeLinks a { padding: 1px 6px; border-radius: 999px; background: var(--surface-strong); color: var(--ink-soft) !important; font-size: 10.5px; text-decoration: none !important; }
 .placeLinks a:hover { background: var(--line-strong); color: var(--ink) !important; }
+
+/* ---- de-slop: quieter cards ---- */
+.lcBody { gap: 2px; padding: 12px 14px 8px; }
+.lcPriceRow strong { font-size: 18px; }
+.lcActions { align-items: center; gap: 14px; padding: 0 14px 12px; }
+.lcLink { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 13px; text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 3px; cursor: pointer; }
+.lcLink:hover { text-decoration-color: currentColor; }
+.lcActions .lcContact { margin-left: auto; color: var(--muted); font-size: 11px; }
+.lcChips span { background: transparent; padding: 0; color: var(--muted); }
+.lcChips span + span::before { content: "·"; margin-right: 4px; color: var(--faint); }
+.lcChips .lcHist { padding: 1px 7px; border-radius: 999px; }
+.lcChips .lcHist + span::before { display: none; }
+.lcGrid { gap: 16px; }
+.lcMeta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

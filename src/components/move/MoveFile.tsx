@@ -443,6 +443,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
                 <i className={x.mxDot} aria-hidden /> falls short of what you asked for
               </span>
               <span>{DASH} not measured</span>
+              {areas.some((a) => a.commute?.estimate) && <span>≈ estimate</span>}
               {matrix.same.length > 0 && <span>Same in every area: {matrix.same.map((s) => `${s.label} ${s.value}`).join(" · ")}</span>}
               {(hiddenN > 0 || allCols) && (
                 <button type="button" className={x.mxMore} onClick={() => setAllCols((v) => !v)}>
@@ -453,7 +454,6 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
           ) : (
             <p className={c.empty}>{run.finished ? "No areas came back for this search." : "Areas appear here as each one is measured."}</p>
           )}
-          {ranked && areas.some((a) => a.commute?.estimate) && <p className={x.footnote}>≈ marks a distance-based commute estimate, not a timetable result.</p>}
         </section>
 
         <section className={c.section} aria-labelledby="move-listings" data-tour="listings">
