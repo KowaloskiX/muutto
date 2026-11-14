@@ -191,6 +191,22 @@ export function CandidateDrawer({
         </header>
 
         <div className={s.dBody}>
+          {r.registrySource && (
+            <p className={s.outage}>
+              <Warning weight="fill" aria-hidden />
+              <span>
+                The live trade register (PRH) is unreachable right now. Register facts below come from {r.registrySource.site}
+                {r.registrySource.asOf ? `, copy dated ${r.registrySource.asOf.split("-").reverse().join(".")}` : ""}.{" "}
+                <a href={r.registrySource.url} target="_blank" rel="noopener noreferrer">Open the copy</a>
+                {r.businessId && (
+                  <>
+                    {" · "}
+                    <a href={`https://tietopalvelu.ytj.fi/yritys/${r.businessId}`} target="_blank" rel="noopener noreferrer">Re-check in YTJ</a>
+                  </>
+                )}
+              </span>
+            </p>
+          )}
           {key && (
             <section className={s.dSection}>
               <h3>Key finding</h3>

@@ -166,8 +166,8 @@ export async function fallbackByName(name: string, trace?: ExaTrace[]): Promise<
   return bestById(data?.results ?? []);
 }
 
-/** "From YTJ company page (Exa's stored copy, 24.10.2026)": for check details. */
+/** "(Stored copy, 24.10.2026.)": appended to check details built from fallback register data. */
 export function fallbackNote(f: RegistryFallback): string {
-  const when = f.asOf ? `, copy dated ${f.asOf.split("-").reverse().join(".")}` : ", date of the copy not stated";
-  return `From ${f.site}${when}: the live register (PRH open data) was unreachable.`;
+  // Short on purpose: it is appended to every register check; the drawer explains the outage once.
+  return f.asOf ? `(Stored copy, ${f.asOf.split("-").reverse().join(".")}.)` : "(Stored copy.)";
 }

@@ -154,7 +154,14 @@ function candidatesB2B(r: CompanyReport, service: string): Cand[] {
   if (t.total && t.red === 0) {
     const missing = r.checks.filter((x) => PUBLIC_TV.includes(x.id) && x.status === "yellow");
     if (!missing.length) add(70, "green", `Tilaajavastuu public checks clear: ${t.ok} of ${t.total} (tax registers, trade register${find(r, "tv-tax")?.status === "green" ? ", no tax debt" : ""}, no insolvency)`, pubEv);
-    else add(78, "yellow", `${missing[0].label.replace(/^Tilaajavastuu: /, "")}: ${missing[0].detail.split(/(?<=\.)\s/)[0]}`, missing[0].evidence);
+    else {
+      // Registers the company is simply not listed in read better as one short line than as the first check's detail.
+      const notListed = missing.filter((x) => /not listed/i.test(x.detail)).map((x) => x.label.replace(/^Tilaajavastuu: /, "").replace(/ register$/, ""));
+      const sentence = notListed.length
+        ? `Not in the ${notListed.join(" or ")} register${notListed.length > 1 ? "s" : ""}: ask why before signing`
+        : `${missing[0].label.replace(/^Tilaajavastuu: /, "")}: ${missing[0].detail.split(/(?<=\.)\s/)[0]}`;
+      add(78, "yellow", sentence, missing[0].evidence);
+    }
   }
 
   const refs = c("cap-references");

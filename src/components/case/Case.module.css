@@ -216,6 +216,9 @@
 .dSection { display: flex; flex-direction: column; gap: 8px; }
 .dSection h3 { display: flex; align-items: baseline; gap: 8px; margin: 0; padding-bottom: 6px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 500; }
 .dSection h3 small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.outage { display: flex; gap: 8px; margin: 0; padding: 10px 12px; border-radius: var(--radius-control); background: var(--surface-strong); color: var(--ink-soft); font-size: 12px; line-height: 1.45; }
+.outage svg { flex: none; margin-top: 2px; color: var(--muted); }
+.outage a { color: inherit; }
 .note { margin: 0; color: var(--muted); font-size: 12px; }
 .keyText { display: flex; gap: 8px; margin: 0; font-weight: 500; }
 .keyText .dot { margin-top: 2px; }
