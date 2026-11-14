@@ -453,6 +453,8 @@ export default function Home() {
   const [drafts, setDrafts] = useState<DraftOut[] | null>(null);
   const [drafting, setDrafting] = useState(false);
   const [trace, setTrace] = useState<ExaTrace[]>([]);
+  // Cards appear as soon as each company is verified; the final ranking replaces them.
+  const [pending, setPending] = useState(0);
   const [intent, setIntent] = useState<{ service: string; city: string }>({ service: "", city: "" });
   const [showCompare, setShowCompare] = useState(true);
   const [advanced, setAdvanced] = useState(false);
@@ -491,6 +493,7 @@ export default function Home() {
     setDrafts(null);
     setError(null);
     setTrace([]);
+    setPending(0);
     setIntent({ service: "", city: "" });
     setSummary(q);
     const res = await fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
@@ -511,9 +514,19 @@ export default function Home() {
           setSummary(e.summary);
           setIntent({ service: e.service, city: e.city });
         }
-        else if (e.type === "company") setCompanies((c) => ({ ...c, [e.domain]: e.status }));
+        else if (e.type === "company") {
+          setCompanies((c) => ({ ...c, [e.domain]: e.status }));
+          if (e.status === "scanning") setPending((n) => n + 1);
+          else setPending((n) => Math.max(0, n - 1));
+          if (e.status === "done" && e.report) {
+            const item = { place: e.place, report: e.report } as Ranked;
+            setRanked((rs) => [...rs.filter((r) => r.report.name !== item.report.name), item].sort((a, b) => b.report.score - a.report.score));
+            setView("results");
+          }
+        }
         else if (e.type === "done") {
           setRanked(e.ranked);
+          setPending(0);
           setTrace(e.trace ?? e.ranked.flatMap((r) => r.report.trace ?? []));
           setActive(0);
           setView("results");
@@ -640,7 +653,13 @@ export default function Home() {
           </button>
         )}
       </section>
-      <div className="kp-results-meta"><ExaSummary trace={trace} /></div>
+      <div className="kp-results-meta">
+        {pending > 0 ? (
+          <span className="kp-pending"><SpinnerGap className="spin" />Checking {pending} more {pending === 1 ? "company" : "companies"}… ranking updates when done</span>
+        ) : (
+          <ExaSummary trace={trace} />
+        )}
+      </div>
       {showCompare && ranked[0] && <WithWithout top={ranked[0]} service={intent.service || summary} city={intent.city} />}
       {ranked.length ? (
         <>

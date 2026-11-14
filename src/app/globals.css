@@ -809,3 +809,4 @@ img { display: block; max-width: 100%; }
 .kp-cmp-rec a { color: var(--accent-deep); font-size: 12px; }
 .kp-cmp-sub { color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
 .kp-cmp-foot { color: var(--muted); font-size: 11px; }
+.kp-pending { display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: var(--pill-radius); background: var(--surface-glass); color: var(--ink-soft); font-size: 13px; font-weight: 600; }
