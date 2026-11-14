@@ -71,3 +71,31 @@ export function buildIcs(ev: { title: string; start: string; end?: string; locat
   ];
   return lines.map(fold).join("\r\n") + "\r\n";
 }
+
+export type IcsEvent = { title: string; start: string; end?: string; location?: string; notes?: string; url?: string; reminderMin?: number };
+
+/** Several events in one calendar file (one VEVENT each), same rules as buildIcs. */
+export function buildIcsMulti(events: IcsEvent[]): string | null {
+  const vevents: string[] = [];
+  for (const ev of events) {
+    const one = buildIcs(ev);
+    if (!one) continue;
+    const m = one.match(/BEGIN:VEVENT[\s\S]*?END:VEVENT/);
+    if (m) vevents.push(m[0]);
+  }
+  if (!vevents.length) return null;
+  return ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Muutto//Move agent//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH", ...vevents, "END:VCALENDAR"].join("\r\n") + "\r\n";
+}
+
+/** "Add to Google Calendar" link for one event (opens a prefilled event; nothing is created by us). */
+export function googleCalendarUrl(ev: IcsEvent): string | null {
+  const s = parseLocal(ev.start);
+  if (!s) return null;
+  let e = ev.end ? parseLocal(ev.end) : null;
+  if (!e || e.date <= s.date) e = { date: new Date(s.date.getTime() + (s.allDay ? 86400000 : 3600000)), allDay: s.allDay };
+  const fmt = (d: Date, allDay: boolean) => (allDay ? dateOnly(d) : stamp(d));
+  const q = new URLSearchParams({ action: "TEMPLATE", text: ev.title, dates: `${fmt(s.date, s.allDay)}/${fmt(e.date, s.allDay)}`, ctz: TZ });
+  if (ev.location) q.set("location", ev.location);
+  if (ev.notes || ev.url) q.set("details", [ev.notes, ev.url].filter(Boolean).join("\n\n"));
+  return `https://calendar.google.com/calendar/render?${q}`;
+}

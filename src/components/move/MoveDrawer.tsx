@@ -12,6 +12,7 @@ import type { DraftState, ResearchState, View } from "./types";
 import { AreaStats, SettlingIn } from "./SettlingIn";
 import { Gallery } from "./ListingCard";
 import { AreaOutlook, ListingFacts, ListingHistoryView } from "./Insights";
+import { MovingChecklist, ViewingCalendar } from "./Calendar";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
 
@@ -322,6 +323,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
           )}
         </section>
         <SettlingIn a={a} />
+        <MovingChecklist a={a} />
         </>
       )}
       {tab === "news" && (
@@ -982,6 +984,7 @@ export function MoveDrawer({
                 Open on {l.source || host(l.url)} <ArrowUpRight weight="bold" aria-hidden />
               </a>
             </div>
+            <ViewingCalendar l={l} area={area} intent={intent} questions={ds?.draft?.questions} />
             <ListingFacts l={l} />
             <section className={d.section}>
               <h3 className={d.sh}>The listing</h3>
@@ -1008,6 +1011,7 @@ export function MoveDrawer({
           <section className={`${d.section} ${x.anchor}`} ref={draftSec}>
             <h3 className={d.sh}>Viewing request</h3>
             <DraftView listingUrl={l.url} st={ds} onLang={(lang) => onDraftLang(l.url, lang)} onOpened={() => onDraftOpened(l.url)} onStart={() => onDraft(l)} />
+            <ViewingCalendar l={l} area={area} intent={intent} questions={ds?.draft?.questions} />
           </section>
         )}
       </>

@@ -735,3 +735,20 @@
 .tourDots .tourDotOn { width: 14px; border-radius: 999px; background: var(--accent-deep); }
 @media (prefers-color-scheme: dark) { .tourSrc span { color: #8fc9a8; } .tourDots .tourDotOn { background: #8fc9a8; } }
 @media (prefers-reduced-motion: reduce) { .tourHole, .tourCard { transition: none; } }
+
+/* ---- calendar ---- */
+.cal { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.calHead { display: flex; align-items: flex-start; gap: 10px; }
+.calHead > svg { flex: none; width: 22px; height: 22px; margin-top: 1px; color: var(--accent-deep); }
+.calHead div { display: flex; flex-direction: column; gap: 2px; }
+.calHead strong { color: var(--ink); font-size: 15px; font-weight: 500; }
+.calHead small { color: var(--muted); font-size: 12px; }
+.calBtns { display: flex; flex-wrap: wrap; gap: 8px; }
+.calBtns button { display: inline-flex; align-items: center; gap: 6px; min-height: 34px; }
+.calBtns svg { width: 14px; height: 14px; }
+.calInput { height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--page); color: var(--ink); font: inherit; font-size: 13px; color-scheme: light dark; }
+.calRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 13px; }
+.calList { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-soft); }
+.calList b { display: inline-block; min-width: 92px; color: var(--ink); font-weight: 500; font-variant-numeric: tabular-nums; }
+.calList a { color: var(--ink-soft); }
+@media (prefers-color-scheme: dark) { .calHead > svg { color: #8fc9a8; } }
