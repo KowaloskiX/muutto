@@ -20,7 +20,8 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const EXAMPLE = "Electrical subcontractor for a 40-apartment pipe renovation (linjasaneeraus) in Espoo, start March";
 
 const welcomeChips = (): Chip[] => [
-  { label: "Electrical subcontractor for a 40-apartment pipe renovation in Espoo, start March", action: "example", payload: EXAMPLE, primary: true },
+  // Runs the search directly (no router rewrite) so the demo query always hits the same cached real results.
+  { label: "Electrical subcontractor for a 40-apartment pipe renovation in Espoo, start March", action: "find_again", payload: EXAMPLE, primary: true },
   { label: "Check subcontractor: <paste company>", action: "prefill", payload: "Check subcontractor: " },
   { label: "Which documents must I collect from a subcontractor?", action: "example", payload: "Which documents must I collect from a subcontractor before signing under the tilaajavastuulaki, and which can I check myself from public registers?" },
 ];

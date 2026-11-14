@@ -106,6 +106,13 @@ function DocRow({ c }: { c: Check }) {
   );
 }
 
+function checkedAgo(iso: string): string {
+  const min = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (min < 1) return "just now";
+  if (min < 60) return `${min} min ago`;
+  return `${Math.round(min / 60)} h ago`;
+}
+
 export function CandidateDrawer({
   cand,
   distance,
@@ -149,6 +156,8 @@ export function CandidateDrawer({
     distance != null && `${fmtKm(distance)} from site`,
     prof?.employees && `${prof.employees} staff`,
     prof?.foundedYear && `founded ${prof.foundedYear}`,
+    // Honest freshness: cached reports are real earlier checks, say how old they are.
+    r.cachedAt ? `checked ${checkedAgo(r.cachedAt)}` : "checked just now",
   ].filter(Boolean);
   const keyEv = key?.sources ?? [];
 
