@@ -1,6 +1,6 @@
 # Demo runbook
 
-**Rule:** never present cached results as live. If a result came from the warm-up, say *"checked N minutes ago"*. The `/chat` view doesn't show the cache age yet. The classic view `/` shows it in the Exa trace panel ("cached N min ago").
+**Rule:** never present cached results as live. If a result came from the warm-up, say *"checked N minutes ago"*. The `/chat` candidate panel shows "checked N min ago" in its meta line; the classic view `/` also shows it in the Exa trace panel.
 
 ---
 
@@ -39,7 +39,7 @@ Reports are served without re-checking for 6 h. Between 6 and 24 h they are show
 
 At the last warm-up (local cache, a few hours before this was written), the Espoo electrical shortlist was Systempoint Oy, Sähkö-Kamut Oy, Sähkö-Huhta Oy and Digisähkö Oy. Expect these, but don't promise them. Use whatever your warm-up returns.
 
-The existing `warm.mjs` script warms the old consumer queries only, because it sends no `audience`. It does not warm `/chat`.
+Warm the main demo query from the terminal with `node scripts/warm.mjs` (sends the welcome-chip query with `audience: "b2b"`, exactly what `/chat` sends when you click the first chip; that chip skips the router so it always hits the same cache entry).
 
 ### 4. Browser tabs (in this order)
 

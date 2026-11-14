@@ -146,7 +146,7 @@ A first run of a search with 4 candidates makes roughly 20+ Exa calls and takes 
 1. Start the server, open `/chat`, click each demo prompt (see `docs/DEMO-RUNBOOK.md`), and wait for the ranking to finish.
 2. Run each one a second time. It should finish in seconds.
 
-The cache is mirrored to `$TMPDIR/kilpailutus-cache/cache-v1.json`, so a server restart keeps it. A warm-up script for the earlier consumer queries also exists (`warm.mjs`, `POST /api/find` without `audience`). It does **not** warm the B2B `/chat` path: B2B reports use different cache keys (`audience: "b2b"`, trade, scope).
+The cache is mirrored to `$TMPDIR/kilpailutus-cache/cache-v1.json`, so a server restart keeps it. Warm the demo query before presenting with `node scripts/warm.mjs [baseUrl]`: it sends the `/chat` welcome-chip query with `audience: "b2b"`, the same request the chip makes.
 
 When a result comes from the cache, its age is recorded (`cachedAt` on the report, "cached N min ago" in the Exa trace). The `/chat` view doesn't display this yet, so say it out loud when presenting.
 
