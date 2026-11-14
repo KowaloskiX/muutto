@@ -755,3 +755,5 @@
 .calReply { width: 100%; min-height: 64px; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--page); color: var(--ink); font: inherit; font-size: 13px; line-height: 1.45; resize: vertical; box-sizing: border-box; }
 .calReply:focus { outline: 2px solid var(--accent-deep); outline-offset: -1px; }
 .calBtns .ghostBtn:disabled { opacity: .5; cursor: default; }
+.logo { flex: none; align-self: center; width: 26px; height: 26px; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
+.rail .logo { width: 30px; height: 30px; margin-bottom: 6px; }

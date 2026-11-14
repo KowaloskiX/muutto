@@ -122,6 +122,8 @@ export default function Landing() {
       <header className={s.bar}>
         <div className={s.barIn}>
           <Link href="/" className={s.word} aria-label="Muutto home">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/media/logo-goat-256.png" alt="" className={s.logo} width={32} height={32} />
             Muutto
           </Link>
           <Link href="/move" className={s.barCta}>
@@ -333,7 +335,11 @@ export default function Landing() {
 
       <footer className={s.foot}>
         <div className={`${s.wrap} ${s.footIn}`}>
-          <span className={s.word}>Muutto</span>
+          <span className={s.word}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/media/logo-goat-256.png" alt="" className={s.logo} width={24} height={24} />
+            Muutto
+          </span>
           <span className={s.footNote}>Built at Junction 2026 with Exa</span>
           <nav className={s.footNav} aria-label="Footer">
             <Link href="/move">App</Link>

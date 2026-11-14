@@ -617,6 +617,8 @@ export default function MoveApp() {
           tabIndex={folded ? 0 : -1}
           aria-hidden={!folded}
         >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/media/logo-goat-256.png" alt="" className={s.logo} width={26} height={26} />
           <strong>Muutto</strong>
           <span className={s.railChat}>
             <ChatCircleText weight="bold" aria-hidden />
@@ -625,6 +627,8 @@ export default function MoveApp() {
         </button>
         <header className={s.header}>
           <div className={s.who}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/media/logo-goat-256.png" alt="" className={s.logo} width={26} height={26} />
             <strong>Muutto</strong>
             <small>{busy ? "Working on it…" : "Where to live, Helsinki region"}</small>
           </div>

@@ -242,3 +242,5 @@
 .duoText { max-width: 46ch; margin: 0; color: var(--muted); font-size: 16px; line-height: 1.5; }
 .duoFrom { margin: 4px 0 0; color: var(--ink); font-size: 13px; }
 .duoFrom span { margin-right: 6px; color: var(--accent-deep); }
+.word { display: inline-flex; align-items: center; gap: 10px; }
+.logo { flex: none; border-radius: 50%; box-shadow: 0 0 0 1px var(--line); }
