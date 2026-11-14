@@ -243,7 +243,10 @@ export async function POST(req: Request) {
           "intent",
         ).catch(() => guessIntent(query));
         // "company" without a name (e.g. only an invalid ID was given) has nothing to look up.
-        const target = validId ? "company" : intent.kind === "company" && !intent.companyName.trim() ? (badId ? "not_a_job" : "job") : intent.kind;
+        // An invalid ID in a "check this company / its Y-tunnus" request: the honest answer is the
+        // checksum failure itself; running a generic trade search instead would look like a result.
+        const checkingTheId = !!badId && (/\b(check|verify|vet|legit|tarkist|selvit|kontrol)|y-?tunnus|business id/i.test(query) || intent.kind === "company");
+        const target = validId ? "company" : checkingTheId ? "not_a_job" : intent.kind === "company" && !intent.companyName.trim() ? (badId ? "not_a_job" : "job") : intent.kind;
 
         if (target === "not_a_job") {
           throw new Error(idNote ?? `"${query.slice(0, 60)}${query.length > 60 ? "…" : ""}" isn't a request for a service or a company, so I can't help with that. ${WHAT_I_DO}. Try ${EXAMPLES}.`);
