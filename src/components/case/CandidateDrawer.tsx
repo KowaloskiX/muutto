@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { ArrowSquareOut, Bell, ChatCircleText, CheckCircle, Question, Warning, X, XCircle } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowSquareOut, Bell, ChatCircleText, CheckCircle, Question, Warning, X, XCircle } from "@phosphor-icons/react";
 import type { Check, Status } from "@/lib/verify";
 import { withTextFragment } from "@/lib/textFragment";
 import { compliance, findingOf, fmtKm, hostOf, isDoc, isTv, verdict, VERDICT_LABEL, type Cand } from "./model";
@@ -182,8 +182,11 @@ export function CandidateDrawer({
             </p>
             {r.registry?.mainBusinessLine && <p>{r.registry.mainBusinessLine}</p>}
           </div>
-          <button type="button" className={s.close} onClick={onClose} aria-label="Close">
-            <X weight="bold" />
+          <button type="button" className={s.close} onClick={onClose} aria-label="Back to the list">
+            <X weight="bold" className={s.closeX} />
+            <span className={s.closeBack}>
+              <ArrowLeft weight="bold" /> List
+            </span>
           </button>
         </header>
 

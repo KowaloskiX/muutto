@@ -204,6 +204,13 @@
 .dTitle p { margin: 0; color: var(--muted); font-size: 12px; }
 .dTitle a { color: var(--ink-soft); text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
 .close { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--muted); }
+.closeBack { display: none; align-items: center; gap: 4px; font-size: 13px; }
+@media (max-width: 1023px) {
+  .dHead { flex-direction: column; gap: 4px; padding-top: 12px; }
+  .close { width: auto; padding: 0 8px; margin-left: -8px; order: -1; }
+  .closeX { display: none; }
+  .closeBack { display: inline-flex; }
+}
 .close:hover { background: var(--surface-strong); color: var(--ink); }
 .dBody { flex: 1; min-height: 0; overflow-y: auto; padding: 0 24px 24px; display: flex; flex-direction: column; gap: 28px; overscroll-behavior: contain; }
 .dSection { display: flex; flex-direction: column; gap: 8px; }

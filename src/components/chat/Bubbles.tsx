@@ -308,7 +308,7 @@ export function CompareCard({ rows, recommendation }: { rows: QuoteRow[]; recomm
   );
 }
 
-export function WatchCard({ name, domain, monitorId, mode }: { name: string; domain?: string; monitorId?: string; mode?: string }) {
+export function WatchCard({ name, domain, mode }: { name: string; domain?: string; monitorId?: string; mode?: string }) {
   return (
     <div className={`${s.card} ${s.watch}`}>
       <Bell weight="fill" />
@@ -318,7 +318,6 @@ export function WatchCard({ name, domain, monitorId, mode }: { name: string; dom
           Daily Exa Monitor for news, complaints and register changes{domain ? ` about ${domain}` : ""}
           {mode === "polling" ? " (checked on demand while running locally)" : ""}.
         </small>
-        {monitorId && <code>{monitorId}</code>}
       </div>
     </div>
   );

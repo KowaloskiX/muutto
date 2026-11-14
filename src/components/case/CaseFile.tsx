@@ -605,16 +605,6 @@ function OutboxRow({
             <Envelope weight="bold" />{" "}
             {d.email ?? "No email found: add one in your mail app"}
           </div>
-          {d.kind === "docs" && d.documents?.length ? (
-            <ul className={s.docList}>
-              {d.documents.map((x, i) => (
-                <li key={i}>
-                  {d.lang === "fi" ? x.fi || x.en : x.en}
-                  {x.law && <small> · {x.law}</small>}
-                </li>
-              ))}
-            </ul>
-          ) : null}
           <pre>{body}</pre>
           <div className={s.mailActions}>
             <div className={s.langToggle} role="group" aria-label="Language">
