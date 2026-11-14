@@ -70,14 +70,14 @@ export const TOOL_DEFS = [
     description:
       "Slow (30-60 s) deep research run with the Exa Agent API: ONLY for 'find all X that match criteria' when one search is not enough. Prefer exa_search/exa_places.",
     parameters: obj({
-      query: S("What to find, e.g. 'pet-friendly rental flats in Tampere under 900 EUR listed this week'"),
+      query: S("What to find, e.g. 'demolition subcontractors in Oulu with asbestos removal certification'"),
       criteria: { type: "array", items: { type: "string" }, description: "2-4 criteria each item must meet" },
     }),
   },
   {
     name: "contractors_handoff",
     description:
-      "Hand over to the app's contractor finder when the errand is to hire/compare/vet a local tradesperson or service provider for a job (plumber, electrician, cleaner, movers, renovation...). It finds, verifies (business register, reviews) and ranks companies. Do not research contractors yourself.",
+      "Hand over to the app's subcontractor finder when the errand is to find, compare or vet subcontractors for a construction or renovation project (electrical, HVAC, plumbing, waterproofing, demolition, roofing...) or to check a named company. It finds, verifies (trade register, tilaajavastuu items, references, reviews) and ranks companies. Do not research subcontractors yourself.",
     parameters: obj({
       query: S("The job and place in one line, e.g. 'pipe relining in Espoo'"),
       note: S("One short sentence to the user saying what happens next (no facts)"),
@@ -122,7 +122,7 @@ export const TOOL_DEFS = [
   {
     name: "watch_changes",
     description:
-      "Propose an Exa Monitor that re-runs a search daily and alerts the user to new pages (e.g. 'Kela housing allowance application opening', a price or rule change, a reply-worthy news item). Use when the user wants to be told when something happens or the answer may change soon.",
+      "Propose an Exa Monitor that re-runs a search daily and alerts the user to new pages (e.g. a subcontractor's bankruptcy or tax-debt news, a change in tilaajavastuu or reporting-duty guidance, a new public tender in the project area). Use when the user wants to be told when something happens or the answer may change soon.",
     parameters: obj({
       query: S("Search query the monitor re-runs, describing the page that would signal the change"),
       why: S("One sentence: what the user will be alerted about"),
