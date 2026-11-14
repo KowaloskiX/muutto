@@ -9,6 +9,7 @@ import { withTextFragment } from "@/lib/textFragment";
 import type { Area, Commute, Criterion, CriterionId, Listing, ListingResearch, MoveIntent, Source, ViewingDraft } from "@/lib/move/types";
 import { DASH, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, PLACE_WORD, price, sizeLine } from "./model";
 import type { DraftState, ResearchState, View } from "./types";
+import { AreaStats, SettlingIn } from "./SettlingIn";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
 
@@ -227,6 +228,7 @@ function AreaView({ a, view, tenure, onListing, onResearch, onDraft }: { a: Area
         <h3 className={d.sh}>Commute to work</h3>
         <CommuteGrid c={a.commute} />
       </section>
+      <AreaStats a={a} />
       <section className={d.section}>
         <h3 className={d.sh}>
           Criteria <small>{a.criteria.length} measured</small>
@@ -274,6 +276,7 @@ function AreaView({ a, view, tenure, onListing, onResearch, onDraft }: { a: Area
           <p className={x.noSrc}>{DASH} No places were returned for this area.</p>
         )}
       </section>
+      <SettlingIn a={a} />
       <section className={d.section}>
         <h3 className={d.sh}>
           Local news <small>{a.news.length ? `${a.news.length}` : ""}</small>

@@ -2,7 +2,7 @@
 
 // The move map. Four layers, one segmented switch (remembered per browser):
 //  · Fit         — each area's postal-code outline filled by fit (pins where no outline came back)
-//  · Drive time  — car minutes to work on a hex grid (GET /api/move/heat: OSRM on OpenStreetMap, no live traffic)
+//  · Drive time  — car-minute contours + reach slider (DriveTimeLayer; GET /api/move/heat: OSRM, no live traffic)
 //  · Noise       — City of Helsinki noise survey 2022, road and street traffic Lden (official WMS)
 //  · Daily life  — the selected area's pharmacies, shops, cafés, schools, parks, stops + a 500 m circle
 // Listings are price pins on every layer. Only measured data is drawn: no isochrones are invented.
@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { Circle, MapContainer, Marker, Pane, Polygon, TileLayer, Tooltip, WMSTileLayer, useMap } from "react-leaflet";
 import type { Area, Place } from "@/lib/move/types";
-import type { HeatResponse } from "@/app/api/move/heat/route";
+import DriveTimeLayer, { DriveLegend, driveCaption, useHeat } from "./DriveTimeLayer";
 import { FIT_WORD, PLACE_WORD, type Tone } from "./model";
 import m from "@/components/case/Map.module.css";
 import x from "./Move.module.css";
@@ -57,16 +57,6 @@ const TONE_HEX: Record<"light" | "dark", Record<Tone, string>> = {
   light: { green: "#2b7a4b", yellow: "#b25e09", red: "#c4321f", grey: "#9a968d" },
   dark: { green: "#6cc08e", yellow: "#e6a15a", red: "#f07a68", grey: "#75726b" },
 };
-
-// Drive-time bins (minutes), darkest = closest. One hue, light to dark.
-const BINS: { max: number; label: string; color: string }[] = [
-  { max: 10, label: "≤10", color: "#0b5a3a" },
-  { max: 20, label: "≤20", color: "#3d8a5c" },
-  { max: 30, label: "≤30", color: "#86b88a" },
-  { max: 45, label: "≤45", color: "#c9ddb2" },
-  { max: Infinity, label: ">45", color: "#ece4cf" },
-];
-const binOf = (min: number) => BINS.find((b) => min <= b.max) ?? BINS[BINS.length - 1];
 
 // Daily-life place icons: 16px stroke glyphs in a white disc, one colour per kind.
 const PLACE_STYLE: Record<Place["kind"], { color: string; svg: string }> = {
@@ -257,37 +247,6 @@ function Shapes({ pins, hover, active, dark, onSelect, onHover, outline }: { pin
   );
 }
 
-/** Hexes coloured by car minutes; circumradius from the grid spacing. */
-function Heat({ data, dark }: { data: HeatResponse; dark: boolean }) {
-  const hexes = useMemo(() => {
-    const R = data.spacingKm / Math.sqrt(3);
-    return data.cells.map((c) => {
-      const kLat = 110.574;
-      const kLng = 111.32 * Math.cos((c.lat * Math.PI) / 180);
-      const pts: [number, number][] = [];
-      for (let i = 0; i < 6; i++) {
-        const a = ((60 * i + 30) * Math.PI) / 180;
-        pts.push([c.lat + (R * Math.sin(a)) / kLat, c.lng + (R * Math.cos(a)) / kLng]);
-      }
-      return { c, pts, bin: binOf(c.min) };
-    });
-  }, [data]);
-  return (
-    <Pane name="heat" style={{ zIndex: 420 }}>
-      {hexes.map(({ c, pts, bin }) => (
-        <Polygon key={`${c.lat},${c.lng}`} positions={pts} pathOptions={{ stroke: true, color: bin.color, weight: 0.5, opacity: 0.5, fillColor: bin.color, fillOpacity: dark ? 0.36 : 0.5 }}>
-          <Tooltip sticky className={m.tip} opacity={1}>
-            <b>{Math.round(c.min)} min by car</b>
-            <small>free-flow, no live traffic</small>
-          </Tooltip>
-        </Polygon>
-      ))}
-    </Pane>
-  );
-}
-
-type HeatState = { key: string; data?: HeatResponse; error?: string };
-
 export default function MoveMap({
   work,
   pins,
@@ -338,25 +297,7 @@ export default function MoveMap({
   };
 
   // Drive-time grid: fetched once per workplace, only when the layer is opened.
-  const [heat, setHeat] = useState<HeatState | undefined>();
-  const heatKey = work ? `${work.lat.toFixed(3)},${work.lng.toFixed(3)}` : "";
-  useEffect(() => {
-    if (layer !== "drive" || !work || heat?.key === heatKey) return;
-    let stop = false;
-    setHeat({ key: heatKey });
-    fetch(`/api/move/heat?lat=${work.lat}&lng=${work.lng}`)
-      .then(async (r) => {
-        const j = await r.json();
-        if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
-        return j as HeatResponse;
-      })
-      .then((data) => !stop && setHeat({ key: heatKey, data }))
-      .catch((e: Error) => !stop && setHeat({ key: heatKey, error: e.message }));
-    return () => {
-      stop = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [layer, heatKey]);
+  const heat = useHeat(work, layer === "drive");
 
   const points = useMemo<[number, number][]>(() => [...(work ? [[work.lat, work.lng] as [number, number]] : []), ...pins.map((p) => [p.lat, p.lng] as [number, number])], [work, pins]);
   // Daily life zooms to the focused area: its places and the 500 m circle.
@@ -381,28 +322,8 @@ export default function MoveMap({
   let legend: React.ReactNode;
   let caption: React.ReactNode = null;
   if (layer === "drive") {
-    legend = (
-      <>
-        <span className={x.lgTitle}>Car to work, min</span>
-        {BINS.map((b) => (
-          <span key={b.label}>
-            <i className={x.lgSwatch} style={{ background: b.color }} />
-            {b.label}
-          </span>
-        ))}
-      </>
-    );
-    caption = !work ? (
-      "No workplace location, so no drive times."
-    ) : heat?.error ? (
-      <span className={x.capErr}>{heat.error}</span>
-    ) : !heat?.data ? (
-      "Routing a grid around the workplace…"
-    ) : (
-      <>
-        Car, typical ({heat.data.source.label}) — no live traffic. {heat.data.cells.length} cells of {heat.data.spacingKm} km; {heat.data.dropped} off-road points (sea, forest) left blank.
-      </>
-    );
+    legend = <DriveLegend />;
+    caption = driveCaption(heat, !!work);
   } else if (layer === "noise") {
     legend = (
       <>
@@ -477,7 +398,9 @@ export default function MoveMap({
           <Fit points={layer === "daily" && places.length ? dailyPoints : points} />
           {layer === "fit" && <Shapes pins={pins} hover={hover} active={active} dark={dark} onSelect={onSelect} onHover={onHover} />}
           {layer === "daily" && <Shapes pins={pins} hover={hover} active={active} dark={dark} onSelect={onSelect} onHover={onHover} outline />}
-          {layer === "drive" && heat?.data && <Heat data={heat.data} dark={dark} />}
+          {layer === "drive" && (
+            <DriveTimeLayer heat={heat} work={work} dots={dots} areas={pins.map((p) => ({ key: p.key, lat: p.lat, lng: p.lng, label: p.label }))} dark={dark} onSelectListing={onSelectListing} />
+          )}
           {layer === "daily" && circle && (
             <Circle center={[circle.lat, circle.lng]} radius={500} interactive={false} pathOptions={{ color: dark ? "#f2f1ed" : "#0d1016", weight: 1.25, opacity: 0.6, dashArray: "4 5", fillOpacity: dark ? 0.06 : 0.04 }} />
           )}
@@ -500,7 +423,7 @@ export default function MoveMap({
               </Tooltip>
             </Marker>
           ))}
-          {dots.map((d) => (
+          {layer !== "drive" && dots.map((d) => (
             <Marker key={`${d.key}-${layer === "fit" || layer === "daily" ? "p" : "d"}`} position={[d.lat, d.lng]} icon={layer === "fit" || layer === "daily" ? priceIcon(d) : dotIcon} zIndexOffset={1500} title={d.label} eventHandlers={{ click: () => onSelectListing(d.key) }}>
               <Tooltip direction="top" className={m.tip} opacity={1}>
                 <b>{d.label}</b>

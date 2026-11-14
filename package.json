@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
     "@phosphor-icons/react": "^2.1.10",
+    "d3-contour": "^4.0.2",
     "leaflet": "^1.9.4",
     "next": "15.5.4",
     "openai": "^7.57.0",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@tailwindcss/postcss": "^4",
+    "@types/d3-contour": "^3.0.6",
     "@types/leaflet": "^1.9.22",
     "@types/node": "^20",
     "@types/react": "^19",
