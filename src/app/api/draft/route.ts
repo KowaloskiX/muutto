@@ -67,6 +67,12 @@ const FULL_LIST: DocRequest[] = [
   { id: "tv-accident", fi: "Todistus lakisääteisen tapaturmavakuutuksen ottamisesta", en: "Certificate of statutory occupational accident insurance", law: "1233/2006 5 § 7 kohta" },
 ];
 
+// No placeholders in a message the user may send as-is: default the quote deadline to two weeks out.
+function defaultDeadline(): string {
+  const d = new Date(Date.now() + 14 * 24 * 3600 * 1000);
+  return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}`;
+}
+
 type Project = { trade: string; scope: string; place: string; startDate: string; contractValueEur?: number; deadline: string };
 type Sender = { name: string; phone: string; address: string; company: string; email: string };
 
@@ -94,11 +100,11 @@ function b2bTemplate(job: string, name: string, businessId: string | undefined, 
   const when = p.startDate ? ` Arvioitu aloitus: ${p.startDate}.` : "";
   const whenEn = p.startDate ? ` Estimated start: ${p.startDate}.` : "";
   const where = p.place ? ` (${p.place})` : "";
-  const due = p.deadline || "[päivämäärä]";
+  const due = p.deadline || defaultDeadline();
   const sign = [sender.name, sender.company, sender.phone, sender.email].filter(Boolean).join("\n");
   const subject = `Tarjouspyyntö aliurakasta: ${work}${where}`;
   const bodyFi = `Hei ${name},\n\npyydämme tarjousta aliurakasta kohteeseemme${where}: ${work}.${when}\n\nPyydämme tarjoukseen:\n${qFi.map((q) => `- ${q}`).join("\n")}\n\nPyydämme tarjouksen viimeistään ${due}. Tilaajavastuulain mukaiset selvitykset pyydämme erillisellä viestillä.\n\nYstävällisin terveisin\n${sign}`.trim();
-  const bodyEn = `Hello ${name},\n\nwe are requesting a quote for a subcontract on our project${where}: ${work}.${whenEn}\n\nPlease include:\n${qEn.map((q) => `- ${q}`).join("\n")}\n\nPlease send your quote by ${p.deadline || "[date]"}. We will request the documents required by the Contractor's Liability Act separately.\n\nBest regards\n${sign}`.trim();
+  const bodyEn = `Hello ${name},\n\nwe are requesting a quote for a subcontract on our project${where}: ${work}.${whenEn}\n\nPlease include:\n${qEn.map((q) => `- ${q}`).join("\n")}\n\nPlease send your quote by ${due}. We will request the documents required by the Contractor's Liability Act separately.\n\nBest regards\n${sign}`.trim();
 
   const idFi = businessId ? ` (Y-tunnus ${businessId})` : "";
   // § 5 documents first; licences/certificates are asked for separately (not tilaajavastuu items).
