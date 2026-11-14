@@ -56,13 +56,19 @@ export function useIso(work: Pt | undefined, active: boolean): IsoState | undefi
     if (!active || !work || iso?.key === key) return;
     let stop = false;
     setIso({ key });
-    fetch(`/api/move/iso?lat=${work.lat}&lng=${work.lng}`)
-      .then(async (r) => {
+    const get = (step: 1 | 5) =>
+      fetch(`/api/move/iso?lat=${work.lat}&lng=${work.lng}&step=${step}`).then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
         return j as IsoResponse;
+      });
+    // Every 5 min first (about 3 s), then every minute in the background; keep the 5-min set if that fails.
+    get(5)
+      .then((data) => {
+        if (stop) return;
+        setIso({ key, data });
+        return get(1).then((full) => !stop && setIso({ key, data: full }), () => undefined);
       })
-      .then((data) => !stop && setIso({ key, data }))
       .catch((e: Error) => !stop && setIso({ key, error: e.message }));
     return () => {
       stop = true;
@@ -112,7 +118,7 @@ export function DriveLegend({ scale = "city" }: { scale?: HeatScale }) {
 export function driveCaption(heat: HeatState | undefined, hasWork: boolean, iso?: IsoState, scale: HeatScale = "city"): React.ReactNode {
   if (!hasWork) return "No workplace location, so no drive times.";
   if (scale === "city" && iso?.data)
-    return `Car, typical — isochrones along the road network (${iso.data.source.label}), no live traffic. Listing times: OSRM. Click the map for a route.`;
+    return `Car, typical — isochrones along the road network (${iso.data.source.label}), every ${iso.data.step === 1 ? "minute" : "5 min (loading every minute…)"}, no live traffic. Listing times: OSRM. Click the map for a route.`;
   if (scale === "city" && iso && !iso.error)
     return (
       <span className={x.capBusy}>
@@ -206,8 +212,10 @@ function isoBands(d: IsoResponse) {
     .filter((b) => b.polys.length)
     .sort((a, b) => b.band.max - a.band.max);
 }
+/** The contour for `t` minutes, or the nearest lower one while the 1-minute set is still loading. */
 function isoZone(d: IsoResponse, t: number): Ring[][] {
-  const c = d.contours.find((x) => x.min === t);
+  let c: IsoResponse["contours"][number] | undefined;
+  for (const x of d.contours) if (x.min <= t) c = x;
   return c ? toPolys(c.geometry) : [];
 }
 
@@ -328,7 +336,7 @@ export default function DriveTimeLayer({
   onSelectListing: (key: string) => void;
 }) {
   const roads = scale === "city" && !!iso?.data;
-  const ui = roads ? { ...SCALE_UI.city, step: 5 } : SCALE_UI[scale];
+  const ui = roads ? { ...SCALE_UI.city, step: iso!.data!.step } : SCALE_UI[scale];
   const ready = roads || !!heat?.data;
   const status = scale === "city" ? (iso?.error ? heat : iso) : heat;
   const shapes = useMemo(() => (roads ? isoBands(iso!.data!) : heat?.data ? bands(heat.data) : []), [roads, iso?.data, heat?.data]);
@@ -343,8 +351,8 @@ export default function DriveTimeLayer({
   const [t, setT] = useState<number>(ui.start);
   useEffect(() => setT(SCALE_UI[scale].start), [scale]);
   useEffect(() => {
-    if (roads) setT((v) => Math.max(5, Math.round(v / 5) * 5));
-  }, [roads]);
+    if (roads && iso?.data?.step === 5) setT((v) => Math.max(5, Math.round(v / 5) * 5));
+  }, [roads, iso?.data?.step]);
   const [playing, setPlaying] = useState(false);
   const raf = useRef<number | undefined>(undefined);
   const zone = useMemo(() => (roads ? isoZone(iso!.data!, t) : heat?.data ? reach(heat.data, t) : []), [roads, iso?.data, heat?.data, t]);
