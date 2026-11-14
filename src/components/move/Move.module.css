@@ -516,3 +516,8 @@
 .lgPair { display: flex; gap: 12px; }
 .lgPair > span { display: flex; flex-direction: column; gap: 2px; }
 .lgPair small { color: var(--muted); font-size: 10px; }
+.scaleSwitch { display: flex; gap: 2px; padding: 2px; border-radius: 999px; background: var(--line); }
+.scaleSwitch button { flex: 1; min-height: 22px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.scaleSwitch .scaleOn { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgb(13 16 22 / .15); }
+.scaleSwitch button:focus-visible { outline: 2px solid var(--accent-deep); outline-offset: 1px; }
+.reachPanel input[type="range"]:disabled { opacity: .4; cursor: default; }

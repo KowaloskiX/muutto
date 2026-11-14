@@ -8,8 +8,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { contours } from "d3-contour";
-import { CircleMarker, Marker, Pane, Polygon, Polyline, Tooltip, useMapEvents } from "react-leaflet";
-import type { HeatResponse } from "@/app/api/move/heat/route";
+import { CircleMarker, Marker, Pane, Polygon, Polyline, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import type { HeatResponse, HeatScale } from "@/app/api/move/heat/route";
 import m from "@/components/case/Map.module.css";
 import x from "./Move.module.css";
 
@@ -24,22 +24,37 @@ export const DRIVE_BANDS = [
   { max: 30, color: "#6fa77c" },
   { max: 45, color: "#b4cf9f" },
 ] as const;
+/** Weekend reach: how far the car gets in a few hours (region scale). */
+const REGION_BANDS = [
+  { max: 30, color: "#0b5a3a" },
+  { max: 60, color: "#2f7d55" },
+  { max: 90, color: "#6fa77c" },
+  { max: 120, color: "#b4cf9f" },
+  { max: 180, color: "#dcd8b8" },
+] as const;
+type Band = { max: number; color: string };
+const BANDS: Record<HeatScale, readonly Band[]> = { city: DRIVE_BANDS, region: REGION_BANDS };
+export const SCALE_UI: Record<HeatScale, { max: number; start: number; step: number; label: string }> = {
+  city: { max: 60, start: 30, step: 1, label: "City · 1 h" },
+  region: { max: 180, start: 120, step: 5, label: "Region · 3 h" },
+};
 const FAR = "#9a968d";
 export const driveColor = (min: number) => DRIVE_BANDS.find((b) => min <= b.max)?.color ?? FAR;
+const fmtT = (t: number) => (t < 60 ? `${t} min` : t % 60 ? `${Math.floor(t / 60)} h ${t % 60} min` : `${t / 60} h`);
 const OSRM = "https://router.project-osrm.org";
 const NOTE = "OSRM, typical, no live traffic";
 
 export type HeatState = { key: string; data?: HeatResponse; error?: string };
 
 /** Fetches the drive-time grid once per workplace, only while the layer is shown. */
-export function useHeat(work: Pt | undefined, active: boolean): HeatState | undefined {
+export function useHeat(work: Pt | undefined, active: boolean, scale: HeatScale = "city"): HeatState | undefined {
   const [heat, setHeat] = useState<HeatState | undefined>();
-  const key = work ? `${work.lat.toFixed(3)},${work.lng.toFixed(3)}` : "";
+  const key = work ? `${scale}:${work.lat.toFixed(3)},${work.lng.toFixed(3)}` : "";
   useEffect(() => {
     if (!active || !work || heat?.key === key) return;
     let stop = false;
     setHeat({ key });
-    fetch(`/api/move/heat?lat=${work.lat}&lng=${work.lng}`)
+    fetch(`/api/move/heat?lat=${work.lat}&lng=${work.lng}${scale === "region" ? "&scale=region" : ""}`)
       .then(async (r) => {
         const j = await r.json();
         if (!r.ok) throw new Error(j?.error ?? `HTTP ${r.status}`);
@@ -55,13 +70,13 @@ export function useHeat(work: Pt | undefined, active: boolean): HeatState | unde
   return heat;
 }
 
-export function DriveLegend() {
+export function DriveLegend({ scale = "city" }: { scale?: HeatScale }) {
   return (
     <>
-      <span className={x.lgTitle}>Car to work</span>
-      {DRIVE_BANDS.map((b) => (
+      <span className={x.lgTitle}>{scale === "region" ? "By car from work" : "Car to work"}</span>
+      {BANDS[scale].map((b) => (
         <span key={b.max}>
-          <i className={x.lgSwatch} style={{ background: b.color }} />≤{b.max} min
+          <i className={x.lgSwatch} style={{ background: b.color }} />≤{fmtT(b.max)}
         </span>
       ))}
     </>
@@ -78,7 +93,8 @@ export function driveCaption(heat: HeatState | undefined, hasWork: boolean): Rea
       </span>
     );
   const d = heat.data;
-  return `Car, typical (${d.source.label}) — no live traffic. ${d.routed.toLocaleString("en-US")} points on a ${d.stepKm} km grid; ${d.dropped.toLocaleString("en-US")} off-road points (sea, forest) left blank. Click the map for a route.`;
+  const ferry = d.scale === "region" ? ` Grid ends ${Math.round(((d.grid.nx - 1) / 2) * d.stepKm)} km from work.` : "";
+  return `Car, typical (${d.source.label}) — no live traffic. ${d.routed.toLocaleString("en-US")} points on a ${d.stepKm} km grid; ${d.dropped.toLocaleString("en-US")} off-road points (sea, forest) left blank.${ferry} Click the map for a route.`;
 }
 
 type Ring = [number, number][];
@@ -118,14 +134,15 @@ function contourValues(d: HeatResponse): number[] {
 function bands(d: HeatResponse) {
   const g = d.grid;
   const vals = contourValues(d);
+  const B = BANDS[d.scale ?? "city"];
   const gen = contours()
     .size([g.nx, g.ny])
-    .thresholds(DRIVE_BANDS.map((b) => -b.max));
+    .thresholds(B.map((b) => -b.max));
   // Grid point i sits at pixel centre i + 0.5 in d3-contour space.
   const toLL = ([cx, cy]: number[]): [number, number] => [g.lat0 + (cy - 0.5) * g.dLat, g.lng0 + (cx - 0.5) * g.dLng];
   return gen(vals)
     .map((c) => {
-      const band = DRIVE_BANDS.find((b) => -b.max === c.value)!;
+      const band = B.find((b) => -b.max === c.value)!;
       const polys = c.coordinates.map((poly) => poly.map((ring) => ring.map(toLL) as Ring));
       // Label at the northernmost point of the largest outer ring (north of Helsinki is land).
       let best: Ring | undefined;
@@ -199,7 +216,58 @@ function useRoutedMinutes(dots: { key: string; lat: number; lng: number }[], wor
 
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelectListing }: { heat?: HeatState; work?: Pt; dots: Dot[]; areas: AreaPt[]; dark: boolean; onSelectListing: (key: string) => void }) {
+/** Region scale zooms out to the routed disc; back on city scale the map returns to the workplace. */
+function FitScale({ heat, scale, work }: { heat?: HeatState; scale: HeatScale; work?: Pt }) {
+  const map = useMap();
+  const d = heat?.data;
+  useEffect(() => {
+    if (scale === "region" && d?.scale === "region") {
+      // Fit to what is reachable within the slider's range, not the whole (mostly empty) grid square.
+      const g = d.grid;
+      let s = 90, n = -90, w = 180, e = -180;
+      g.min.forEach((v, i) => {
+        if (v == null || v > SCALE_UI.region.max) return;
+        const lat = g.lat0 + Math.floor(i / g.nx) * g.dLat;
+        const lng = g.lng0 + (i % g.nx) * g.dLng;
+        s = Math.min(s, lat);
+        n = Math.max(n, lat);
+        w = Math.min(w, lng);
+        e = Math.max(e, lng);
+      });
+      if (n > s)
+        map.flyToBounds(
+          [
+            [s, w],
+            [n, e],
+          ],
+          { padding: [16, 16], duration: reducedMotion() ? 0 : 0.8 },
+        );
+    } else if (scale === "city" && work) map.flyTo([work.lat, work.lng], 11, { duration: reducedMotion() ? 0 : 0.8 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scale, d]);
+  return null;
+}
+
+export default function DriveTimeLayer({
+  heat,
+  work,
+  dots,
+  areas,
+  dark,
+  scale,
+  onScale,
+  onSelectListing,
+}: {
+  heat?: HeatState;
+  work?: Pt;
+  dots: Dot[];
+  areas: AreaPt[];
+  dark: boolean;
+  scale: HeatScale;
+  onScale: (s: HeatScale) => void;
+  onSelectListing: (key: string) => void;
+}) {
+  const ui = SCALE_UI[scale];
   const shapes = useMemo(() => (heat?.data ? bands(heat.data) : []), [heat?.data]);
   const [route, setRoute] = useState<Route | undefined>();
   // Listings and area centres, each routed to work (one OSRM table call).
@@ -209,7 +277,8 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
   const accent = dark ? "#8fc9a8" : "#005032";
 
   // The time slider: the reach zone for "within T minutes", recomputed live from the grid.
-  const [t, setT] = useState(30);
+  const [t, setT] = useState<number>(ui.start);
+  useEffect(() => setT(SCALE_UI[scale].start), [scale]);
   const [playing, setPlaying] = useState(false);
   const raf = useRef<number | undefined>(undefined);
   const zone = useMemo(() => (heat?.data ? reach(heat.data, t) : []), [heat?.data, t]);
@@ -220,7 +289,7 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
   }, [zone]);
   const play = () => {
     if (reducedMotion()) {
-      setT(60);
+      setT(ui.max);
       return;
     }
     if (raf.current) cancelAnimationFrame(raf.current);
@@ -228,7 +297,7 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
     const t0 = performance.now();
     const step = (now: number) => {
       const k = Math.min(1, (now - t0) / 4000);
-      setT(Math.round(k * 60));
+      setT(Math.round((k * ui.max) / ui.step) * ui.step);
       if (k < 1) raf.current = requestAnimationFrame(step);
       else setPlaying(false);
     };
@@ -240,7 +309,7 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
     if (!panel.current) return;
     L.DomEvent.disableClickPropagation(panel.current);
     L.DomEvent.disableScrollPropagation(panel.current);
-  }, [heat?.data]);
+  }, [!!heat]);
   const known = dots.filter((d) => lm[d.key] != null);
   const inL = known.filter((d) => lm[d.key]! <= t).length;
   const knownA = areas.filter((a) => lm[`area:${a.key}`] != null);
@@ -266,7 +335,7 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
         )}
       </Pane>
       {zoneLabel && (
-        <Marker position={zoneLabel} interactive={false} keyboard={false} zIndexOffset={2500} icon={L.divIcon({ className: m.icon, html: `<span class="${x.isoLabel} ${x.isoNow}" style="--c:${accent}">${t} min</span>`, iconSize: [0, 0] })} />
+        <Marker position={zoneLabel} interactive={false} keyboard={false} zIndexOffset={2500} icon={L.divIcon({ className: m.icon, html: `<span class="${x.isoLabel} ${x.isoNow}" style="--c:${accent}">${fmtT(t)}</span>`, iconSize: [0, 0] })} />
       )}
       {shapes.map(
         (s) =>
@@ -277,7 +346,7 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
               position={s.label}
               interactive={false}
               keyboard={false}
-              icon={L.divIcon({ className: m.icon, html: `<span class="${x.isoLabel}" style="--c:${s.band.color}">${s.band.max} min</span>`, iconSize: [0, 0] })}
+              icon={L.divIcon({ className: m.icon, html: `<span class="${x.isoLabel}" style="--c:${s.band.color}">${fmtT(s.band.max)}</span>`, iconSize: [0, 0] })}
             />
           ),
       )}
@@ -321,13 +390,21 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
           </Marker>
         );
       })}
-      {heat?.data && (
+      <FitScale heat={heat} scale={scale} work={work} />
+      {heat && (
         <div ref={panel} className={x.reachPanel}>
+          <div className={x.scaleSwitch} role="radiogroup" aria-label="Reach scale">
+            {(Object.keys(SCALE_UI) as HeatScale[]).map((s) => (
+              <button key={s} type="button" role="radio" aria-checked={scale === s} className={scale === s ? x.scaleOn : ""} onClick={() => onScale(s)}>
+                {SCALE_UI[s].label}
+              </button>
+            ))}
+          </div>
           <div className={x.reachTop}>
             <label htmlFor="reach-t">
-              Reachable by car in <b>{t} min</b>
+              Reachable by car in <b>{fmtT(t)}</b>
             </label>
-            <button type="button" className={x.playBtn} onClick={play} disabled={playing} aria-label="Play 0 to 60 minutes">
+            <button type="button" className={x.playBtn} onClick={play} disabled={playing || !heat.data} aria-label={`Play 0 to ${fmtT(ui.max)}`}>
               {playing ? "Playing" : "Play"}
             </button>
           </div>
@@ -335,20 +412,22 @@ export default function DriveTimeLayer({ heat, work, dots, areas, dark, onSelect
             id="reach-t"
             type="range"
             min={0}
-            max={60}
-            step={1}
+            max={ui.max}
+            step={ui.step}
+            disabled={!heat.data}
             value={t}
             onChange={(e) => {
               if (raf.current) cancelAnimationFrame(raf.current);
               setPlaying(false);
               setT(Number(e.target.value));
             }}
-            style={{ "--p": `${(t / 60) * 100}%` } as React.CSSProperties}
+            style={{ "--p": `${(t / ui.max) * 100}%` } as React.CSSProperties}
           />
           <small>
-            {dots.length ? `${inL} of ${dots.length} listings` : "No listings"}
-            {areas.length ? ` · ${inA} of ${areas.length} areas` : ""}
-            {known.length < dots.length || knownA.length < areas.length ? " (routing…)" : ""}
+            {!heat.data ? (heat.error ? "Unavailable" : scale === "region" ? "Routing ~2,000 points across southern Finland…" : "Routing…") : null}
+            {heat.data && (dots.length ? `${inL} of ${dots.length} listings` : "No listings")}
+            {heat.data && areas.length ? ` · ${inA} of ${areas.length} areas` : ""}
+            {heat.data && (known.length < dots.length || knownA.length < areas.length) ? " (routing…)" : ""}
           </small>
         </div>
       )}

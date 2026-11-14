@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
-// GET /api/move/heat?lat=&lng= — car travel time to the workplace on a regular ~1 km grid
-// (a 25 km disc around it), for drive-time contours on the move map.
+// GET /api/move/heat?lat=&lng=[&scale=region] — car travel time to the workplace on a regular grid:
+// ~1 km within 25 km (city), or ~10 km within 260 km (region), for drive-time contours on the move map.
 // OSRM table requests (public keyless demo server, routing on OpenStreetMap), ≤ 99 origins each,
 // sent one after another with a short pause. Free-flow road times: no live traffic.
 // Grid points OSRM has to snap more than SNAP_MAX metres to reach a road (sea, large forest) and
@@ -9,9 +9,13 @@ import { NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const RADIUS_KM = 25;
-const STEP_KM = 1;
-const SNAP_MAX = 500; // metres
+// city: ~1 km grid, 25 km (the commute question). region: ~10 km grid, 260 km (weekend reach:
+// how far you get in a few hours). Rural roads are sparse, so the region tolerates a longer snap.
+const SCALES = {
+  city: { radiusKm: 25, stepKm: 1, snapMax: 500 },
+  region: { radiusKm: 260, stepKm: 10, snapMax: 3000 },
+} as const;
+export type HeatScale = keyof typeof SCALES;
 const BATCH = 99;
 const PAUSE_MS = 150;
 const TTL = 24 * 3600 * 1000;
@@ -30,6 +34,7 @@ export type HeatGrid = {
 };
 export type HeatResponse = {
   work: { lat: number; lng: number };
+  scale: HeatScale;
   stepKm: number;
   grid: HeatGrid;
   /** Points routed / points dropped as off the road network. */
@@ -62,7 +67,8 @@ async function table(work: { lat: number; lng: number }, pts: { lat: number; lng
   }
 }
 
-async function build(lat: number, lng: number): Promise<HeatResponse> {
+async function build(lat: number, lng: number, scale: HeatScale): Promise<HeatResponse> {
+  const { radiusKm: RADIUS_KM, stepKm: STEP_KM, snapMax: SNAP_MAX } = SCALES[scale];
   const t0 = Date.now();
   const work = { lat, lng };
   const dLat = STEP_KM / 110.574;
@@ -99,6 +105,7 @@ async function build(lat: number, lng: number): Promise<HeatResponse> {
   }
   return {
     work,
+    scale,
     stepKm: STEP_KM,
     grid: { lat0, lng0, dLat, dLng, nx, ny, min },
     routed,
@@ -116,13 +123,14 @@ export async function GET(req: Request) {
   // The capital region and a margin around it; anything else is not this product's map.
   if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < 59.8 || lat > 60.7 || lng < 24.2 || lng > 25.7)
     return NextResponse.json({ error: "lat/lng must be a point in the Helsinki region" }, { status: 400 });
-  const key = `${lat.toFixed(3)},${lng.toFixed(3)}`;
+  const scale: HeatScale = u.searchParams.get("scale") === "region" ? "region" : "city";
+  const key = `${scale}:${lat.toFixed(3)},${lng.toFixed(3)}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) return NextResponse.json(hit.data, { headers: { "Cache-Control": "public, max-age=3600" } });
   let p = inflight.get(key);
   if (!p) {
     // Build on the rounded point so every caller in the cache bucket gets the same grid.
-    p = build(+lat.toFixed(3), +lng.toFixed(3));
+    p = build(+lat.toFixed(3), +lng.toFixed(3), scale);
     inflight.set(key, p);
   }
   try {
