@@ -10,7 +10,7 @@ export type RunState = {
   stages: Record<StageId, StageStatus>;
   details: Partial<Record<StageId, string>>;
   intent?: MoveIntent;
-  candidates: Pick<Area, "id" | "name" | "municipality" | "center">[];
+  candidates: Pick<Area, "id" | "name" | "municipality" | "center" | "polygon">[];
   /** Areas measured so far, in arrival order. */
   areas: Area[];
   /** Final ranking (from `done`). */

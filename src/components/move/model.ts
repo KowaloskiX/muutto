@@ -88,7 +88,7 @@ export function columnsFor(areas: Area[]): Col[] {
   const cols: Col[] = [];
   const hasCommute = areas.some((a) => a.commute);
   if (hasCommute) {
-    cols.push({ key: "transit", label: "Transit", crit: "commute", get: (a) => commuteCell(a, "transitMin") });
+    cols.push({ key: "transitMin", label: "Transit", crit: "commute", get: (a) => commuteCell(a, "transitMin") });
     if (areas.some((a) => a.commute?.carMin != null)) cols.push({ key: "car", label: "Car", crit: "commute", get: (a) => commuteCell(a, "carMin") });
   } else if (areas.some((a) => a.criteria.some((c) => c.id === "commute"))) {
     cols.push({ key: "commute", label: "Commute", crit: "commute", get: (a) => fromCriterion(a, "commute") });

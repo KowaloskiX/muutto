@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { Check, CircleNotch } from "@phosphor-icons/react";
 import type { Area, CriterionId, Listing } from "@/lib/move/types";
-import { allListings, columnsFor, DASH, fitTone, FIT_WORD, fmtDate, host, mins, price, sizeLine } from "./model";
+import { allListings, columnsFor, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
 import { ListingRow, MoveDrawer } from "./MoveDrawer";
 import type { AreaPin, ListingDot } from "./MoveMap";
 import type { DraftState, ResearchState, RunState, View, WatchState } from "./types";
@@ -71,19 +71,49 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
       rank: ranked ? i + 1 : undefined,
       tone,
       tag: t != null ? `${a.commute?.estimate ? "≈" : ""}${Math.round(t)} min` : undefined,
-      sub: [FIT_WORD[tone], `fit ${a.fit}`, t != null ? `${mins(t)} transit` : null, a.listings.length ? `${a.listings.length} listings` : null].filter(Boolean).join(" · "),
+      polygon: a.polygon,
+      sub: [
+        `fit ${a.fit}`,
+        t != null ? `${a.commute?.estimate ? "≈" : ""}${mins(t)} transit` : "transit —",
+        (() => {
+          const r = a.criteria.find((c) => c.id === "rent");
+          return r?.value && r.status !== "unknown" ? `rent ${r.value}` : "rent —";
+        })(),
+      ].join(" · "),
     };
   });
   // Candidate areas not measured yet: grey dots so the map fills in as the search runs.
   if (run && !run.finished)
     for (const cnd of run.candidates)
-      if (!areas.some((a) => a.id === cnd.id)) pins.push({ key: cnd.id, lat: cnd.center.lat, lng: cnd.center.lng, label: cnd.name, tone: "grey", sub: "Measuring" });
+      if (!areas.some((a) => a.id === cnd.id)) pins.push({ key: cnd.id, lat: cnd.center.lat, lng: cnd.center.lng, label: cnd.name, tone: "grey", sub: "Measuring", polygon: cnd.polygon });
+  const shortPrice = (n?: number) => (n == null ? undefined : intent?.tenure === "buy" ? `€${Math.round(n / 1000)}k` : `€${Math.round(n).toLocaleString("en-US")}`);
   const dots: ListingDot[] = listings.flatMap(({ listing: l, area }) =>
-    l.geo ? [{ key: l.url, lat: l.geo.lat, lng: l.geo.lng, label: price(l, intent?.tenure) ?? l.title, sub: [l.address, sizeLine(l), area.name].filter(Boolean).join(" · ") }] : [],
+    l.geo ? [{ key: l.url, lat: l.geo.lat, lng: l.geo.lng, price: shortPrice(l.price), label: price(l, intent?.tenure) ?? l.title, sub: [l.address, sizeLine(l), area.name].filter(Boolean).join(" · ") }] : [],
   );
 
   const openArea = (id: string, focus?: CriterionId) => onView({ kind: "area", id, focus, n: Date.now() });
   const openId = view?.kind === "area" ? view.id : view?.kind === "listing" ? areas.find((a) => a.listings.some((l) => l.url === view.url))?.id : undefined;
+
+  // Daily-life layer: the open area (or the one under the pointer, else the best) and a 500 m circle.
+  const focusArea = areas.find((a) => a.id === openId) ?? areas.find((a) => a.places.length) ?? areas[0];
+  const openListing = view?.kind === "listing" ? listings.find((l) => l.listing.url === view.url)?.listing : undefined;
+  const circle = openListing?.geo
+    ? { lat: openListing.geo.lat, lng: openListing.geo.lng, label: openListing.address || "the listing" }
+    : focusArea
+      ? { lat: focusArea.center.lat, lng: focusArea.center.lng, label: `${focusArea.name} centre` }
+      : undefined;
+  // Air-quality stations only when a source carries coordinates; none are placed by guess.
+  const airStations = useMemo(() => {
+    const seen = new Map<string, { lat: number; lng: number; label: string }>();
+    for (const a of areas)
+      for (const c of a.criteria)
+        if (c.id === "air")
+          for (const s of c.sources) {
+            const g = (s as typeof s & { geo?: { lat: number; lng: number } }).geo;
+            if (g) seen.set(`${g.lat},${g.lng}`, { lat: g.lat, lng: g.lng, label: s.quote?.split(":")[0] || s.label });
+          }
+    return [...seen.values()];
+  }, [areas]);
 
   useEffect(() => {
     if (hover) rows.current[hover]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -167,6 +197,10 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
               work={work}
               pins={pins}
               dots={dots}
+              places={focusArea?.places ?? []}
+              placesFor={focusArea?.name}
+              circle={circle}
+              airStations={airStations}
               hover={hover}
               active={openId}
               onSelect={(k) => (areas.some((a) => a.id === k) ? openArea(k) : undefined)}
