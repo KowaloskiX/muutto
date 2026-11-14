@@ -107,7 +107,7 @@ export function keyFinding(item: Ranked): Finding | null {
   const id = item.report.checks.find((c) => c.id === "identity" && c.status === "green" && toSources(c.evidence).length);
   if (id && item.report.businessId) {
     const q = id.evidence.find((e) => e.source === "site" && e.quote)?.quote ?? id.evidence.find((e) => e.quote)?.quote;
-    return { status: "green", label: FINDING_LABEL.green, text: `Business ID ${item.report.businessId} on their site matches the trade register`, quote: q ? clip(q, item.report.businessId) : undefined, sources: toSources(id.evidence) };
+    return { status: "green", label: FINDING_LABEL.green, text: `Business ID ${item.report.businessId} on their site matches the trade register${item.report.registrySource ? " (stored copy of the register page)" : ""}`, quote: q ? clip(q, item.report.businessId) : undefined, sources: toSources(id.evidence) };
   }
   const green = sourced.find((w) => w.status === "green");
   return green ? fromWhy(green) : null;
