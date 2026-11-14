@@ -1,108 +1,131 @@
-/* Natural palette after the Minerva design system: white, clean gray, sand and beige,
-   graphite text; green/orange/yellow/red only for status; blue only for citations. */
+/* Apple-style system palette: grouped light grey page, white inset cards, hairline separators,
+   system blue for links and primary actions, green/orange/red only for status. */
 :root {
   color-scheme: light dark;
-  --page: hsl(0 0% 100%);
-  --surface: hsl(0 0% 100%);
-  --surface-strong: hsl(48 4% 96%);
-  --surface-glass: hsl(0 0% 100% / .88);
-  --panel: hsl(60 8% 98%);
-  --ink: hsl(24 5% 14%);
-  --ink-soft: hsl(0 0% 32%);
-  --muted: hsl(24 4% 42%);
-  --line: hsl(0 0% 90%);
-  --line-strong: hsl(0 0% 82%);
-  --accent: hsl(24 5% 14%);
-  --accent-deep: hsl(24 5% 14%);
-  --accent-ink: hsl(60 5% 98%);
-  --accent-hover: hsl(24 5% 20%);
-  --sky-hero: hsl(42 24% 95%);
-  --sand: hsl(42 24% 95%);
-  --beige: hsl(45 20% 63%);
-  --danger: hsl(0 72% 42%);
-  --warning: hsl(32 81% 29%);
-  --shadow: hsl(24 5% 14% / .08);
-  --ring: hsl(24 4% 28%);
-
-  --success: hsl(142 76% 36%);
-  --success-muted: hsl(86 45% 95%);
-  --success-border: hsl(86 35% 79%);
-  --success-text: hsl(142 76% 26%);
-  --caution: hsl(38 92% 50%);
-  --caution-muted: hsl(38 92% 95%);
-  --caution-border: hsl(38 88% 80%);
-  --caution-text: hsl(32 81% 29%);
-  --destructive: hsl(0 84% 60%);
-  --destructive-muted: hsl(0 86% 97%);
-  --destructive-border: hsl(0 86% 89%);
-  --destructive-text: hsl(0 72% 42%);
-  --cite: hsl(217 80% 55%);
-  --cite-bg: hsl(217 100% 95%);
-  --cite-fg: hsl(217 80% 30%);
-
-  --radius-control: 12px;
-  --radius-surface: 16px;
+  /* Shared Apple tokens (canonical names; the older names below alias them). */
+  --bg: #f5f5f7;
+  --card: #ffffff;
+  --hairline: #e5e5ea;
+  --ink: #1d1d1f;
+  --ink-2: #6e6e73;
+  --accent: #0071e3;
+  --ok: #34c759;
+  --warn: #ff9f0a;
+  --bad: #ff3b30;
+  --ok-ink: #1e7a34;
+  --warn-ink: #9a5b00;
+  --bad-ink: #c4271d;
+  --radius-card: 14px;
   --radius-pill: 999px;
-  --shadow-surface: 0 1px 2px 0 hsl(24 5% 14% / .05);
-  --shadow-floating: 0 10px 24px -12px hsl(24 5% 14% / .22);
-  --shadow-modal: 0 24px 64px -24px hsl(24 5% 14% / .32);
-  --ease-out: cubic-bezier(.23, 1, .32, 1);
-  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
-  --font-display: var(--font-eb-garamond), Georgia, "Times New Roman", serif;
 
-  --card-radius: 16px;
-  --control-radius: 12px;
+  --page: var(--bg);
+  --surface: var(--card);
+  --surface-strong: #f0f0f3;
+  --surface-glass: rgb(255 255 255 / .78);
+  --panel: #fbfbfd;
+  --fill: rgb(118 118 128 / .12);
+  --fill-strong: rgb(118 118 128 / .2);
+  --ink-soft: #3a3a3c;
+  --muted: var(--ink-2);
+  --faint: #aeaeb2;
+  --line: var(--hairline);
+  --line-strong: #d1d1d6;
+  --accent-deep: var(--accent);
+  --accent-ink: #ffffff;
+  --accent-hover: #0077ed;
+  --accent-muted: rgb(0 113 227 / .1);
+  --link: #0066cc;
+  --sky-hero: #f5f5f7;
+  --sand: #ececef;
+  --beige: #a1a1a6;
+  --danger: #d70015;
+  --warning: #b25000;
+  --shadow: rgb(0 0 0 / .08);
+  --ring: rgb(0 113 227 / .6);
+
+  --success: var(--ok);
+  --success-muted: rgb(52 199 89 / .12);
+  --success-border: rgb(52 199 89 / .3);
+  --success-text: var(--ok-ink);
+  --caution: var(--warn);
+  --caution-muted: rgb(255 159 10 / .12);
+  --caution-border: rgb(255 159 10 / .32);
+  --caution-text: var(--warn-ink);
+  --destructive: var(--bad);
+  --destructive-muted: rgb(255 59 48 / .1);
+  --destructive-border: rgb(255 59 48 / .28);
+  --destructive-text: var(--bad-ink);
+  --cite: #0071e3;
+  --cite-bg: rgb(0 113 227 / .08);
+  --cite-fg: #0066cc;
+
+  --radius-control: 10px;
+  --radius-surface: var(--radius-card);
+  --shadow-surface: 0 1px 2px rgb(0 0 0 / .04), 0 0 0 .5px rgb(0 0 0 / .04);
+  --shadow-floating: 0 8px 24px -8px rgb(0 0 0 / .16);
+  --shadow-modal: 0 24px 64px -16px rgb(0 0 0 / .28);
+  --ease-out: cubic-bezier(.23, 1, .32, 1);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-geist), system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Helvetica Neue", var(--font-geist), Inter, system-ui, sans-serif;
+
+  --card-radius: 14px;
+  --control-radius: 10px;
   --pill-radius: 999px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --page: hsl(0 0% 6%);
-    --surface: hsl(0 0% 10%);
-    --surface-strong: hsl(0 0% 13%);
-    --surface-glass: hsl(0 0% 8% / .88);
-    --panel: hsl(0 0% 8%);
-    --ink: hsl(0 0% 98%);
-    --ink-soft: hsl(0 0% 75%);
-    --muted: hsl(0 0% 64%);
-    --line: hsl(0 0% 15%);
-    --line-strong: hsl(0 0% 24%);
-    --accent: hsl(0 0% 98%);
-    --accent-deep: hsl(0 0% 98%);
-    --accent-ink: hsl(0 0% 6%);
-    --accent-hover: hsl(0 0% 88%);
-    --sky-hero: hsl(38 10% 13%);
-    --sand: hsl(38 10% 13%);
-    --danger: hsl(0 90% 78%);
-    --warning: hsl(40 85% 72%);
-    --shadow: hsl(0 0% 0% / .5);
-    --ring: hsl(0 0% 84%);
+    --bg: #000000;
+    --card: #1c1c1e;
+    --hairline: #38383a;
+    --ink: #f5f5f7;
+    --ink-2: #98989d;
+    --accent: #0a84ff;
+    --ok: #30d158;
+    --warn: #ff9f0a;
+    --bad: #ff453a;
+    --ok-ink: #30d158;
+    --warn-ink: #ffb340;
+    --bad-ink: #ff6961;
+    --surface-strong: #2c2c2e;
+    --surface-glass: rgb(28 28 30 / .78);
+    --panel: #111113;
+    --fill: rgb(118 118 128 / .24);
+    --fill-strong: rgb(118 118 128 / .36);
+    --ink-soft: #d1d1d6;
+    --faint: #636366;
+    --line-strong: #48484a;
+    --accent-deep: var(--accent);
+    --accent-ink: #ffffff;
+    --accent-hover: #409cff;
+    --accent-muted: rgb(10 132 255 / .18);
+    --link: #409cff;
+    --sky-hero: #1c1c1e;
+    --sand: #2c2c2e;
+    --danger: #ff6961;
+    --warning: #ffb340;
+    --shadow: rgb(0 0 0 / .5);
+    --ring: rgb(10 132 255 / .7);
 
-    --success: hsl(142 70% 45%);
-    --success-muted: hsl(84 28% 14%);
-    --success-border: hsl(84 35% 29%);
-    --success-text: hsl(142 70% 65%);
-    --caution: hsl(38 92% 50%);
-    --caution-muted: hsl(38 40% 15%);
-    --caution-border: hsl(38 54% 36%);
-    --caution-text: hsl(48 96% 80%);
-    --destructive: hsl(0 72% 55%);
-    --destructive-muted: hsl(0 45% 15%);
-    --destructive-border: hsl(0 52% 31%);
-    --destructive-text: hsl(0 90% 78%);
-    --cite: hsl(217 80% 65%);
-    --cite-bg: hsl(217 40% 18%);
-    --cite-fg: hsl(217 80% 80%);
+    --success-muted: rgb(48 209 88 / .16);
+    --success-border: rgb(48 209 88 / .34);
+    --caution-muted: rgb(255 159 10 / .16);
+    --caution-border: rgb(255 159 10 / .36);
+    --destructive-muted: rgb(255 69 58 / .16);
+    --destructive-border: rgb(255 69 58 / .36);
+    --cite: #0a84ff;
+    --cite-bg: rgb(10 132 255 / .18);
+    --cite-fg: #64b0ff;
 
-    --shadow-surface: 0 1px 2px 0 hsl(0 0% 0% / .3);
-    --shadow-floating: 0 10px 24px -12px hsl(0 0% 0% / .6);
-    --shadow-modal: 0 24px 64px -24px hsl(0 0% 0% / .7);
+    --shadow-surface: 0 0 0 .5px rgb(255 255 255 / .06);
+    --shadow-floating: 0 10px 24px -12px rgb(0 0 0 / .6);
+    --shadow-modal: 0 24px 64px -24px rgb(0 0 0 / .7);
   }
 }
 
 * { box-sizing: border-box; }
 html { min-width: 320px; background: var(--page); scroll-behavior: smooth; }
-body { margin: 0; color: var(--ink); background: var(--page); font-family: var(--font-geist), ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+body { margin: 0; color: var(--ink); background: var(--page); font-family: var(--font-sans); letter-spacing: -.005em; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { color: inherit; font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .48; }

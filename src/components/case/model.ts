@@ -95,6 +95,33 @@ export const VERDICT_LABEL: Record<Verdict, string> = { green: "Looks clear", ye
 export const isTv = (k: Check) => k.group === "tilaajavastuu";
 export const isDoc = (k: Check) => !!k.needsDocument;
 
+/** The public tilaajavastuu register checks (not documents), in a fixed order so candidates compare at a glance. */
+const REG_ORDER = ["tv-prepayment", "tv-employer", "tv-vat", "tv-trade-register", "tv-tax", "tv-insolvency", "tv-reliable-partner"];
+const REG_NAME: Record<string, string> = {
+  "tv-prepayment": "Prepayment",
+  "tv-employer": "Employer",
+  "tv-vat": "VAT",
+  "tv-trade-register": "Trade reg.",
+  "tv-tax": "Tax debt",
+  "tv-insolvency": "Insolvency",
+  "tv-reliable-partner": "Reliable partner",
+};
+export function publicRegisters(r?: CompanyReport): Check[] {
+  if (!r) return [];
+  const rank = (c: Check) => {
+    const i = REG_ORDER.indexOf(c.id);
+    return i < 0 ? REG_ORDER.length : i;
+  };
+  return r.checks.filter((c) => isTv(c) && !isDoc(c)).sort((a, b) => rank(a) - rank(b));
+}
+/** "Prepayment", "Trade reg.": from the check id, else the label without the "Tilaajavastuu:" prefix. */
+export function regName(c: Check): string {
+  if (REG_NAME[c.id]) return REG_NAME[c.id];
+  const l = c.label.replace(/^Tilaajavastuu:\s*/i, "");
+  return l.charAt(0).toUpperCase() + l.slice(1);
+}
+export { firstSentence };
+
 /** "6/9 checks · 3 docs to request": the tilaajavastuu checklist when present, else every check. */
 export function compliance(r?: CompanyReport) {
   if (!r) return null;

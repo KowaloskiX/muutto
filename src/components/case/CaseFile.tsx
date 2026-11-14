@@ -8,22 +8,23 @@ import {
   CircleNotch,
   Copy,
   Envelope,
-  Gavel,
+  Info,
 } from "@phosphor-icons/react";
 import type { Ranked } from "@/lib/rationale";
 import type { QuoteRow, Recommendation } from "@/lib/compare";
 import { Sources, draftBody } from "@/components/chat/Bubbles";
 import type { Ctx, Draft } from "@/components/chat/types";
-import { CandidateDrawer, VerdictBadge } from "./CandidateDrawer";
+import { CandidateDrawer, StatusIcon, VerdictBadge } from "./CandidateDrawer";
 import {
   addressOf,
-  compliance,
   fmtKm,
   findingOf,
   fromRanked,
   geocodeClient,
   keyOf,
   km,
+  publicRegisters,
+  regName,
   verdict,
   VERDICT_LABEL,
   type Cand,
@@ -77,6 +78,7 @@ export default function CaseFile({
   const [open, setOpen] = useState<string | undefined>();
   const [geo, setGeo] = useState<Record<string, Geo | null>>({});
   const [mapOpen, setMapOpen] = useState(true);
+  const [noticeOpen, setNoticeOpen] = useState(false);
   // Phones: the map stays folded until asked for; the table carries the distances.
   useEffect(() => {
     if (window.matchMedia("(max-width: 1023px)").matches) setMapOpen(false);
@@ -218,18 +220,29 @@ export default function CaseFile({
             )}
             {p?.tilaajavastuu && (
               <div className={s.notice}>
-                <Gavel weight="bold" aria-hidden />
-                <div>
-                  <strong>
+                <button
+                  type="button"
+                  className={s.noticeLine}
+                  onClick={() => setNoticeOpen((x) => !x)}
+                  aria-expanded={noticeOpen}
+                >
+                  <Info weight="bold" aria-hidden />
+                  <span>
                     {p.tilaajavastuu.applies === "below_threshold"
                       ? "Below the tilaajavastuu threshold"
                       : p.tilaajavastuu.applies === "yes"
                         ? "Tilaajavastuulaki applies"
                         : "Tilaajavastuulaki applies from €9,000"}
-                  </strong>
-                  <p>{p.tilaajavastuu.note}</p>
-                  <Sources list={p.tilaajavastuu.evidence} />
-                </div>
+                  </span>
+                  <small>{noticeOpen ? "Hide" : "Details"}</small>
+                  <CaretDown weight="bold" className={noticeOpen ? s.caretUp : ""} aria-hidden />
+                </button>
+                {noticeOpen && (
+                  <div className={s.noticeBody}>
+                    <p>{p.tilaajavastuu.note}</p>
+                    <Sources list={p.tilaajavastuu.evidence} />
+                  </div>
+                )}
               </div>
             )}
             {empty && (
@@ -287,20 +300,25 @@ export default function CaseFile({
         <section className={s.section} aria-labelledby="case-cands">
           <div className={s.secHead}>
             <h2 id="case-cands">Candidates</h2>
-            {cands.length > 0 && (
-              <small>
-                {ctx.searching
-                  ? `${cands.filter((c) => c.status === "done").length} of ${cands.length} checked`
-                  : [
-                      `${cands.length} checked`,
-                      counts.green && `${counts.green} look clear`,
-                      counts.yellow && `${counts.yellow} to clarify`,
-                      counts.red && `${counts.red} red flag${counts.red === 1 ? "" : "s"}`,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-              </small>
-            )}
+            {cands.length > 0 &&
+              (ctx.searching ? (
+                <small>
+                  {cands.filter((c) => c.status === "done").length} of {cands.length} checked
+                </small>
+              ) : (
+                <span className={s.tally}>
+                  <small>{cands.length} checked</small>
+                  {counts.green > 0 && (
+                    <small><i className={s.rd_green} />{counts.green} clear</small>
+                  )}
+                  {counts.yellow > 0 && (
+                    <small><i className={s.rd_yellow} />{counts.yellow} to clarify</small>
+                  )}
+                  {counts.red > 0 && (
+                    <small><i className={s.rd_red} />{counts.red} red flag{counts.red === 1 ? "" : "s"}</small>
+                  )}
+                </span>
+              ))}
           </div>
           {cands.length ? (
             <div className={s.tableWrap}>
@@ -312,15 +330,14 @@ export default function CaseFile({
                     <th>Verdict</th>
                     <th className={s.colNum}>Fit</th>
                     <th className={s.colFinding}>Key finding</th>
-                    <th className={s.colComp}>§ 5 checks</th>
-                    <th className={`${s.colNum} ${s.colDocs}`}>Docs</th>
+                    <th className={s.colComp}>Registers</th>
                     <th className={`${s.colNum} ${s.colKm}`}>Distance</th>
                   </tr>
                 </thead>
                 <tbody>
                   {cands.map((c) => {
                     const v = verdict(c);
-                    const comp = compliance(c.report);
+                    const regs = publicRegisters(c.report);
                     const d = dist(c);
                     const k = findingOf(c);
                     const can = !!c.report;
@@ -352,11 +369,20 @@ export default function CaseFile({
                         <td className={s.nameCell}>
                           <strong>{c.name}</strong>
                           <small>
-                            {c.origin === "checked"
-                              ? "checked on its own"
-                              : c.report?.businessId || c.domain || ""}
+                            {[
+                              c.origin === "checked"
+                                ? "checked on its own"
+                                : c.report?.businessId || c.domain || "",
+                              d != null ? fmtKm(d) : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" · ")}
                           </small>
-                          {k && <span className={s.findingInline}>{k.text}</span>}
+                          {k && (
+                            <span className={s.findingInline}>
+                              <StatusIcon status={k.status} /> <span>{k.text}</span>
+                            </span>
+                          )}
                         </td>
                         <td>
                           {c.status === "scanning" ? (
@@ -371,24 +397,29 @@ export default function CaseFile({
                         </td>
                         <td className={s.colNum}>{c.fit ?? ""}</td>
                         <td className={s.colFinding}>
-                          <span className={s.finding}>{k?.text ?? ""}</span>
+                          {k && (
+                            <span className={s.finding} title={k.text}>
+                              <StatusIcon status={k.status} />
+                              <span>{k.text}</span>
+                            </span>
+                          )}
                         </td>
                         <td className={s.colComp}>
-                          {comp ? (
-                            <span className={s.comp}>
-                              <span className={s.bar} aria-hidden>
-                                <i
-                                  style={{
-                                    width: `${comp.total ? (100 * comp.verified) / comp.total : 0}%`,
-                                  }}
-                                />
+                          {regs.length ? (
+                            <span
+                              className={s.comp}
+                              title={regs.map((x) => `${regName(x)}: ${x.status === "green" ? "clear" : x.status === "grey" ? "no data" : x.status === "yellow" ? "clarify" : "failed"}`).join("\n")}
+                            >
+                              <span className={s.regDots} aria-hidden>
+                                {regs.map((x) => (
+                                  <i key={x.id} className={s[`rd_${x.status}`]} />
+                                ))}
                               </span>
-                              {comp.verified}/{comp.total}
+                              <small>
+                                {regs.filter((x) => x.status === "green").length}/{regs.length}
+                              </small>
                             </span>
                           ) : null}
-                        </td>
-                        <td className={`${s.colNum} ${s.colDocs}`}>
-                          {comp?.docs || ""}
                         </td>
                         <td className={`${s.colNum} ${s.colKm}`}>
                           {d != null ? fmtKm(d) : ""}
@@ -526,6 +557,7 @@ export default function CaseFile({
 
       {openCand && (
         <CandidateDrawer
+          key={openCand.key}
           cand={openCand}
           distance={dist(openCand)}
           busy={busy}
