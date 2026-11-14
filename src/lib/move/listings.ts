@@ -6,6 +6,7 @@ import { contents, search, type ExaResult, type ExaTrace } from "@/lib/exa";
 import type { Criterion, Listing, Source } from "./types";
 import { fmtEur, hostOf, median } from "./util";
 import { areaStems } from "./news";
+import { listingFacts } from "./facts";
 
 const LISTING_URL = /asunnot\.oikotie\.fi\/(vuokra-asunnot|myytavat-asunnot)\/[^/]+\/\d+|vuokraovi\.com\/kohde\/|etuovi\.com\/kohde\//;
 
@@ -105,6 +106,7 @@ export function parseListing(r: ExaResult): ParsedListing | null {
     source: hostOf(r.url).replace(/^asunnot\./, ""),
     contact,
     photos: photosOf(r),
+    facts: listingFacts(text),
     kind,
     postalCode,
     eurPerM2,

@@ -655,3 +655,23 @@
 .mx th:hover .mxPick button, .mxPick button:focus-visible { opacity: 1; }
 .mxPick button:hover { background: var(--surface-strong); color: var(--ink); }
 @media (hover: none) { .mxPick button { opacity: 1; } }
+
+/* ---- listing facts, history, area outlook ---- */
+.lcChips { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; }
+.lcChips span { padding: 1px 7px; border-radius: 999px; background: var(--surface-strong); color: var(--ink-soft); font-size: 11px; white-space: nowrap; }
+.lcChips .lcHist { background: color-mix(in srgb, var(--caution) 14%, transparent); color: var(--caution-text); }
+.lcChips .ft_good { color: var(--accent-deep); }
+.lcChips .ft_poor { color: var(--caution-text); }
+.factGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px 20px; margin: 0; }
+.factGrid div { display: flex; flex-direction: column; gap: 2px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.factGrid dt { color: var(--muted); font-size: 12px; }
+.factGrid dd { margin: 0; color: var(--ink); font-size: 14px; }
+.factGrid small { overflow: hidden; color: var(--faint); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.ft_good { color: var(--accent-deep) !important; }
+.ft_poor { color: var(--caution-text) !important; }
+.histList { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+.histList li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 4px 12px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.histList li a { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); }
+.histList li a svg { width: 10px; height: 10px; }
+.histList li small { grid-column: 1 / -1; color: var(--faint); font-size: 11px; }
+@media (prefers-color-scheme: dark) { .lcChips .ft_good, .ft_good { color: #8fc9a8 !important; } }

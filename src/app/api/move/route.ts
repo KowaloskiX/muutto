@@ -12,6 +12,7 @@ import { railStations } from "@/lib/move/region";
 import { batchCommute, isMorningRush, routeTraffic, TRANSIT_ESTIMATE_NOTE, walkTimes } from "@/lib/move/commute";
 import { measureAmenities, regionPois } from "@/lib/move/amenities";
 import { measureCustom } from "@/lib/move/custom";
+import { areaFuture, areaVoices } from "@/lib/move/outlook";
 import { measureAir } from "@/lib/move/air";
 import { measureNoise } from "@/lib/move/noise";
 import { areaNews, constructionCriterion } from "@/lib/move/news";
@@ -160,6 +161,7 @@ export async function POST(req: Request) {
         const done: Area[] = [];
 
         await pool(scored, 4, async ({ c, cm }) => {
+          const outlookP = Promise.all([withTimeout(areaFuture(c, trace), 20_000, "timeout").catch(() => []), withTimeout(areaVoices(c, trace), 20_000, "timeout").catch(() => [])]);
           const customP = Promise.all(
             (intent.customPlaces ?? []).map((cp) =>
               withTimeout(measureCustom(cp, c, trace), 15_000, "timeout").catch((e) => ({
@@ -180,6 +182,7 @@ export async function POST(req: Request) {
             trafficCriterion(c, work, cm),
           ]);
           const custom = await customP;
+          const [future, voices] = await outlookP;
           am?.notes.forEach((n) => amenityNotes.add(n));
           const walk = await Promise.race([walkP, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
           const wi = scored.findIndex((x) => x.c.id === c.id);
@@ -215,6 +218,8 @@ export async function POST(req: Request) {
             news: news.items.map(({ title, url, date, quote, tone }) => ({ title, url, date, quote, tone })),
             commute: cm,
             why: whyLines(criteria, w),
+            future: future.length ? future : undefined,
+            voices: voices.length ? voices : undefined,
             stats: {
               population: c.population,
               medianIncome: c.medianIncome,

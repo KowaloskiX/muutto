@@ -8,6 +8,7 @@ import { CaretLeft, CaretRight, House, Images } from "@phosphor-icons/react";
 import type { Listing, MoveIntent } from "@/lib/move/types";
 import { fmtDate, host, mins, price } from "./model";
 import x from "./Move.module.css";
+import { historyLine } from "./Insights";
 
 export function Gallery({ photos, alt, className }: { photos?: string[]; alt: string; className?: string }) {
   const [i, setI] = useState(0);
@@ -92,6 +93,20 @@ export function ListingCard({
           </div>
           {facts.length > 0 && <p className={x.lcFacts}>{facts.join(" · ")}</p>}
           <p className={x.lcAddr}>{l.address || l.title}</p>
+          {(() => {
+            const pick = (l.facts ?? []).filter((f) => ["built", "lift", "sauna", "renovation", "pets", "energy"].includes(f.key)).slice(0, 4);
+            const hist = historyLine(l);
+            return pick.length || hist ? (
+              <p className={x.lcChips}>
+                {hist && <span className={x.lcHist} title="Found with Exa on the portals: same address and size">{hist}</span>}
+                {pick.map((f) => (
+                  <span key={f.key} className={f.tone ? x[`ft_${f.tone}`] : ""} title={`“${f.quote}”`}>
+                    {f.key === "built" ? `Built ${f.value}` : f.key === "lift" ? (f.value === "Yes" ? "Lift" : "No lift") : f.key === "sauna" ? `Sauna ${f.value === "In the flat" ? "in flat" : "in building"}` : f.key === "renovation" ? `Pipes ${f.value.toLowerCase()}` : f.key === "pets" ? (f.value === "Allowed" ? "Pets OK" : "No pets") : `Energy ${f.value}`}
+                  </span>
+                ))}
+              </p>
+            ) : null;
+          })()}
           <p className={x.lcMeta}>
             {[areaName && `${rank ? `#${rank} ` : ""}${areaName}`, t != null ? `${l.commute?.estimate ? "≈" : ""}${mins(t)} transit` : areaTransit != null ? `≈${mins(areaTransit)} transit (area)` : null, car != null ? `${mins(car)} car` : null].filter(Boolean).join(" · ")}
           </p>

@@ -11,6 +11,7 @@ import { DASH, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, placeGrou
 import type { DraftState, ResearchState, View } from "./types";
 import { AreaStats, SettlingIn } from "./SettlingIn";
 import { Gallery } from "./ListingCard";
+import { AreaOutlook, ListingFacts, ListingHistoryView } from "./Insights";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
 
@@ -305,6 +306,7 @@ function AreaView({ a, view, tenure, onListing, onResearch, onDraft }: { a: Area
           <p className={x.noSrc}>{DASH} No recent local news or city decisions were found.</p>
         )}
       </section>
+      <AreaOutlook a={a} />
       <section className={d.section}>
         <h3 className={d.sh}>
           Listings <small>{a.listings.length ? `${a.listings.length} live` : ""}</small>
@@ -815,6 +817,8 @@ export function MoveDrawer({
           {l.title && l.address && <p className={x.listingTitle}>{l.title}</p>}
           <Facts l={l} tenure={tenure} areaName={area?.name} />
         </section>
+        <ListingFacts l={l} />
+        <ListingHistoryView l={l} />
         <section className={d.section}>
           <h3 className={d.sh}>Commute to work</h3>
           <CommuteGrid c={l.commute ?? area?.commute} />

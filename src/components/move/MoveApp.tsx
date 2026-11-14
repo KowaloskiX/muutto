@@ -208,6 +208,16 @@ export default function MoveApp() {
         }
       }
       if (!gotDone) throw new Error(runsRef.current[id]?.error ?? "The search ended before a ranking came back.");
+      // In the background: has each shown flat been on the market before? (Exa, ~20 s)
+      void (async () => {
+        const list = (runsRef.current[id]?.ranked ?? []).flatMap((a) => a.listings).filter((l) => l.address);
+        if (!list.length) return;
+        const res = await fetch("/api/move/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listings: list.map((l) => ({ url: l.url, address: l.address, sizeM2: l.sizeM2 })) }) }).catch(() => null);
+        if (!res?.ok) return;
+        const hist = (await res.json()) as Record<string, Listing["history"] | null>;
+        const put = (a: Area): Area => ({ ...a, listings: a.listings.map((l) => (hist[l.url] ? { ...l, history: hist[l.url]! } : l)) });
+        patchRun(id, (st) => ({ ...st, areas: st.areas.map(put), ranked: st.ranked?.map(put) }));
+      })();
       const fin = runsRef.current[id];
       const ranked = fin.ranked ?? [];
       if (!ranked.length) {

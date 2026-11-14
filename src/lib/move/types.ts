@@ -84,6 +84,10 @@ export type Listing = {
   areaId?: string;
   /** The listing's own photos as the portal publishes them (main image first); never stock images. */
   photos?: string[];
+  /** Facts stated in the listing text (built year, lift, floor, energy class, renovations …), each with its verbatim line. */
+  facts?: ListingFact[];
+  /** Earlier appearances of the same flat on the portals (Exa), filled after the search. */
+  history?: ListingHistory;
   commute?: Commute;
 };
 
@@ -142,6 +146,23 @@ export type WatchRuns = {
   skipped: number;
 };
 
+export type ListingFact = {
+  key: "built" | "floor" | "lift" | "sauna" | "energy" | "condition" | "pets" | "furnished" | "deposit" | "fee" | "renovation" | "viewing" | "rentIncrease" | "balcony";
+  label: string;
+  value: string;
+  /** "good"/"poor" only where the fact is plainly good or bad news for a tenant/buyer. */
+  tone?: "good" | "poor";
+  quote: string;
+};
+
+export type ListingHistory = {
+  /** Other listing pages for the same address and size (earlier or on another portal). */
+  seen: { url: string; source: string; price?: number; removedOn?: string; publishedAt?: string; quote: string }[];
+  /** The portal's page for the whole building (all its listings, price changes), if found. */
+  buildingPage?: { url: string; label: string; quote?: string };
+  checkedAt: string;
+};
+
 export type Place = {
   name: string;
   kind: "pharmacy" | "grocery" | "school" | "daycare" | "park" | "transit" | "cafe" | "custom";
@@ -183,6 +204,10 @@ export type Area = {
   why: { text: string; status: Status; criterion?: CriterionId }[];
   /** Postal-area outline (Statistics Finland Paavo), WGS84 [lng, lat], simplified to ≤ ~200 points. */
   polygon?: { type: "Polygon"; coordinates: number[][][] } | { type: "MultiPolygon"; coordinates: number[][][][] };
+  /** What is planned or starting in the next years (city pages, local news via Exa), quoted. */
+  future?: { title: string; url: string; date?: string; quote: string; when?: string }[];
+  /** What residents say on forums (vauva.fi, Suomi24, Reddit via Exa), quoted, last 18 months. */
+  voices?: { title: string; url: string; host: string; date?: string; quote: string }[];
   /** Postal-area statistics (Statistics Finland Paavo), when available. */
   stats?: {
     population: number;
