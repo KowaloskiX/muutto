@@ -22,6 +22,13 @@ const store: Store = (g.__kilpCache ??= { map: new Map(), inflight: new Map(), l
 
 export const cacheEnabled = () => process.env.KILP_CACHE !== "0";
 
+// LIVE mode (default): every search, register read and report is computed fresh on each
+// request. Only map geocodes (static addresses, Nominatim allows 1 req/s) are reused, and
+// identical Exa calls are de-duplicated for 2 minutes so one run never pays twice.
+// KILP_LIVE=0 turns the full replay cache back on (offline backup for a flaky venue network).
+export const liveMode = () => process.env.KILP_LIVE !== "0";
+const LIVE_MAX_AGE: Record<string, number> = { geo: HARD_MAX_AGE, exa: 120_000 };
+
 function load() {
   if (store.loaded) return;
   store.loaded = true;
@@ -57,6 +64,11 @@ export type Hit<T> = { value: T; at: number; ageMs: number };
 /** A cached value no older than `maxAgeMs`, or undefined. */
 export function cacheGet<T>(ns: string, key: string, maxAgeMs: number): Hit<T> | undefined {
   if (!cacheEnabled()) return undefined;
+  if (liveMode()) {
+    const cap = LIVE_MAX_AGE[ns] ?? 0;
+    if (!cap) return undefined;
+    maxAgeMs = Math.min(maxAgeMs, cap);
+  }
   load();
   const e = store.map.get(k(ns, key));
   if (!e) return undefined;

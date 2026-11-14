@@ -48,7 +48,7 @@ Expect something like this, but don't promise it. Use whatever your run returns.
 
 At an earlier warm-up, the Espoo electrical backup shortlist was Systempoint Oy, Sähkö-Kamut Oy, Sähkö-Huhta Oy and Digisähkö Oy.
 
-About 30 minutes before presenting, run `node scripts/warm.mjs`. It warms both chips (sends each welcome-chip query with `audience: "b2b"`, exactly what `/chat` sends when you click a chip; the chips skip the router so they always hit the same cache entry). The demo must also work live: without cache, the first run takes about 30 s.
+**Everything runs live by default** (`KILP_LIVE` unset): every click searches Exa, reads the registers and builds the reports fresh, about 30 s with the first company after 10–15 s. Only map geocodes are reused, and identical Exa calls are de-duplicated for 2 minutes inside one run. Rehearse once ~30 min before to catch network or key problems. Emergency backup only: start the server with `KILP_LIVE=0` to re-enable the replay cache (then `node scripts/warm.mjs` warms both chips) and say "checked N minutes ago" out loud.
 
 ### 4. Browser tabs (in this order)
 
@@ -92,7 +92,7 @@ Turn off notifications. Set browser zoom to 110–125%. Put the laptop on power.
 | Failure | What to do | What to say |
 |---|---|---|
 | Wi-Fi down | Phone hotspot. If that fails too, play the backup video. | "The network is down, so this is a recording of the same flow from earlier today." |
-| Exa errors or 429s | Use only warmed queries (served from cache). Don't run new ones. | "These results were checked N minutes ago. The live Exa call is failing right now." |
+| Exa errors or 429s | Restart with `KILP_LIVE=0` and use only warmed queries (served from cache). Don't run new ones. | "These results were checked N minutes ago. The live Exa call is failing right now." |
 | OpenAI down or LLM cap reached | `/api/find` falls back to a keyword parser. Use demo query 1 only. The router falls back to keywords. | "The model is unavailable, so we're on the keyword fallback. The checks themselves come from Exa and the registers." |
 | Server crash | `npm start` again. The cache file survives restarts. Reload `/chat`, and the conversation is restored from localStorage. | Nothing special. |
 | Everything fails | Play the 90-second video. | "This is a recording. Every result in it came from live API calls." |

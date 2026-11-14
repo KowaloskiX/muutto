@@ -21,7 +21,7 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const EXAMPLE = "Ventilation (IV) subcontractor for a school renovation (perusparannus) in Katajanokka, Helsinki, about 400 000 €, start in spring";
 
 const welcomeChips = (): Chip[] => [
-  // Runs the search directly (no router rewrite), so the demo query is exactly this text every time.
+  // Only a suggestion: it runs the full live search (no router rewrite), like any typed query.
   { label: "Ventilation subcontractor for a school renovation in Katajanokka, Helsinki, ~€400k", action: "find_again", payload: EXAMPLE, primary: true },
   { label: "Electrical subcontractor for a 40-apartment pipe renovation in Espoo", action: "find_again", payload: "Electrical subcontractor for a 40-apartment pipe renovation (linjasaneeraus) in Espoo, start March" },
   { label: "Check subcontractor: <paste company>", action: "prefill", payload: "Check subcontractor: " },
