@@ -10,6 +10,8 @@ import {
   Check,
   EnvelopeSimple,
   Copy,
+  CaretDown,
+  Lightning,
   X,
   CheckCircle,
   MagnifyingGlass,
@@ -23,9 +25,12 @@ import {
   XCircle,
 } from "@phosphor-icons/react";
 import type { FindEvent } from "./api/find/route";
-import type { Place } from "@/lib/exa";
+import type { ExaTrace, Place } from "@/lib/exa";
 import type { Check as VerifyCheck, CompanyReport, Status } from "@/lib/verify";
 import type { DraftOut } from "./api/draft/route";
+import CriteriaMatrix from "@/components/CriteriaMatrix";
+import WatchPanel from "@/components/WatchPanel";
+import QuoteChecker from "@/components/QuoteChecker";
 
 type View = "home" | "searching" | "results";
 type StageId = "understand" | "find" | "verify" | "rank";
@@ -119,6 +124,128 @@ function RegistryRow({ checks }: { checks: VerifyCheck[] }) {
   return <CheckRow check={merged} />;
 }
 
+type EndpointKind = "places" | "search" | "contents" | "monitors";
+function endpointKind(t: ExaTrace): EndpointKind {
+  if (/monitor/i.test(t.endpoint)) return "monitors";
+  if (t.endpoint.includes("/contents")) return "contents";
+  if (/^search\(lite\)/.test(t.summary)) return "places";
+  return "search";
+}
+const fmtMs = (ms: number) => (ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`);
+const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n).replace(/\s+\S*$/, "")}…` : s);
+
+function ExaTracePanel({ trace }: { trace: ExaTrace[] }) {
+  const [open, setOpen] = useState(false);
+  if (!trace.length) return null;
+  const total = trace.reduce((a, t) => a + t.ms, 0);
+  return (
+    <div className={`kp-trace ${open ? "open" : ""}`}>
+      <button type="button" className="kp-trace-head" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+        <Lightning weight="fill" />
+        <span>What Exa did</span>
+        <span className="kp-trace-meta">{trace.length} call{trace.length > 1 ? "s" : ""} · {fmtMs(total)}</span>
+        <CaretDown weight="bold" className="kp-caret" />
+      </button>
+      {open && (
+        <ol className="kp-trace-list">
+          {trace.map((t, i) => {
+            const kind = endpointKind(t);
+            return (
+              <li key={i} className={t.ok ? "" : "fail"}>
+                <span className={`kp-ep ${kind}`}>{kind}</span>
+                <span className="kp-trace-sum" title={t.summary}>{t.summary.replace(/^(search\([^)]*\)|contents):\s*/, "") || t.endpoint}</span>
+                <span className="kp-trace-ms">{fmtMs(t.ms)}</span>
+                <span className="kp-trace-ok">{t.ok ? <CheckCircle weight="fill" /> : <XCircle weight="fill" />}</span>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function ExaSummary({ trace }: { trace: ExaTrace[] }) {
+  if (!trace.length) return null;
+  const total = trace.reduce((a, t) => a + t.ms, 0);
+  const counts = trace.reduce<Partial<Record<EndpointKind, number>>>((m, t) => {
+    const k = endpointKind(t);
+    m[k] = (m[k] ?? 0) + 1;
+    return m;
+  }, {});
+  const failed = trace.filter((t) => !t.ok).length;
+  return (
+    <div className="kp-exa-summary" aria-label="Exa usage">
+      <span className="kp-exa-title"><Lightning weight="fill" />Powered by Exa</span>
+      <span><strong>{trace.length}</strong> API calls</span>
+      <span><strong>{fmtMs(total)}</strong> total Exa time</span>
+      <span className="kp-exa-eps">
+        {(Object.entries(counts) as [EndpointKind, number][]).map(([k, n]) => <span key={k} className={`kp-ep ${k}`}>{k} ×{n}</span>)}
+      </span>
+      {failed > 0 && <span className="kp-exa-fail">{failed} failed</span>}
+    </div>
+  );
+}
+
+function siteQuotes(report: CompanyReport): { url: string; quote: string }[] {
+  const service = report.checks.find((c) => c.id === "service");
+  const claims = report.checks.filter((c) => c.id.startsWith("claim-"));
+  return [service, ...claims]
+    .flatMap((c) => c?.evidence ?? [])
+    .filter((e): e is { url: string; quote: string; source: "site" } => e.source === "site" && !!e.quote)
+    .slice(0, 2)
+    .map((e) => ({ url: e.url, quote: clip(e.quote.replace(/\s+/g, " ").trim(), 170) }));
+}
+
+function SiteQuotes({ report }: { report: CompanyReport }) {
+  const quotes = siteQuotes(report);
+  if (!quotes.length) return null;
+  return (
+    <div className="kp-quotes">
+      {quotes.map((q, i) => (
+        <a key={i} className="kp-quote" href={q.url} target="_blank" rel="noopener noreferrer">
+          <q>{q.quote}</q>
+          <span className="kp-quote-src">From their site · {hostOf(q.url)} · via Exa <ArrowSquareOut /></span>
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function genericAnswer(service: string, city: string) {
+  const job = service || "this job";
+  return `To find someone for ${job}${city ? ` in ${city}` : ""}, search Google or a marketplace like Fixmera, read their reviews, and ask a few companies for quotes. Make sure the company is registered and has a valid business ID before you pay anything.`;
+}
+
+function WithWithout({ top, service, city }: { top: Ranked; service: string; city: string }) {
+  const { place, report } = top;
+  const phone = place.phone ?? report.contact?.phones?.[0];
+  const quote = siteQuotes(report)[0];
+  const site = place.website ?? report.website ?? (report.domain ? `https://${report.domain}` : undefined);
+  return (
+    <section className="kp-compare" aria-label="Without Exa vs with Exa">
+      <div className="kp-compare-box without">
+        <span className="kp-compare-label">A model without web search would say:</span>
+        <p>{genericAnswer(service, city)}</p>
+        <span className="kp-compare-foot">No names · no phone numbers · no sources</span>
+      </div>
+      <div className="kp-compare-arrow" aria-hidden><ArrowRight weight="bold" /></div>
+      <div className="kp-compare-box with">
+        <span className="kp-compare-label"><Lightning weight="fill" />With Exa:</span>
+        <h3>{report.name}</h3>
+        <div className="kp-compare-facts">
+          {phone && <a href={`tel:${phone.replace(/\s/g, "")}`}><Phone weight="bold" />{phone}</a>}
+          {place.rating && <span><Star weight="fill" />{place.rating.score.toFixed(1)} ({place.rating.count} reviews)</span>}
+          {report.businessId && <a href={`https://tietopalvelu.ytj.fi/yritys/${report.businessId}`} target="_blank" rel="noopener noreferrer"><ShieldCheck weight="bold" />Y-tunnus {report.businessId}</a>}
+          {site && <a href={site} target="_blank" rel="noopener noreferrer"><ArrowSquareOut weight="bold" />{hostOf(site)}</a>}
+        </div>
+        {quote && <a className="kp-quote" href={quote.url} target="_blank" rel="noopener noreferrer"><q>{quote.quote}</q><span className="kp-quote-src">From their site · {hostOf(quote.url)} · via Exa <ArrowSquareOut /></span></a>}
+        <span className="kp-compare-foot">{report.trace.length} Exa calls for this company · every claim linked</span>
+      </div>
+    </section>
+  );
+}
+
 function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch, setRef }: {
   item: Ranked; rank: number; active: boolean; selected: boolean; onToggle: () => void;
   watching: "idle" | "busy" | "on" | "error"; onWatch: () => void; setRef: (n: HTMLElement | null) => void;
@@ -149,6 +276,7 @@ function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch
         </div>
         <h2>{report.name}</h2>
         {place.address && <p className="match-reason">{place.address}</p>}
+        <SiteQuotes report={report} />
         <ul className="kp-checks">
           {exaChecks.map((c) => <CheckRow key={c.id} check={c} />)}
           <RegistryRow checks={registry} />
@@ -164,6 +292,7 @@ function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch
             {watching === "on" ? "Watching" : watching === "error" ? "Retry watch" : "Watch"}
           </button>
         </div>
+        <ExaTracePanel trace={report.trace ?? []} />
       </div>
     </article>
   );
@@ -224,6 +353,9 @@ export default function Home() {
   const [watch, setWatch] = useState<Record<number, "idle" | "busy" | "on" | "error">>({});
   const [drafts, setDrafts] = useState<DraftOut[] | null>(null);
   const [drafting, setDrafting] = useState(false);
+  const [trace, setTrace] = useState<ExaTrace[]>([]);
+  const [intent, setIntent] = useState<{ service: string; city: string }>({ service: "", city: "" });
+  const [showCompare, setShowCompare] = useState(true);
 
   async function startWatch(i: number) {
     const r = ranked[i]?.report;
@@ -258,6 +390,8 @@ export default function Home() {
     setWatch({});
     setDrafts(null);
     setError(null);
+    setTrace([]);
+    setIntent({ service: "", city: "" });
     setSummary(q);
     const res = await fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
     const reader = res.body!.getReader();
@@ -273,10 +407,14 @@ export default function Home() {
         if (!line.trim()) continue;
         const e = JSON.parse(line) as FindEvent;
         if (e.type === "stage") setStages((s) => ({ ...s, [e.id]: { status: e.status, detail: e.detail ?? s[e.id]?.detail } }));
-        else if (e.type === "intent") setSummary(e.summary);
+        else if (e.type === "intent") {
+          setSummary(e.summary);
+          setIntent({ service: e.service, city: e.city });
+        }
         else if (e.type === "company") setCompanies((c) => ({ ...c, [e.domain]: e.status }));
         else if (e.type === "done") {
           setRanked(e.ranked);
+          setTrace(e.trace ?? e.ranked.flatMap((r) => r.report.trace ?? []));
           setActive(0);
           setView("results");
         } else if (e.type === "error") setError(e.message);
@@ -325,6 +463,10 @@ export default function Home() {
           <div className="kp-examples">
             {EXAMPLES.map((ex) => <button key={ex} type="button" onClick={() => { setQuery(ex); void run(ex); }}>{ex}</button>)}
           </div>
+          <details className="kp-quote-home">
+            <summary>Already have a quote? Check it claim by claim</summary>
+            <QuoteChecker />
+          </details>
         </section>
       </main>
     );
@@ -387,7 +529,14 @@ export default function Home() {
       </header>
       <section className="results-intro">
         <div><h1>{ranked.length} contractors checked</h1><p>{summary}</p></div>
+        {ranked.length > 0 && (
+          <button type="button" className={`kp-compare-toggle ${showCompare ? "on" : ""}`} onClick={() => setShowCompare((v) => !v)} aria-pressed={showCompare}>
+            <Lightning weight="fill" />{showCompare ? "Hide" : "Show"} without vs with Exa
+          </button>
+        )}
       </section>
+      <div className="kp-results-meta"><ExaSummary trace={trace} /></div>
+      {showCompare && ranked[0] && <WithWithout top={ranked[0]} service={intent.service || summary} city={intent.city} />}
       {ranked.length ? (
         <>
           <section className="results-track" aria-label="Contractors">
@@ -400,7 +549,7 @@ export default function Home() {
                 selected={!!selected[i]}
                 onToggle={() => setSelected((s) => ({ ...s, [i]: !s[i] }))}
                 watching={watch[i] ?? "idle"}
-                onWatch={() => void startWatch(i)}
+                onWatch={() => { go(i); setActive(i); document.getElementById("kp-watch")?.scrollIntoView({ behavior: "smooth" }); }}
                 setRef={(n) => { cardRefs.current[i] = n; }}
               />
             ))}
@@ -410,6 +559,26 @@ export default function Home() {
             <span>{active + 1} / {ranked.length}</span>
             <button onClick={() => go(active + 1)} aria-label="Next"><ArrowRight weight="bold" /></button>
           </div>
+          {ranked[active] && (
+            <section className="kp-more" id="kp-watch">
+              <WatchPanel key={ranked[active].report.name} name={ranked[active].report.name} domain={ranked[active].report.domain} />
+            </section>
+          )}
+          {ranked[active] && (
+            <section className="kp-more">
+              <details className="kp-quote-home kp-quote-results">
+                <summary>Got a quote from {ranked[active].report.name}? Check it</summary>
+                <QuoteChecker key={ranked[active].report.name} defaultWebsite={ranked[active].place.website} />
+              </details>
+            </section>
+          )}
+          <section className="kp-more">
+            <CriteriaMatrix
+              job={intent.service || summary}
+              city={intent.city || "Espoo"}
+              exclude={ranked.map((r) => ({ name: r.report.name, website: r.place.website }))}
+            />
+          </section>
           {Object.values(selected).some(Boolean) && (
             <div className="kp-floating">
               <span>{Object.values(selected).filter(Boolean).length} selected</span>

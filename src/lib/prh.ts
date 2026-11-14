@@ -58,13 +58,25 @@ function parseCompany(c: any): PrhCompany {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-async function query(params: Record<string, string>): Promise<PrhCompany[]> {
-  const url = `${BASE}/companies?${new URLSearchParams(params)}`;
-  const res = await fetch(url, { headers: { Accept: "application/json" }, next: { revalidate: 3600 }, signal: AbortSignal.timeout(10000) });
+const cache = new Map<string, Promise<PrhCompany[]>>();
+
+async function queryOnce(url: string): Promise<PrhCompany[]> {
+  const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) });
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(`PRH ${res.status} for ${url}`);
   const data = await res.json();
   return (data.companies ?? []).map(parseCompany);
+}
+
+// PRH gets slow under parallel load: retry once, and cache successful lookups.
+async function query(params: Record<string, string>): Promise<PrhCompany[]> {
+  const url = `${BASE}/companies?${new URLSearchParams(params)}`;
+  const hit = cache.get(url);
+  if (hit) return hit;
+  const p = queryOnce(url).catch(() => queryOnce(url));
+  cache.set(url, p);
+  p.catch(() => cache.delete(url));
+  return p;
 }
 
 export async function prhByBusinessId(businessId: string): Promise<PrhCompany | null> {

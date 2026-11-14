@@ -1,11 +1,24 @@
 import { z } from "zod";
 import { askJson } from "./claude";
 import { contents, search, type ExaTrace } from "./exa";
+import { groundedReputation, groundedServiceProof, priceHistory, withTimeout, type Confidence } from "./exa-grounded";
 import { domainOf, prhByBusinessId, prhByName, type PrhCompany } from "./prh";
 import { extractYTunnukset, isValidYTunnus, normalizeYTunnus } from "./ytunnus";
 
 export type Status = "green" | "yellow" | "red" | "grey";
-export type Evidence = { url: string; quote?: string; source: "site" | "registry" | "web" };
+export type Evidence = {
+  url: string;
+  quote?: string;
+  source: "site" | "registry" | "web";
+  /** Exa's per-field grounding confidence for the claim this evidence supports. */
+  confidence?: Confidence;
+  /** Which Exa feature produced it, e.g. "exa.search outputSchema grounding". */
+  via?: string;
+  /** Exa's synthesized one-line claim (the quote stays verbatim page text). */
+  claim?: string;
+  /** For historical evidence: the Exa Snapshot cutoff date (YYYY-MM-DD). */
+  asOf?: string;
+};
 export type Check = { id: string; label: string; status: Status; detail: string; evidence: Evidence[] };
 export type CompanyReport = {
   name: string;
@@ -22,6 +35,8 @@ export type CompanyReport = {
 const POINTS: Record<Status, number> = { green: 2, yellow: 0, grey: 0, red: -4 };
 const PRH_URL = (id: string) => `https://tietopalvelu.ytj.fi/yritys/${id}`;
 
+// Anti-bot interstitials ("One moment, please…") are not evidence of anything.
+const isBotWall = (t: string) => /one moment, please|please wait while your request|checking your browser|just a moment/i.test(t);
 const norm = (s: string) => s.replace(/\s+/g, " ").trim().toLowerCase();
 // A quote only counts if it really appears in the fetched page text (no invented quotes).
 const anchored = (quote: string, haystack: string) => quote.length > 8 && norm(haystack).includes(norm(quote));
@@ -148,14 +163,39 @@ function registryChecks(prh: PrhCompany | null): Check[] {
       id: "age",
       label: "Company age",
       status: ageYears < 1 ? "yellow" : "green",
-      detail: `Registered ${prh.registrationDate} (${ageYears < 1 ? "less than a year ago" : `${Math.floor(ageYears)} years ago`}).`,
+      detail: `Registered ${prh.registrationDate} (${ageYears < 1 ? "less than a year ago" : `${Math.floor(ageYears)} year${Math.floor(ageYears) === 1 ? "" : "s"} ago`}).`,
       evidence: ev,
     });
   }
   return checks;
 }
 
+const VIA_GROUNDED = "exa.search outputSchema grounding";
+
 async function serviceProof(domain: string, service: string, trace: ExaTrace[]): Promise<Check> {
+  try {
+    const g = await groundedServiceProof(domain, service, trace);
+    if (g.offersService && g.url) {
+      return {
+        id: "service",
+        label: "Does this kind of job",
+        status: "green",
+        detail: `Their own site describes the job (${service}).${g.confidence ? ` Exa grounding confidence: ${g.confidence}.` : ""}`,
+        evidence: [{ url: g.url, quote: g.quote, source: "site", confidence: g.confidence, via: VIA_GROUNDED, claim: g.evidenceSentence && g.evidenceSentence !== g.quote ? g.evidenceSentence : undefined }],
+      };
+    }
+    if (!g.offersService) {
+      return {
+        id: "service",
+        label: "Does this kind of job",
+        status: "grey",
+        detail: `Exa read their site and found no clear mention of ${service}. Ask before booking.`,
+        evidence: g.url && g.quote && !isBotWall(g.quote) ? [{ url: g.url, quote: g.quote, source: "site", via: `${VIA_GROUNDED} (closest passage)` }] : [],
+      };
+    }
+  } catch {
+    /* fall back to plain highlight search */
+  }
   try {
     const data = await search(
       { query: `${service} service offered`, type: "auto", numResults: 3, includeDomains: [domain], contents: { highlights: { query: `Do they offer ${service}?`, maxCharacters: 500 } } },
@@ -220,8 +260,31 @@ const Reputation = z.object({
   ),
 });
 
+const REPUTATION_LABEL = "Reviews, complaints & news";
+
+// Primary path: Exa deep search synthesizes findings and grounds every field in citations.
 async function reputationCheck(name: string, domain: string | null, businessId: string | undefined, trace: ExaTrace[]): Promise<Check> {
-  const label = "Reviews, complaints & news";
+  const label = REPUTATION_LABEL;
+  try {
+    const { findings, overall } = await withTimeout(groundedReputation(name, domain, businessId, trace), 25000, "Exa deep reputation");
+    if (!findings.length) return { id: "reputation", label, status: "grey", detail: "No reviews or news found that are clearly about this company.", evidence: [] };
+    const worst = findings.some((f) => f.severity === "high") ? "red" : findings.some((f) => f.severity === "medium") ? "yellow" : "green";
+    const issues = findings.filter((f) => f.severity !== "none" && f.kind !== "positive_review").length;
+    return {
+      id: "reputation",
+      label,
+      status: worst,
+      detail: `${worst === "green" ? "Coverage found is positive or neutral." : `Found ${issues} issue(s) in reviews or news.`} ${overall}`.trim(),
+      evidence: findings.map((f) => ({ url: f.url, quote: f.quote, source: "web" as const, confidence: f.confidence, via: f.quoteVerified ? `${VIA_GROUNDED}; quote verified in page text` : `${VIA_GROUNDED}; quote is Exa highlight`, claim: `${f.kind.replace(/_/g, " ")}: ${f.summary}` })),
+    };
+  } catch {
+    return reputationCheckClaude(name, domain, businessId, trace);
+  }
+}
+
+// Fallback: keyword search + Claude extraction with verbatim-quote anchoring.
+async function reputationCheckClaude(name: string, domain: string | null, businessId: string | undefined, trace: ExaTrace[]): Promise<Check> {
+  const label = REPUTATION_LABEL;
   try {
     const data = await search(
       {
@@ -261,6 +324,26 @@ async function reputationCheck(name: string, domain: string | null, businessId: 
   }
 }
 
+async function priceHistoryCheck(domain: string, trace: ExaTrace[]): Promise<Check | null> {
+  try {
+    const ch = await withTimeout(priceHistory(domain, trace), 15000, "Exa snapshot");
+    if (!ch) return null;
+    const fmt = (xs: number[]) => xs.slice(0, 6).map((v) => `${v} €`).join(", ");
+    return {
+      id: "price-history",
+      label: `Price page changed since ${ch.asOf}`,
+      status: "grey",
+      detail: `Exa Snapshot shows different prices on their price page than on ${ch.asOf} (then: ${fmt(ch.before)}; now: ${fmt(ch.after)}). Not a red flag by itself; get a written quote.`,
+      evidence: [
+        { url: ch.url, quote: ch.beforeQuote, source: "site", via: `exa.contents snapshotAsOf ${ch.asOf}`, asOf: ch.asOf },
+        { url: ch.url, quote: ch.afterQuote, source: "site", via: "exa.contents (current)" },
+      ],
+    };
+  } catch {
+    return null;
+  }
+}
+
 function extractContact(pages: Page[], domain: string | null) {
   const all = pages.map((p) => p.text).join("\n");
   const emails = [...new Set(all.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi) ?? [])]
@@ -293,13 +376,21 @@ export async function verifyCompany(input: { name?: string; website?: string; bu
   }
 
   const name = prh?.name ?? input.name ?? domain ?? "Unknown company";
-  const [service, claims, reputation] = await Promise.all([
+  const [service, claims, reputation, prices] = await Promise.all([
     domain ? serviceProof(domain, input.service, trace) : Promise.resolve<Check | null>(null),
     siteClaimChecks(pages, prh),
     reputationCheck(name, domain, prh?.businessId, trace),
+    domain ? priceHistoryCheck(domain, trace) : Promise.resolve<Check | null>(null),
   ]);
 
-  const checks = [...identityChecks(pages, domain, prh, siteIds, claimedId), ...registryChecks(prh), ...(service ? [service] : []), ...claims, reputation];
+  const checks = [
+    ...identityChecks(pages, domain, prh, siteIds, claimedId),
+    ...registryChecks(prh),
+    ...(service ? [service] : []),
+    ...claims,
+    reputation,
+    ...(prices ? [prices] : []),
+  ];
   return {
     name,
     website: input.website,
