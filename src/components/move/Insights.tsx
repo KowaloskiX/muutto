@@ -2,6 +2,7 @@
 
 // Exa-sourced extras shown in the drawer: what the listing page states (facts), earlier appearances
 // of the same flat (history), what is coming to the area, and what residents say. All quoted.
+import { useEffect, useState } from "react";
 import { ArrowUpRight } from "@phosphor-icons/react";
 import type { Area, Listing } from "@/lib/move/types";
 import { withTextFragment } from "@/lib/textFragment";
@@ -95,15 +96,41 @@ function Quotes({ items }: { items: { title: string; url: string; date?: string;
   );
 }
 
+type Outlook = { future: NonNullable<Area["future"]>; voices: NonNullable<Area["voices"]> };
+const outlookCache = new Map<string, Promise<Outlook>>();
+
+/** Loads (once per area) what is coming and what residents say; also used to prefetch the top areas. */
+export function loadOutlook(a: Pick<Area, "name" | "municipality">): Promise<Outlook> {
+  const key = `${a.name}|${a.municipality}`;
+  let p = outlookCache.get(key);
+  if (!p) {
+    p = fetch("/api/move/outlook", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: a.name, municipality: a.municipality }) })
+      .then((r) => (r.ok ? r.json() : { future: [], voices: [] }))
+      .catch(() => ({ future: [], voices: [] }));
+    outlookCache.set(key, p);
+  }
+  return p;
+}
+
 export function AreaOutlook({ a }: { a: Area }) {
+  const [o, setO] = useState<Outlook | undefined>(a.future || a.voices ? { future: a.future ?? [], voices: a.voices ?? [] } : undefined);
+  useEffect(() => {
+    let stop = false;
+    if (!(a.future || a.voices)) loadOutlook(a).then((v) => !stop && setO(v));
+    return () => {
+      stop = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [a.id]);
+  const busy = <p className={x.noSrc}>Searching city pages, local news and forums…</p>;
   return (
     <>
       <section className={d.section}>
         <h3 className={d.sh}>
           Coming next <small>city plans · local news</small>
         </h3>
-        {a.future?.length ? (
-          <Quotes items={a.future.map((f) => ({ ...f, meta: [host(f.url), f.when && `for ${f.when}`].filter(Boolean).join(" · ") }))} />
+        {!o ? busy : o.future.length ? (
+          <Quotes items={o.future.map((f) => ({ ...f, meta: [host(f.url), f.when && `for ${f.when}`].filter(Boolean).join(" · ") }))} />
         ) : (
           <p className={x.noSrc}>{DASH} No plans or upcoming projects naming this area were found in the last year.</p>
         )}
@@ -112,7 +139,7 @@ export function AreaOutlook({ a }: { a: Area }) {
         <h3 className={d.sh}>
           What residents say <small>forums · opinions</small>
         </h3>
-        {a.voices?.length ? <Quotes items={a.voices.map((v) => ({ ...v, meta: v.host }))} /> : <p className={x.noSrc}>{DASH} No recent forum threads naming this area were found.</p>}
+        {!o ? busy : o.voices.length ? <Quotes items={o.voices.map((v) => ({ ...v, meta: v.host }))} /> : <p className={x.noSrc}>{DASH} No recent forum threads naming this area were found.</p>}
       </section>
     </>
   );

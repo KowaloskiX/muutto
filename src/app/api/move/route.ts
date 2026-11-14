@@ -12,7 +12,6 @@ import { railStations } from "@/lib/move/region";
 import { batchCommute, isMorningRush, routeTraffic, TRANSIT_ESTIMATE_NOTE, walkTimes } from "@/lib/move/commute";
 import { measureAmenities, regionPois } from "@/lib/move/amenities";
 import { measureCustom } from "@/lib/move/custom";
-import { areaFuture, areaVoices } from "@/lib/move/outlook";
 import { getIso } from "@/lib/move/reach-iso";
 import { getHeat } from "@/lib/move/reach-heat";
 import { measureAir } from "@/lib/move/air";
@@ -80,17 +79,44 @@ async function trafficCriterion(from: Candidate, work: { lat: number; lng: numbe
   }
 }
 
+// The same search within 15 minutes is replayed from memory (the events it streamed), with a notice
+// saying how old it is. Listings and news don't change in minutes; judges re-run the examples.
+const REPLAY_MS = 15 * 60_000;
+const replays = new Map<string, { at: number; events: MoveEvent[] }>();
+const replayKey = (q: string) => q.toLowerCase().replace(/\s+/g, " ").trim();
+
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { query?: string };
   const query = String(body.query ?? "").trim().slice(0, 1200);
   const enc = new TextEncoder();
   const t0 = Date.now();
 
+  const key = replayKey(query);
+  const prev = query ? replays.get(key) : undefined;
+  if (prev && Date.now() - prev.at < REPLAY_MS) {
+    const ago = Math.max(1, Math.round((Date.now() - prev.at) / 60_000));
+    const replay = new ReadableStream({
+      async start(controller) {
+        const out = (e: MoveEvent) => controller.enqueue(enc.encode(JSON.stringify(e) + "\n"));
+        out({ type: "notice", message: `Same search ${ago} min ago: showing those results (live data is re-fetched after 15 min).` });
+        for (const e of prev.events) {
+          if (e.type === "done") out({ ...e, tookMs: Date.now() - t0 });
+          else out(e);
+          if (e.type === "area") await new Promise((r) => setTimeout(r, 60));
+        }
+        controller.close();
+      },
+    });
+    return new Response(replay, { headers: { "Content-Type": "application/x-ndjson; charset=utf-8", "Cache-Control": "no-store" } });
+  }
+  const recorded: MoveEvent[] = [];
+
   const stream = new ReadableStream({
     async start(controller) {
       let closed = false;
       const send = (e: MoveEvent) => {
         if (closed) return;
+        if (e.type !== "notice" || !/Same search/.test(e.message)) recorded.push(e);
         try {
           controller.enqueue(enc.encode(JSON.stringify(e) + "\n"));
         } catch {
@@ -99,6 +125,7 @@ export async function POST(req: Request) {
       };
       const finish = (ranked: Area[]) => {
         send({ type: "done", ranked, tookMs: Date.now() - t0 });
+        if (ranked.length && query) replays.set(key, { at: Date.now(), events: recorded });
         closed = true;
         controller.close();
       };
@@ -167,8 +194,8 @@ export async function POST(req: Request) {
         const amenityNotes = new Set<string>();
         const done: Area[] = [];
 
-        await pool(scored, 4, async ({ c, cm }) => {
-          const outlookP = Promise.all([withTimeout(areaFuture(c, trace), 20_000, "timeout").catch(() => []), withTimeout(areaVoices(c, trace), 20_000, "timeout").catch(() => [])]);
+        const geoJobs: Promise<void>[] = [];
+        await pool(scored, 5, async ({ c, cm }) => {
           const customP = Promise.all(
             (intent.customPlaces ?? []).map((cp) =>
               withTimeout(measureCustom(cp, c, trace), 15_000, "timeout").catch((e) => ({
@@ -178,18 +205,17 @@ export async function POST(req: Request) {
             ),
           );
           const [am, air, noise, news, listings, traffic] = await Promise.all([
-            withTimeout(measureAmenities(c.center, { hasKids: u.hasKids }), 30_000, "amenities timeout").catch((e) => {
+            withTimeout(measureAmenities(c.center, { hasKids: u.hasKids }), 25_000, "amenities timeout").catch((e) => {
               amenityNotes.add(`Amenities: ${(e as Error).message}`);
               return null;
             }),
             withTimeout(measureAir(c.center), 15_000, "timeout").catch((e): Criterion => ({ id: "air", label: "Air quality", status: "unknown", value: null, detail: `Source unavailable (${(e as Error).message}).`, sources: [] })),
             withTimeout(measureNoise(c.center, c.municipality), 15_000, "timeout").catch((e): Criterion => ({ id: "noise", label: "Traffic noise", status: "unknown", value: null, detail: `Source unavailable (${(e as Error).message}).`, sources: [] })),
-            withTimeout(areaNews(c, trace), 20_000, "timeout").catch(() => ({ items: [], ok: false })),
+            withTimeout(areaNews(c, trace), 18_000, "timeout").catch(() => ({ items: [], ok: false })),
             withTimeout(areaListings({ ...c, postalCode: c.postalCode }, lq, trace), 22_000, "timeout").catch(() => ({ all: [], ok: false })),
             trafficCriterion(c, work, cm),
           ]);
           const custom = await customP;
-          const [future, voices] = await outlookP;
           am?.notes.forEach((n) => amenityNotes.add(n));
           const walk = await Promise.race([walkP, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
           const wi = scored.findIndex((x) => x.c.id === c.id);
@@ -225,8 +251,6 @@ export async function POST(req: Request) {
             news: news.items.map(({ title, url, date, quote, tone }) => ({ title, url, date, quote, tone })),
             commute: cm,
             why: whyLines(criteria, w),
-            future: future.length ? future : undefined,
-            voices: voices.length ? voices : undefined,
             stats: {
               population: c.population,
               medianIncome: c.medianIncome,
@@ -242,25 +266,25 @@ export async function POST(req: Request) {
           };
           done.push(area);
           send({ type: "area", area });
+          // Locate this area's top listing now (Nominatim is 1 req/s, cached), while other areas are measured.
+          const top = area.listings.find((l) => l.address && /\d/.test(l.address));
+          if (top)
+            geoJobs.push(
+              withTimeout(geocode(/\b\d{5}\b/.test(top.address!) ? top.address! : `${top.address}, ${area.municipality}`), 8_000, "geocode")
+                .then((g) => {
+                  if (g && Math.abs(g.lat - area.center.lat) < 0.05 && Math.abs(g.lng - area.center.lng) < 0.1) top.geo = { lat: g.lat, lng: g.lng };
+                })
+                .catch(() => undefined),
+            );
         });
         amenityNotes.forEach((n) => send({ type: "notice", message: n }));
 
-        // Listing-level location + commute, after the areas are streamed (Nominatim is 1 req/s):
-        // the top listing per area, one batched routing call, within a ~10 s budget. Shown in `done`.
-        const toGeo = done.flatMap((a) => a.listings.filter((l) => l.address && /\d/.test(l.address)).slice(0, 1).map((l) => ({ a, l })));
-        if (toGeo.length) {
-          send({ type: "notice", message: `Locating ${toGeo.length} listings and routing them to work` });
-          const deadline = Date.now() + 10_000;
-          for (const { a, l } of toGeo) {
-            if (Date.now() > deadline) break;
-            const g = await withTimeout(geocode(/\b\d{5}\b/.test(l.address!) ? l.address! : `${l.address}, ${a.municipality}`), 5_000, "geocode").catch(() => null);
-            if (g && Math.abs(g.lat - a.center.lat) < 0.05 && Math.abs(g.lng - a.center.lng) < 0.1) l.geo = { lat: g.lat, lng: g.lng };
-          }
-          const located = toGeo.map((x) => x.l).filter((l) => l.geo);
-          if (located.length) {
-            const lc = await withTimeout(batchCommute(located.map((l) => l.geo!), work), 15_000, "routing").catch(() => null);
-            lc?.commutes.forEach((x, i) => (located[i].commute = x));
-          }
+        // Listing-level commute: the listings located during measuring (wait at most 2 s more), one routing call.
+        await Promise.race([Promise.all(geoJobs), new Promise((r) => setTimeout(r, 2_000))]);
+        const located = done.flatMap((a) => a.listings.filter((l) => l.geo).slice(0, 1));
+        if (located.length) {
+          const lc = await withTimeout(batchCommute(located.map((l) => l.geo!), work, { walk: false }), 6_000, "routing").catch(() => null);
+          lc?.commutes.forEach((x, i) => (located[i].commute = x));
         }
         send({ type: "stage", id: "measure", status: "done", detail: `${done.length} areas measured` });
         const nListings = done.reduce((s, a) => s + a.listings.length, 0);

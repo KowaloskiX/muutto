@@ -10,6 +10,7 @@ import type { Area, Listing, MoveEvent, ResearchEvent, ViewingDraft, WatchResult
 import MoveFile, { PROMPTS } from "./MoveFile";
 import { MoveProgress } from "./MoveProgress";
 import { Tour, type TourStep } from "./Tour";
+import { loadOutlook } from "./Insights";
 import { mins } from "./model";
 import { fitScore, rankAreas, weights, whyLines } from "@/lib/move/rank";
 import type { AskResult } from "@/lib/move/ask";
@@ -211,6 +212,8 @@ export default function MoveApp() {
         }
       }
       if (!gotDone) throw new Error(runsRef.current[id]?.error ?? "The search ended before a ranking came back.");
+      // Prefetch "Coming next / What residents say" for the top areas (off the search's critical path).
+      (runsRef.current[id]?.ranked ?? []).slice(0, 4).forEach((ar) => void loadOutlook(ar));
       // In the background: has each shown flat been on the market before? (Exa, ~20 s)
       void (async () => {
         const list = (runsRef.current[id]?.ranked ?? []).flatMap((a) => a.listings).filter((l) => l.address);

@@ -14,7 +14,7 @@ export type ExaTrace = { endpoint: string; summary: string; ms: number; ok: bool
 // Process-wide limiter: at most MAX_PER_SEC starts per rolling second and
 // MAX_INFLIGHT open requests; 429/5xx are retried with backoff.
 const MAX_PER_SEC = Number(process.env.EXA_MAX_QPS ?? 8);
-const MAX_INFLIGHT = Number(process.env.EXA_MAX_INFLIGHT ?? 10);
+const MAX_INFLIGHT = Number(process.env.EXA_MAX_INFLIGHT ?? 12);
 const starts: number[] = [];
 let inflight = 0;
 const waiters: (() => void)[] = [];
