@@ -34,6 +34,7 @@
 .live { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-soft); }
 .live svg { width: 13px; height: 13px; }
 .title { margin: -6px 0 0; font-family: var(--font-display); font-size: 32px; font-weight: 500; line-height: 1.15; letter-spacing: -.01em; text-wrap: balance; }
+.title::first-letter { text-transform: uppercase; }
 .facts { display: flex; flex-wrap: wrap; gap: 8px 32px; margin: 0; }
 .facts div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .facts dt { color: var(--muted); font-size: 12px; }
