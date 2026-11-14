@@ -11,7 +11,7 @@ export const EN = {
   results: "{n} candidates are in the case file. {name} looks strongest, and none has a warning.",
   resultsFlags: "{n} candidates are in the case file. {name} ranks first; {flagged} need clarifying before you sign.",
   askTop: "Draft quote requests and document requests for the top {n}? Nothing is sent until you approve.",
-  askTopFlags: "Draft quote requests and document requests for the top {n}, with a question on each of the {asks} warnings? Nothing is sent until you approve.",
+  askTopFlags: "Draft quote requests and document requests for the top {n}, with questions about the warnings? Nothing is sent until you approve.",
   chipAskTop: "Yes, draft RFQs for the top {n}",
   chipPick: "Pick myself",
   chipNotNow: "Not now",
@@ -111,7 +111,7 @@ export function format(tpl: string, vars: Record<string, string | number> = {}) 
   return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-const STORE = "kilpi-chat-i18n-b2b-v5";
+const STORE = "kilpi-chat-i18n-b2b-v6";
 const cache: Record<string, Table> = {};
 const pending: Record<string, Promise<Table>> = {};
 
