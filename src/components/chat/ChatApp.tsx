@@ -847,7 +847,8 @@ export default function ChatApp() {
   // ---- case file: derived from the conversation ------------------------------
   const outbox: OutboxItem[] = msgs.flatMap((m) => (m.kind === "draft" ? [{ id: m.id, draft: m.draft }] : []));
   const lastCompare = [...msgs].reverse().find((m): m is Extract<Msg, { kind: "compare" }> => m.kind === "compare");
-  const caseCount = (ctx.searching ? ctx.live?.length ?? 0 : ctx.ranked.length) + outbox.filter((o) => !o.draft.sent).length;
+  // Candidates only: mixing in unsent drafts made the number mean nothing.
+  const caseCount = ctx.searching ? ctx.live?.length ?? 0 : ctx.ranked.length;
   const caseFromPanel = (fn: () => Promise<void>) => {
     if (busy) return;
     retireChips();
@@ -949,7 +950,7 @@ export default function ChatApp() {
           <button type="button" className={`${s.headBtn} ${s.caseBtn}`} onClick={() => setSheet(true)} title="Case file" aria-label="Open case file">
             <ClipboardText weight="bold" />
             <span>Case file</span>
-            {caseCount > 0 && <b className={s.caseCount}>{caseCount}</b>}
+            {caseCount > 0 && <b className={s.caseCount} title={`${caseCount} candidates`} aria-label={`${caseCount} candidates`}>{caseCount}</b>}
           </button>
           <Link href="/" className={`${s.headBtn} ${s.iconOnly}`} title="Classic view" aria-label="Classic view"><SquaresFour weight="bold" /></Link>
           <button type="button" className={`${s.headBtn} ${s.iconOnly}`} onClick={newChat} disabled={busy} title="New project" aria-label="New project"><NotePencil weight="bold" /></button>
