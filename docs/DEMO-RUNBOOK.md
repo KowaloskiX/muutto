@@ -53,7 +53,7 @@ At an earlier warm-up, the Espoo electrical backup shortlist was Systempoint Oy,
 ### 4. Browser tabs (in this order)
 
 1. `http://localhost:3000/chat`: the demo, warmed, conversation reset
-2. `http://localhost:3000/`: classic view with the Exa trace panel, for "show me the Exa calls"
+2. `http://localhost:3000/classic`: classic view with the Exa trace panel, for "show me the Exa calls"
 3. Työsuojeluhallinto guide PDF: <https://tyosuojelu.fi/documents/154017715/168016298/Tilaajavastuulaki_FI.pdf/e44a5af6-0128-457e-ab25-65c3bcd5b59e/Tilaajavastuulaki_FI.pdf>
 4. Backup video, downloaded locally and open in a player
 5. README on GitHub (architecture diagram)
@@ -83,7 +83,7 @@ Turn off notifications. Set browser zoom to 110–125%. Put the laptop on power.
 6. Open the "clarify first" candidate whose register row lacks the employer register (Helsingin ilmanvaihto Oy, #3, at the last live run). Point at the source and the date.
 7. Close the drawer → type *request quotes from the top 2* → show the outbox → hover "Approve and send" (don't click unless the mail app is ready).
 8. Type *watch #1* → show the watch card.
-9. If time allows: switch to `/` and open the Exa trace panel to show each call, its time, and "cached N min ago".
+9. If time allows: switch to `/classic` and open the Exa trace panel to show each call, its time, and "cached N min ago".
 
 ---
 
