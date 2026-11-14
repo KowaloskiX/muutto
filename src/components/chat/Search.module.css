@@ -1,0 +1,65 @@
+/* Subcontractor search pipeline: fixed stages, one "now" line, compact company chips.
+   Uses the chat column's tokens (--c-*), inherited from .stage in Chat.module.css. */
+.wrap { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 34em; }
+
+.card { padding: 12px 16px 16px; border: 1px solid var(--c-hair); border-radius: var(--c-radius); background: var(--c-bg); }
+.head { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.head small { flex: 1; color: var(--c-ink2); font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; }
+.count { color: var(--c-ink2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.fold { display: grid; place-items: center; width: 24px; height: 24px; margin-right: -6px; border: 0; border-radius: var(--c-pill); background: transparent; color: var(--c-ink2); cursor: pointer; }
+.fold svg { width: 12px; height: 12px; transform: rotate(180deg); }
+.fold:hover { background: var(--c-tile); color: var(--c-ink); }
+
+.now { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; padding: 8px 12px; border-radius: 12px; background: var(--c-tile); color: var(--c-ink); font-size: 13px; font-weight: 500; line-height: 1.4; }
+.now i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--c-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-accent) 14%, transparent); animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .35; } }
+
+.stages { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 0; padding: 0; list-style: none; }
+.stages > li { display: grid; grid-template-columns: 20px 1fr; gap: 8px; padding: 6px 0; color: var(--c-ink3); font-size: 13px; line-height: 1.4; }
+.stages > li.active, .stages > li.done { color: var(--c-ink); }
+.stages > li.failed { color: var(--c-bad-ink); }
+.icon { display: grid; place-items: center; width: 18px; height: 18px; margin-top: 0; border-radius: 50%; }
+.icon svg { width: 12px; height: 12px; }
+.icon > i { width: 6px; height: 6px; border-radius: 50%; background: var(--c-hair); }
+.done .icon { background: var(--c-accent); color: var(--c-accent-ink); }
+.active .icon { color: var(--c-accent); }
+.active .icon svg { width: 14px; height: 14px; }
+.failed .icon svg { width: 16px; height: 16px; color: var(--c-bad); }
+.body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.label { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.active .label > span { font-weight: 500; }
+.label em { color: var(--c-ink3); font-size: 11px; font-style: normal; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+.sub { overflow: hidden; color: var(--c-ink2); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; animation: fade .3s var(--c-ease); }
+@keyframes fade { from { opacity: 0; } }
+
+.chips { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 0; padding: 0; list-style: none; }
+.chip { display: inline-flex; align-items: center; gap: 6px; max-width: 13em; padding: 3px 10px 3px 8px; border: 1px solid var(--c-hair); border-radius: var(--c-pill); background: var(--c-bg); color: var(--c-ink); font-size: 12px; line-height: 1.4; transition: background-color .25s ease, border-color .25s ease; }
+.chip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip > i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--c-ink3); }
+.chip > svg { flex: none; width: 11px; height: 11px; color: var(--c-ink3); }
+.c_scanning { color: var(--c-ink2); background: var(--c-tile); border-color: transparent; }
+.c_green > i { background: var(--c-ok); }
+.c_yellow > i { background: var(--c-warn); }
+.c_red > i { background: var(--c-bad); }
+.c_grey > i, .c_failed > i { background: var(--c-ink3); }
+.c_failed { color: var(--c-ink3); }
+.c_failed span { text-decoration: line-through; }
+
+.spin { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* finished: one quiet line that re-opens the steps */
+.summary { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; max-width: 100%; min-height: 28px; padding: 2px 10px 2px 0; border: 0; border-radius: var(--c-pill); background: transparent; color: var(--c-ink2); font: inherit; font-size: 13px; font-variant-numeric: tabular-nums; text-align: left; cursor: pointer; }
+.summary > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.summary:hover { color: var(--c-ink); }
+.summary:focus-visible, .fold:focus-visible { outline: 2px solid var(--c-accent); outline-offset: 2px; }
+.sumOk { flex: none; width: 14px; height: 14px; color: var(--c-ok); }
+.sumBad { flex: none; width: 14px; height: 14px; color: var(--c-bad); }
+.caret { flex: none; width: 10px; height: 10px; color: var(--c-ink3); }
+
+.notes { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 0; list-style: none; color: var(--c-ink2); font-size: 12px; line-height: 1.45; }
+
+@media (prefers-reduced-motion: reduce) {
+  .now i, .spin, .sub { animation: none; }
+  .chip { transition: none; }
+}

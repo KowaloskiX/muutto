@@ -12,7 +12,9 @@ import type { QuoteReport } from "@/lib/quote";
 import { keywordIntent, type RouteArgs, type RouteOut } from "./intent";
 import { CheckingCard, CitedText, CompanyCard, CompanyDetailCard, CompareCard, DraftCard, ExaBadge, NumberedSources, QuoteCheckCard, Sources, WatchCard, companyKey, host } from "./Bubbles";
 import { loadTable, t, type Key, type Table } from "./i18n";
-import { EMPTY_CTX, type Action, type AgentAction, type Chip, type Ctx, type Draft, type Evidence, type LiveCand, type Msg, type NewMsg, type PlanStep, type Project, type Source } from "./types";
+import { SearchCard } from "./SearchCard";
+import { fromRanked, verdict, type Cand } from "@/components/case/model";
+import { EMPTY_CTX, type Action, type AgentAction, type Chip, type Ctx, type Draft, type Evidence, type LiveCand, type Msg, type NewMsg, type PlanStep, type Project, type SearchChip, type SearchStageId, type SearchState, type Source } from "./types";
 import s from "./Chat.module.css";
 
 const STORE = "kilpi-contractors-v1";
@@ -143,7 +145,9 @@ export default function ChatApp() {
           const restoredMsgs = saved.msgs.map((m) =>
             m.kind === "checking"
               ? { ...m, items: m.items.map((i) => (i.status === "scanning" ? { ...i, status: "failed" as const } : i)) }
-              : m.kind === "plan" && !m.finished
+              : m.kind === "search" && !m.finished
+                ? { ...m, finished: true, failed: true, companies: m.companies.map((c) => (c.status === "scanning" ? { ...c, status: "failed" as const } : c)) }
+                : m.kind === "plan" && !m.finished
                 ? { ...m, finished: true, failed: true, steps: m.steps.map((x) => (x.status === "active" ? { ...x, status: "failed" as const } : x)) }
                 : m,
           );
@@ -170,10 +174,13 @@ export default function ChatApp() {
     }
   }, [msgs, ctx, ready]);
 
+  // The live search card grows in place (stages, company chips): keep it in view as it does.
+  const tail = msgs[msgs.length - 1];
+  const searchGrowth = tail?.kind === "search" ? `${Object.values(tail.stages).join()}:${tail.companies.length}:${tail.finished ? 1 : 0}` : "";
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [msgs.length, busy]);
+  }, [msgs.length, busy, searchGrowth]);
 
   // ---- message helpers ---------------------------------------------------
   const push = useCallback(
@@ -201,9 +208,16 @@ export default function ChatApp() {
     let found: { job?: string; city?: string } = {};
     const checking: { name: string; domain: string; status: "scanning" | "done" | "failed" }[] = [];
     const retry: Chip[] = [{ label: tr("chipRetry"), action: "find_again", payload: query }];
-    // Say something the moment the search starts; the first stream event refines it in place.
-    const progressId = sayT(mode === "company" ? "checkingCompany" : "starting", { name: label || query.replace(/^Verify the company /, "") }, { tone: "progress", exa: true });
-    const progress = (text: string) => patch(progressId, (m) => (m.kind === "text" ? { ...m, text } : m));
+    const companyName = label || query.replace(/^Verify the company /, "");
+    // A contractor search shows the fixed pipeline card; a single-company check keeps its one progress line.
+    let searchId: string | null = null;
+    let progressId: string | null = null;
+    const startProgress = () => (progressId = sayT("checkingCompany", { name: companyName }, { tone: "progress", exa: true }));
+    if (mode === "company") startProgress();
+    else searchId = push({ role: "bot", kind: "search", stages: { understand: "active", find: "pending", verify: "pending", rank: "pending" }, companies: [], notes: [], startedAt: Date.now() });
+    const upd = (fn: (st: SearchState) => SearchState) => {
+      if (searchId) patch(searchId, (m) => (m.kind === "search" ? ({ ...m, ...fn(m) } as Msg) : m));
+    };
     try {
       // Kilpi for contractors: every search and company check is a B2B subcontractor vetting.
       const resP = fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query, audience: "b2b" }) });
@@ -225,9 +239,15 @@ export default function ChatApp() {
           if (e.type === "intent") {
             await table;
             kind = e.kind === "company" ? "company" : "job";
-            if (kind === "company") progress(tr("checkingCompany", { name: label || query.replace(/^Verify the company /, "") }));
-            else progress(tr("looking", { service: label || e.service, city: e.city }));
+            if (kind === "company" && searchId) {
+              // The search turned out to be about one named company: drop the pipeline, keep the single line.
+              const id = searchId;
+              searchId = null;
+              setMsgs((prev) => prev.filter((m) => m.id !== id));
+              startProgress();
+            }
             if (kind === "job") {
+              upd((st) => ({ ...st, scope: [label || e.service, e.city].filter(Boolean).join(" · ") || undefined }));
               found = { job: e.service, city: e.city };
               const loc = e.location as { lat: number; lng: number; label: string; source?: string } | undefined;
               const pr = (e.project ?? {}) as Partial<Project>;
@@ -246,11 +266,15 @@ export default function ChatApp() {
               setCtx((c) => ({ ...c, project, live: [], searching: true }));
             }
           } else if (e.type === "notice") {
-            say(e.message, { tone: e.level === "warning" ? "error" : "progress" });
-          } else if (e.type === "stage" && e.id === "find" && e.status === "done" && kind === "job") {
-            const n = Number(/checking (\d+)/i.exec(e.detail ?? "")?.[1] ?? 0);
-            const total = (e.detail ?? "").match(/\d+/g)?.slice(0, 2).reduce((a: number, b: string) => a + Number(b), 0) ?? 0;
-            if (n) sayT("found", { found: total, n }, { tone: "progress", exa: true });
+            if (searchId) {
+              // The tilaajavastuu note already heads the case file; anything else is a one-line note under the search.
+              if (e.message !== ctxRef.current.project?.tilaajavastuu?.note) upd((st) => ({ ...st, notes: st.notes.includes(e.message) ? st.notes : [...st.notes, e.message] }));
+            } else say(e.message, { tone: e.level === "warning" ? "error" : "progress" });
+          } else if (e.type === "stage" && searchId && kind === "job" && (e.id === "understand" || e.id === "find" || e.id === "verify" || e.id === "rank")) {
+            const id = e.id as SearchStageId;
+            // "35 company sites + 10 local listings, checking 4" -> 45 found.
+            const found = id === "find" && e.status === "done" ? ((e.detail ?? "").split(/checking/i)[0].match(/\d+/g) ?? []).reduce((a: number, b: string) => a + Number(b), 0) : undefined;
+            upd((st) => ({ ...st, stages: { ...st.stages, [id]: e.status === "done" ? "done" : "active" }, found: found ?? st.found }));
           } else if (e.type === "company") {
             const i = checking.findIndex((x) => x.domain === e.domain);
             const row = { name: e.report?.name ?? e.place.name, domain: e.domain, status: e.status };
@@ -267,14 +291,30 @@ export default function ChatApp() {
                 return { ...c, live };
               });
             }
-            if (!checkingId) checkingId = push({ role: "bot", kind: "checking", items });
+            if (searchId) {
+              // Live verdict: the case file's rule on the public checks we have so far.
+              const live: Cand = { key: e.domain, name: row.name, place: e.place, report: e.report, why: [], status: e.status, origin: "live" };
+              const chip: SearchChip = { key: e.domain, name: row.name, status: e.status, verdict: e.status === "done" ? verdict(live) : undefined };
+              upd((st) => {
+                const j = st.companies.findIndex((x) => x.key === chip.key);
+                return { ...st, companies: j < 0 ? [...st.companies, chip] : st.companies.map((x, k) => (k === j ? chip : x)) };
+              });
+            } else if (!checkingId) checkingId = push({ role: "bot", kind: "checking", items });
             else patch(checkingId, (m) => ({ ...m, items }) as Msg);
-          } else if (e.type === "stage" && e.id === "rank" && e.status === "active" && kind === "job") {
-            sayT("ranking", undefined, { tone: "progress" });
           } else if (e.type === "done") {
             finished = true;
             await table;
             const ranked = (e.ranked as Ranked[]).map(slimRanked);
+            // Close the pipeline; chips take the final verdict (with the ranking's reasons and fit), as in the case file.
+            const final = new Map(ranked.map((r, i) => [r.report.domain ?? host(r.place.website), { verdict: verdict(fromRanked(r, i + 1)), name: nameOf(r) }] as const));
+            upd((st) => ({
+              ...st,
+              stages: { understand: "done", find: "done", verify: "done", rank: "done" },
+              ranked: ranked.length,
+              companies: st.companies.map((c) => (c.status === "scanning" ? { ...c, status: "failed" as const } : final.has(c.key) ? { ...c, ...final.get(c.key) } : c)),
+              finished: true,
+              endedAt: Date.now(),
+            }));
             if (kind === "company") {
               const item = ranked[0];
               if (!item) {
@@ -317,8 +357,18 @@ export default function ChatApp() {
         }
       }
     } catch (err) {
+      upd((st) => ({
+        ...st,
+        stages: Object.fromEntries(Object.entries(st.stages).map(([k, v]) => [k, v === "active" ? "failed" : v])) as SearchState["stages"],
+        companies: st.companies.map((c) => (c.status === "scanning" ? { ...c, status: "failed" as const } : c)),
+        finished: true,
+        failed: true,
+        endedAt: Date.now(),
+      }));
       sayT(kind === "company" ? "companyFailed" : "searchError", { msg: (err as Error).message }, { tone: "error", chips: retry });
     } finally {
+      // A stream that ended without `done` or an error still must not spin forever.
+      upd((st) => (st.finished ? st : { ...st, finished: true, failed: true, endedAt: Date.now(), companies: st.companies.map((c) => (c.status === "scanning" ? { ...c, status: "failed" as const } : c)) }));
       if (ctxRef.current.searching || ctxRef.current.live?.length) setCtx((c) => ({ ...c, searching: false, live: [] }));
     }
   }
@@ -939,6 +989,8 @@ export default function ChatApp() {
         }
       case "checking":
         return <div className={s.bot}><CheckingCard items={m.items} /></div>;
+      case "search":
+        return <SearchCard st={m} lang={ctx.lang} />;
       case "company":
         return <CompanyCard item={m.item} rank={m.rank} selected={ctx.selected.includes(companyKey(m.item))} onToggle={() => togglePick(companyKey(m.item))} />;
       case "detail":
@@ -1087,7 +1139,7 @@ export default function ChatApp() {
               </div>
             );
           })}
-          {busy && !activeStep && !(msgs[msgs.length - 1]?.kind === "plan" && !(msgs[msgs.length - 1] as { finished?: boolean }).finished) && (
+          {busy && !activeStep && !((msgs[msgs.length - 1]?.kind === "plan" || msgs[msgs.length - 1]?.kind === "search") && !(msgs[msgs.length - 1] as { finished?: boolean }).finished) && (
             <div className={`${s.row} ${s.rowBot}`}>
               <div className={s.typing} aria-label="Kilpi is working"><i /><i /><i /></div>
             </div>

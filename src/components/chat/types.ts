@@ -57,6 +57,28 @@ export type Project = {
 /** A candidate still being checked during a search (from /api/find's `company` events). */
 export type LiveCand = { domain: string; name: string; status: "scanning" | "done" | "failed"; place: Place; report?: CompanyReport };
 
+/** The fixed subcontractor-search pipeline (from /api/find's `stage` events). */
+export type SearchStageId = "understand" | "find" | "verify" | "rank";
+export type SearchStageStatus = "pending" | "active" | "done" | "failed";
+/** One company being checked against the registers; `verdict` uses the case file's rule once done. */
+export type SearchChip = { key: string; name: string; status: "scanning" | "done" | "failed"; verdict?: "green" | "yellow" | "red" | "grey" };
+export type SearchState = {
+  stages: Record<SearchStageId, SearchStageStatus>;
+  /** "service · area" from the intent event. */
+  scope?: string;
+  /** Candidates found (from find's done detail). */
+  found?: number;
+  companies: SearchChip[];
+  /** Candidates in the ranking (done event). */
+  ranked?: number;
+  /** Short notices worth a line (place fallbacks, ignored IDs); the tilaajavastuu note lives in the case header. */
+  notes: string[];
+  startedAt: number;
+  endedAt?: number;
+  finished?: boolean;
+  failed?: boolean;
+};
+
 // ---- general errands: events from /api/agent (NDJSON) ----------------------------
 export type StepStatus = "pending" | "active" | "done" | "failed" | "skipped";
 /** One tool call the agent made (live: running -> done/failed). */
@@ -74,6 +96,7 @@ export type Msg = Base &
   (
     | { role: "user"; kind: "text"; text: string; attachment?: string }
     | { role: "bot"; kind: "text"; text: string; sources?: Source[]; tone?: "progress" | "error" | "success"; exa?: boolean; note?: string }
+    | ({ role: "bot"; kind: "search" } & SearchState)
     | { role: "bot"; kind: "checking"; items: { name: string; domain: string; status: "scanning" | "done" | "failed" }[] }
     | { role: "bot"; kind: "company"; item: Ranked; rank: number }
     | { role: "bot"; kind: "detail"; item: Ranked; rank?: number }

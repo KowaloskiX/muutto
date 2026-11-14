@@ -88,6 +88,20 @@ export const EN = {
   actionFailed: "That didn't work: {msg}",
   basedOn: "Based on",
   copyForForm: "Approve and copy for the form",
+  sTitle: "Subcontractor search",
+  sUnderstand: "Understanding the job",
+  sFind: "Finding subcontractors",
+  sVerify: "Checking registers",
+  sRank: "Ranking",
+  sPreparing: "Starting the search",
+  sComplete: "Search complete",
+  sStopped: "Search stopped",
+  sFound: "{n} found",
+  sChecked: "{done} of {n} checked",
+  sRanked: "{n} ranked",
+  sSummary: "Searched {found} · checked {n} · {secs} s",
+  sShow: "Show search steps",
+  sHide: "Hide search steps",
 } as const;
 
 export type Key = keyof typeof EN;
