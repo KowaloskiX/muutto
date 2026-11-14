@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -259,6 +259,7 @@ function plainQuote(q: string): string {
   return q
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/^[\s#>*\-|]+/gm, "")
+    .replace(/(^|\s)#{1,6}(?=\s)/g, "$1")
     .replace(/[*_`|]+/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -381,15 +382,15 @@ function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch
           <span>{report.domain ?? "no website"}</span>
           <span>{report.checks.filter((c) => c.status === "green").length}/{report.checks.length} verified</span>
         </div>
-        <h2>{report.name}</h2>
+        <h2 className={report.name.length > 30 ? "kp-long-name" : undefined}>{report.name}</h2>
         {place.address && <p className="match-reason">{place.address}</p>}
         <WhyBlock why={item.why} fit={item.fit} rank={rank} />
         <SiteQuotes report={report} />
         <ul className="kp-checks">
           {exaChecks.map((c) => <CheckRow key={c.id} check={c} />)}
           <RegistryRow checks={registry} />
-          {advanced && <ConnectRecord report={report} />}
         </ul>
+        {advanced && <ul className="kp-connect"><ConnectRecord report={report} /></ul>}
         <div className="kp-actions">
           <button type="button" className={`offer-link-button ${selected ? "" : "kp-secondary"}`} onClick={onToggle}>
             {selected ? <Check weight="bold" /> : <EnvelopeSimple weight="bold" />}{selected ? "In quote request" : "Ask for a quote"}
@@ -411,21 +412,31 @@ function concernsOf(report: CompanyReport): string[] {
   return report.checks.filter((c) => c.status === "yellow" || c.status === "red").map((c) => `${c.label}: ${c.detail}`).slice(0, 3);
 }
 
-function DraftSheet({ drafts, loading, onClose }: { drafts: DraftOut[]; loading: boolean; onClose: () => void }) {
+function DraftSheet({ drafts, loading, error, onClose }: { drafts: DraftOut[]; loading: boolean; error?: string | null; onClose: () => void }) {
   const [lang, setLang] = useState<"fi" | "en">("fi");
   const [sent, setSent] = useState<Record<string, boolean>>({});
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("keydown", onKey); document.body.style.overflow = prev; };
+  }, [onClose]);
   return (
-    <div className="kp-sheet-backdrop" role="dialog" aria-label="Quote requests">
+    <div className="kp-sheet-backdrop" role="dialog" aria-modal="true" aria-labelledby="kp-sheet-title" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="kp-sheet">
         <div className="kp-sheet-head">
-          <h2>Quote requests</h2>
-          <div className="kp-lang">
-            <button className={lang === "fi" ? "on" : ""} onClick={() => setLang("fi")}>Suomi</button>
-            <button className={lang === "en" ? "on" : ""} onClick={() => setLang("en")}>English</button>
+          <h2 id="kp-sheet-title">Quote requests</h2>
+          <div className="kp-lang" role="group" aria-label="Language">
+            <button type="button" className={lang === "fi" ? "on" : ""} aria-pressed={lang === "fi"} onClick={() => setLang("fi")}>Suomi</button>
+            <button type="button" className={lang === "en" ? "on" : ""} aria-pressed={lang === "en"} onClick={() => setLang("en")}>English</button>
           </div>
-          <button className="kp-icon" onClick={onClose} aria-label="Close"><X weight="bold" /></button>
+          <button type="button" ref={closeRef} className="kp-icon" onClick={onClose} aria-label="Close"><X weight="bold" /></button>
         </div>
         {loading && <p className="kp-muted"><SpinnerGap className="spin" /> Drafting one message per company…</p>}
+        {error && <p className="kp-alert" role="alert"><Warning weight="fill" />{error}</p>}
         {drafts.map((d) => {
           const body = lang === "fi" ? d.bodyFi : d.bodyEn;
           const mailto = `mailto:${d.email ?? ""}?subject=${encodeURIComponent(d.subject)}&body=${encodeURIComponent(body)}`;
@@ -438,7 +449,7 @@ function DraftSheet({ drafts, loading, onClose }: { drafts: DraftOut[]; loading:
                 <a className="offer-link-button" href={mailto} onClick={() => setSent((s) => ({ ...s, [d.name]: true }))}>
                   {sent[d.name] ? <Check weight="bold" /> : <EnvelopeSimple weight="bold" />}{sent[d.name] ? "Opened in mail" : "Approve and send"}
                 </a>
-                <button className="offer-link-button kp-secondary" onClick={() => void navigator.clipboard.writeText(`${d.subject}\n\n${body}`)}><Copy weight="bold" />Copy</button>
+                <button type="button" className="offer-link-button kp-secondary" onClick={() => void navigator.clipboard.writeText(`${d.subject}\n\n${body}`)}><Copy weight="bold" />Copy</button>
               </div>
             </div>
           );
@@ -456,12 +467,14 @@ export default function Home() {
   const [companies, setCompanies] = useState<Record<string, "scanning" | "done" | "failed">>({});
   const [ranked, setRanked] = useState<Ranked[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [notices, setNotices] = useState<{ level: "info" | "warning"; message: string }[]>([]);
   const [active, setActive] = useState(0);
   const cardRefs = useRef<(HTMLElement | null)[]>([]);
   const [selected, setSelected] = useState<Record<number, boolean>>({});
   const [watch, setWatch] = useState<Record<number, "idle" | "busy" | "on" | "error">>({});
   const [drafts, setDrafts] = useState<DraftOut[] | null>(null);
   const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [trace, setTrace] = useState<ExaTrace[]>([]);
   // Cards appear as soon as each company is verified; the final ranking replaces them.
   const [pending, setPending] = useState(0);
@@ -474,23 +487,32 @@ export default function Home() {
     const r = ranked[i]?.report;
     if (!r) return;
     setWatch((w) => ({ ...w, [i]: "busy" }));
-    const res = await fetch("/api/watch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: r.name, domain: r.domain }) });
-    setWatch((w) => ({ ...w, [i]: res.ok ? "on" : "error" }));
+    const ok = await fetch("/api/watch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: r.name, domain: r.domain }) })
+      .then((res) => res.ok)
+      .catch(() => false);
+    setWatch((w) => ({ ...w, [i]: ok ? "on" : "error" }));
   }
 
   async function draftQuotes() {
     const chosen = ranked.filter((_, i) => selected[i]);
     if (!chosen.length) return;
     setDrafts([]);
+    setDraftError(null);
     setDrafting(true);
-    const res = await fetch("/api/draft", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job: summary, companies: chosen.map(({ report }) => ({ name: report.name, email: report.contact?.emails?.[0], concerns: concernsOf(report) })) }),
-    });
-    const data = await res.json();
-    setDrafts(data.drafts ?? []);
-    setDrafting(false);
+    try {
+      const res = await fetch("/api/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job: summary, companies: chosen.map(({ report }) => ({ name: report.name, email: report.contact?.emails?.[0], concerns: concernsOf(report) })) }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? `Drafting failed (HTTP ${res.status})`);
+      setDrafts(data.drafts ?? []);
+    } catch (e) {
+      setDraftError(`Couldn't draft the messages. ${(e as Error).message}`);
+    } finally {
+      setDrafting(false);
+    }
   }
 
   async function run(q: string) {
@@ -503,13 +525,20 @@ export default function Home() {
     setWatch({});
     setDrafts(null);
     setError(null);
+    setNotices([]);
     setTrace([]);
     setPending(0);
     setRanking(true);
     setIntent({ service: "", city: "" });
     setSummary(q);
+    let finished = false;
+    try {
     const res = await fetch("/api/find", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
-    const reader = res.body!.getReader();
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? `The search service answered HTTP ${res.status}.`);
+    }
+    const reader = res.body.getReader();
     const dec = new TextDecoder();
     let buf = "";
     for (;;) {
@@ -520,8 +549,10 @@ export default function Home() {
       buf = lines.pop() ?? "";
       for (const line of lines) {
         if (!line.trim()) continue;
-        const e = JSON.parse(line) as FindEvent;
+        let e: FindEvent;
+        try { e = JSON.parse(line) as FindEvent; } catch { continue; }
         if (e.type === "stage") setStages((s) => ({ ...s, [e.id]: { status: e.status, detail: e.detail ?? s[e.id]?.detail } }));
+        else if (e.type === "notice") setNotices((n) => [...n, { level: e.level, message: e.message }]);
         else if (e.type === "intent") {
           setSummary(e.summary);
           setIntent({ service: e.service, city: e.city });
@@ -543,25 +574,37 @@ export default function Home() {
           setTrace(e.trace ?? e.ranked.flatMap((r) => r.report.trace ?? []));
           setActive(0);
           setView("results");
+          finished = true;
         } else if (e.type === "error") {
           setError(e.message);
           setRanking(false);
+          finished = true;
         }
       }
+    }
+    if (!finished) throw new Error("The search stopped before it finished.");
+    } catch (err) {
+      setError((err as Error).message || "Network error");
+      setRanking(false);
+      setPending(0);
     }
   }
 
   // Track which card is centred in the carousel.
   useEffect(() => {
     if (view !== "results") return;
+    // Desktop: horizontal carousel, the card mostly inside the track is active.
+    // Mobile: cards stack vertically in the page, the card crossing the upper-middle band is active.
+    const stacked = window.matchMedia("(max-width: 720px)").matches;
     const obs = new IntersectionObserver(
       (entries) => entries.forEach((en) => en.isIntersecting && setActive(Number((en.target as HTMLElement).dataset.idx))),
-      { threshold: 0.6 },
+      stacked ? { rootMargin: "-35% 0px -55% 0px", threshold: 0 } : { root: document.querySelector(".results-track"), threshold: 0.6 },
     );
     cardRefs.current.forEach((n, i) => { if (n) { n.dataset.idx = String(i); obs.observe(n); } });
     return () => obs.disconnect();
   }, [view, ranked.length]);
 
+  const closeDrafts = useCallback(() => setDrafts(null), []);
   const go = (i: number) => cardRefs.current[Math.max(0, Math.min(ranked.length - 1, i))]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
 
   if (view === "home") {
@@ -608,19 +651,30 @@ export default function Home() {
       <main className="searching-shell">
         <header className="app-header"><Brand /><span className="secure-label"><ShieldCheck />Sources for every claim</span></header>
         <section className="searching-content">
-          <div className="search-orbit"><MagnifyingGlass weight="bold" /><span /></div>
-          <h1>Checking contractors for you</h1>
+          <div className={`search-orbit ${error ? "stopped" : ""}`}><MagnifyingGlass weight="bold" /><span /></div>
+          <h1>{error ? "Search stopped" : "Checking contractors for you"}</h1>
           <p className="searching-query">{summary}</p>
-          {error && <p className="kp-error">{error} <button className="text-link" onClick={() => setView("home")}>Back</button></p>}
+          {error && (
+            <div className="kp-error-card" role="alert">
+              <Warning weight="fill" />
+              <div><strong>The search didn&apos;t finish</strong><span>{error}</span></div>
+              <div className="kp-error-actions">
+                <button type="button" className="offer-link-button" onClick={() => void run(query || summary)}>Try again</button>
+                <button type="button" className="offer-link-button kp-secondary" onClick={() => setView("home")}>New search</button>
+              </div>
+            </div>
+          )}
           <div className="pipeline-card">
             <div className="pipeline-head">
               <span className="pipeline-badge"><Sparkle weight="fill" />Progress</span>
               <span className="pipeline-progress">{done}/{PIPELINE.length}</span>
             </div>
-            <div className="pipeline-now" aria-live="polite"><span className="pipeline-now-dot" /><span>{now?.label ?? "Starting"}</span></div>
+            <div className="pipeline-now" aria-live="polite"><span className={`pipeline-now-dot ${error ? "stopped" : ""}`} /><span>{error ? "Stopped" : now?.label ?? "Starting"}</span></div>
             <div className="stage-list">
               {PIPELINE.map((item) => {
-                const live = stages[item.id]?.status ?? "pending";
+                const raw = stages[item.id]?.status ?? "pending";
+                // Once the run has failed nothing is "in progress" any more.
+                const live = error && raw === "active" ? "pending" : raw;
                 return (
                   <div className={`stage-item ${live === "done" ? "done" : live === "active" ? "active" : ""}`} key={item.id}>
                     <span className="stage-status">{live === "done" ? <Check weight="bold" /> : live === "active" ? <SpinnerGap className="spin" /> : <span className="stage-pending-dot" />}</span>
@@ -652,24 +706,33 @@ export default function Home() {
   return (
     <main className="results-shell">
       <header className="results-header">
-        <button className="new-search-button" onClick={() => setView("home")}><MagnifyingGlass />New search</button>
+        <button type="button" className="new-search-button" onClick={() => setView("home")}><MagnifyingGlass />New search</button>
         <Brand />
         <span />
       </header>
       <section className="results-intro">
-        <div><h1>{ranked.length} contractors checked</h1><p>{summary}</p></div>
+        <div className="results-intro-copy">
+          <h1>{ranked.length ? `${ranked.length} contractor${ranked.length === 1 ? "" : "s"} checked` : "No matches yet"}</h1>
+          <p>{summary}</p>
+        </div>
         {ranked.length > 0 && (
-          <button type="button" className={`kp-compare-toggle ${showCompare ? "on" : ""}`} onClick={() => setShowCompare((v) => !v)} aria-pressed={showCompare}>
-            <Lightning weight="fill" />{showCompare ? "Hide" : "Show"} without vs with Exa
-          </button>
-        )}
-        {ranked.length > 0 && (
-          <button type="button" className={`kp-compare-toggle ${advanced ? "on" : ""}`} onClick={() => setAdvanced((v) => !v)} aria-pressed={advanced}>
-            {advanced ? "Hide" : "Show"} advanced Exa tools
-          </button>
+          <div className="kp-view-toggles" role="group" aria-label="View options">
+            <button type="button" className="kp-toggle" onClick={() => setShowCompare((v) => !v)} aria-pressed={showCompare}>
+              <span className="kp-switch" aria-hidden />Without vs with Exa
+            </button>
+            <button type="button" className="kp-toggle" onClick={() => setAdvanced((v) => !v)} aria-pressed={advanced}>
+              <span className="kp-switch" aria-hidden />Advanced Exa tools
+            </button>
+          </div>
         )}
       </section>
+      {notices.length > 0 && (
+        <div className="kp-notices" role="status">
+          {notices.map((n, i) => <p key={i} className={`kp-notice ${n.level}`}><Warning weight="fill" />{n.message}</p>)}
+        </div>
+      )}
       <div className="kp-results-meta">
+        {error && <p className="kp-alert" role="alert"><Warning weight="fill" />{error}</p>}
         {pending > 0 || ranking ? (
           <span className="kp-pending">
             <SpinnerGap className="spin" />
@@ -704,9 +767,9 @@ export default function Home() {
             ))}
           </section>
           <div className="carousel-controls">
-            <button onClick={() => go(active - 1)} aria-label="Previous"><ArrowLeft weight="bold" /></button>
-            <span>{active + 1} / {ranked.length}</span>
-            <button onClick={() => go(active + 1)} aria-label="Next"><ArrowRight weight="bold" /></button>
+            <button type="button" onClick={() => go(active - 1)} disabled={active === 0} aria-label="Previous"><ArrowLeft weight="bold" /></button>
+            <span aria-live="polite">{active + 1} / {ranked.length}</span>
+            <button type="button" onClick={() => go(active + 1)} disabled={active >= ranked.length - 1} aria-label="Next"><ArrowRight weight="bold" /></button>
           </div>
           <section className="kp-more" id="kp-compare">
             <QuoteCompare
@@ -739,13 +802,13 @@ export default function Home() {
           {Object.values(selected).some(Boolean) && (
             <div className="kp-floating">
               <span>{Object.values(selected).filter(Boolean).length} selected</span>
-              <button className="offer-link-button" onClick={() => void draftQuotes()}><EnvelopeSimple weight="bold" />Draft quote requests</button>
+              <button type="button" className="offer-link-button" onClick={() => void draftQuotes()} disabled={drafting}><EnvelopeSimple weight="bold" />Draft quote requests</button>
             </div>
           )}
-          {drafts && <DraftSheet drafts={drafts} loading={drafting} onClose={() => setDrafts(null)} />}
+          {drafts && <DraftSheet drafts={drafts} loading={drafting} error={draftError} onClose={closeDrafts} />}
         </>
       ) : (
-        <section className="empty-results"><h2>No contractors with a website found</h2><p>Try a broader description or another city.</p><button className="primary-button" onClick={() => setView("home")}>Try again</button></section>
+        <section className="empty-results"><h2>No contractors with a website found</h2><p>Try a broader description or another city.</p><button type="button" className="primary-button" onClick={() => setView("home")}>New search</button></section>
       )}
     </main>
   );

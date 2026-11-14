@@ -28,3 +28,16 @@ export function extractYTunnukset(text: string): string[] {
   }
   return [...found];
 }
+
+/** The check digit a 7-digit base must have, or null when no valid ID can start with it (remainder 1). */
+export function expectedCheckDigit(raw: string): number | null {
+  const base = raw.replace(/\D/g, "").slice(0, 7).padStart(7, "0");
+  const rem = base.split("").map(Number).reduce((acc, d, i) => acc + d * WEIGHTS[i], 0) % 11;
+  if (rem === 1) return null;
+  return rem === 0 ? 0 : 11 - rem;
+}
+
+/** Business-ID-looking tokens in free text ("1234567-8", "1234567 - 8"), valid or not. */
+export function idLikeTokens(text: string): string[] {
+  return [...text.matchAll(/(?<![\d-])(\d{7})\s?-\s?(\d)(?![\d-])/g)].map((m) => `${m[1]}-${m[2]}`);
+}

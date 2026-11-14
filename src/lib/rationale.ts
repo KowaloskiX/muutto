@@ -18,6 +18,8 @@ const hostOf = (u: string) => {
     return "";
   }
 };
+// Exa's place pages carry the map listing's customer reviews; name them as such, not "exa.ai".
+const sourceOf = (u: string) => (/^https?:\/\/(www\.)?exa\.ai\/library\/place\//.test(u) ? "map-listing reviews" : hostOf(u));
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 // ---- fit ----------------------------------------------------------------
@@ -52,7 +54,9 @@ export function fitScore(place: Place, report: CompanyReport): number {
   if (find(report, "prepayment")?.status === "red") pts -= 10;
   if (find(report, "reputation")?.status === "red") pts -= 15;
   pts -= 3 * report.checks.filter((c) => c.id.startsWith("claim-") && c.status === "yellow").length;
-  return Math.max(0, Math.min(100, Math.round((pts / MAX) * 100)));
+  // "Verify <company>" without a job: there is no service to prove, so score on the rest.
+  const max = report.domain && !find(report, "service") ? MAX - W.service : MAX;
+  return Math.max(0, Math.min(100, Math.round((pts / max) * 100)));
 }
 
 // ---- reasons --------------------------------------------------------------
@@ -64,7 +68,7 @@ function complaints(c: Check): { n: number; hosts: string[]; positive: number } 
   const pos = c.evidence.filter((e) => /^positive review/i.test(e.claim ?? ""));
   const fromDetail = Number(/Found (\d+) issue/.exec(c.detail)?.[1] ?? NaN);
   const n = Number.isFinite(fromDetail) ? fromDetail : neg.length;
-  return { n, hosts: [...new Set(neg.map((e) => hostOf(e.url)).filter(Boolean))], positive: pos.length };
+  return { n, hosts: [...new Set(neg.map((e) => sourceOf(e.url)).filter(Boolean))], positive: pos.length };
 }
 
 function candidates(place: Place, r: CompanyReport, service: string): Cand[] {
@@ -88,11 +92,13 @@ function candidates(place: Place, r: CompanyReport, service: string): Cand[] {
   if (rep) {
     const { n, hosts, positive } = complaints(rep);
     const where = hosts.length ? ` on ${hosts.slice(0, 2).join(" and ")}` : "";
-    if (rep.status === "red") add(92, "red", `Serious complaints found: ${plural(n || 1, "issue")}${where}`, rep.evidence);
+    const bankrupt = rep.evidence.some((e) => /^bankruptcy/i.test(e.claim ?? ""));
+    if (rep.status === "red" && bankrupt) add(96, "red", `Bankruptcy or insolvency reported${where}`, rep.evidence);
+    else if (rep.status === "red") add(92, "red", `Serious complaints found: ${plural(n || 1, "issue")}${where}`, rep.evidence);
     else if (rep.status === "yellow")
       add(65, "yellow", `${positive ? "Mixed reviews" : "Some complaints"}: ${plural(n || 1, "complaint")}${where}`, rep.evidence);
     else if (rep.status === "green") {
-      const src = [...new Set(rep.evidence.map((e) => hostOf(e.url)).filter(Boolean))];
+      const src = [...new Set(rep.evidence.map((e) => sourceOf(e.url)).filter(Boolean))];
       add(55, "green", `Reviews and news found are positive or neutral${src.length ? ` (${src.slice(0, 2).join(", ")})` : ""}`, rep.evidence);
     } else add(20, "grey", "No reviews or news found that are clearly about them", rep.evidence);
   }
@@ -106,7 +112,15 @@ function candidates(place: Place, r: CompanyReport, service: string): Cand[] {
 
   const id = find(r, "identity");
   if (id?.status === "green") add(45, "green", `Business ID ${r.businessId} on their site matches the trade register`, id.evidence);
-  else if (id?.status === "yellow" && !r.businessId) add(60, "yellow", "No business ID on their site and no register match; ask for it before paying", id.evidence);
+  else if (id?.status === "yellow" && !r.businessId)
+    add(
+      60,
+      "yellow",
+      /^Business ID \d/.test(id.detail)
+        ? "Their business ID isn't in the open trade register (likely a sole trader); ask for a register extract"
+        : "No business ID on their site and no register match; ask for it before paying",
+      id.evidence,
+    );
   else if (id?.status === "yellow") add(35, "yellow", `Registered as ${r.registry?.name ?? r.name} (${r.businessId}), but site and register don't fully match`, id.evidence);
 
   const age = find(r, "age");

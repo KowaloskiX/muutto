@@ -6,23 +6,7 @@ import type { AgentCompany, Criterion, CriterionResult, MoreRun } from "@/lib/ex
 
 type Props = { job: string; city: string; exclude: { name: string; website?: string }[] };
 
-const CHIP: Record<CriterionResult["status"], { bg: string; fg: string; label: string }> = {
-  met: { bg: "#dcfce7", fg: "#166534", label: "Met" },
-  not_met: { bg: "#fee2e2", fg: "#991b1b", label: "Not met" },
-  unknown: { bg: "#f1f5f9", fg: "#475569", label: "Unknown" },
-};
-
-const s = {
-  wrap: { marginTop: 24, fontFamily: "inherit", color: "inherit" } as React.CSSProperties,
-  btn: { padding: "10px 16px", borderRadius: 8, border: "1px solid #0f172a", background: "#0f172a", color: "#fff", fontWeight: 600, cursor: "pointer", fontSize: 14 } as React.CSSProperties,
-  muted: { color: "#64748b", fontSize: 13 } as React.CSSProperties,
-  tableWrap: { overflowX: "auto", marginTop: 12, border: "1px solid #e2e8f0", borderRadius: 10 } as React.CSSProperties,
-  table: { borderCollapse: "collapse", width: "100%", fontSize: 13, minWidth: 640 } as React.CSSProperties,
-  th: { textAlign: "left", padding: "10px 12px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc", fontWeight: 600, verticalAlign: "bottom" } as React.CSSProperties,
-  td: { padding: "10px 12px", borderBottom: "1px solid #f1f5f9", verticalAlign: "top" } as React.CSSProperties,
-  chip: { display: "inline-block", padding: "3px 9px", borderRadius: 999, fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer" } as React.CSSProperties,
-  pop: { marginTop: 6, padding: 8, borderRadius: 6, background: "#fff", border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,.08)", maxWidth: 260, fontSize: 12, lineHeight: 1.4, color: "#0f172a" } as React.CSSProperties,
-};
+const CHIP_LABEL: Record<CriterionResult["status"], string> = { met: "Met", not_met: "Not met", unknown: "Unknown" };
 
 function hostOf(url?: string) {
   try {
@@ -35,19 +19,18 @@ function hostOf(url?: string) {
 function Cell({ r }: { r?: CriterionResult }) {
   const [open, setOpen] = useState(false);
   const st = r?.status ?? "unknown";
-  const c = CHIP[st];
   const hasEvidence = !!(r?.evidence || r?.sourceUrl);
   return (
     <div onMouseEnter={() => hasEvidence && setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button type="button" style={{ ...s.chip, background: c.bg, color: c.fg, cursor: hasEvidence ? "pointer" : "default" }} onClick={() => hasEvidence && setOpen((o) => !o)} title={r?.evidence ?? undefined}>
-        {c.label}
+      <button type="button" className={`kp-chip-st ${st}`} style={{ cursor: hasEvidence ? "pointer" : "default" }} onClick={() => hasEvidence && setOpen((o) => !o)} title={r?.evidence ?? undefined} aria-expanded={hasEvidence ? open : undefined}>
+        {CHIP_LABEL[st]}
         {hasEvidence ? " ⓘ" : ""}
       </button>
       {open && hasEvidence && (
-        <div style={s.pop}>
+        <div className="kp-matrix-pop">
           {r?.evidence && <div style={{ fontStyle: "italic" }}>{r.evidence}</div>}
           {r?.sourceUrl && (
-            <a href={withTextFragment(r.sourceUrl, r.evidence)} target="_blank" rel="noreferrer" title={r.evidence ? JUMP_HINT : undefined} style={{ color: "#2563eb", wordBreak: "break-all" }}>
+            <a href={withTextFragment(r.sourceUrl, r.evidence)} target="_blank" rel="noreferrer" title={r.evidence ? JUMP_HINT : undefined}>
               {hostOf(r.sourceUrl)}{r.evidence ? " · jump to quote ↗" : ""}
             </a>
           )}
@@ -122,32 +105,36 @@ export default function CriteriaMatrix({ job, city, exclude }: Props) {
   const companies = [...(run?.companies ?? [])].sort((a, b) => score(b) - score(a));
 
   return (
-    <section style={s.wrap}>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button type="button" style={{ ...s.btn, opacity: busy ? 0.6 : 1 }} disabled={busy || !job.trim()} onClick={start}>
-          {busy ? "Exa Agent researching…" : run?.terminal ? "Run Exa Agent again" : "Find more contractors (Exa Agent)"}
+    <section className="kp-matrix" aria-label="Find more contractors with Exa Agent">
+      <div className="kp-matrix-head">
+        <div>
+          <span className="kp-matrix-kicker">Exa Agent</span>
+          <h3>More contractors, checked against your criteria</h3>
+        </div>
+        <button type="button" className="kp-matrix-btn" disabled={busy || !job.trim()} onClick={start}>
+          {busy ? "Exa Agent researching…" : run?.terminal ? "Run Exa Agent again" : "Find more contractors"}
         </button>
-        {runId && (
-          <span style={s.muted}>
+      </div>
+      {runId && (
+          <div className="kp-matrix-muted" aria-live="polite">
             {run?.status ?? "queued"} · {elapsed}s
             {run?.costDollars != null ? ` · $${run.costDollars.toFixed(3)}` : ""}
             {run?.stopReason ? ` · ${run.stopReason}` : ""}
-          </span>
-        )}
-      </div>
-      {!runId && !error && <div style={{ ...s.muted, marginTop: 6 }}>Asynchronous research run (~1 min): finds companies not listed above and checks each against {city ? `job + ${city}` : "the job"} criteria, with evidence.</div>}
-      {error && <div style={{ color: "#b91c1c", marginTop: 8, fontSize: 13 }}>Exa Agent error: {error}</div>}
-      {run?.terminal && run.status !== "completed" && <div style={{ color: "#b91c1c", marginTop: 8, fontSize: 13 }}>Run {run.status}{run.error ? `: ${run.error}` : ""}</div>}
-      {run?.status === "completed" && companies.length === 0 && <div style={{ ...s.muted, marginTop: 8 }}>No additional companies found.</div>}
+          </div>
+      )}
+      {!runId && !error && <div className="kp-matrix-muted">Asynchronous research run (~1 min): finds companies not listed above and checks each against {city ? `job + ${city}` : "the job"} criteria, with evidence.</div>}
+      {error && <div className="kp-matrix-error" role="alert">Exa Agent error: {error}</div>}
+      {run?.terminal && run.status !== "completed" && <div className="kp-matrix-error" role="alert">Run {run.status}{run.error ? `: ${run.error}` : ""}</div>}
+      {run?.status === "completed" && companies.length === 0 && <div className="kp-matrix-muted">No additional companies found.</div>}
 
       {companies.length > 0 && (
-        <div style={s.tableWrap}>
-          <table style={s.table}>
+        <div className="kp-matrix-table-wrap">
+          <table>
             <thead>
               <tr>
-                <th style={s.th}>Company</th>
+                <th>Company</th>
                 {criteria.map((c) => (
-                  <th key={c.key} style={s.th} title={c.description}>
+                  <th key={c.key} title={c.description}>
                     {c.label}
                   </th>
                 ))}
@@ -156,21 +143,21 @@ export default function CriteriaMatrix({ job, city, exclude }: Props) {
             <tbody>
               {companies.map((co, i) => (
                 <tr key={`${co.website ?? co.name}-${i}`}>
-                  <td style={s.td}>
-                    <div style={{ fontWeight: 600 }}>{co.name}</div>
+                  <td>
+                    <div style={{ fontWeight: 600, overflowWrap: "anywhere" }}>{co.name}</div>
                     {co.website && (
-                      <a href={co.website} target="_blank" rel="noreferrer" style={{ color: "#2563eb", fontSize: 12 }}>
+                      <a href={co.website} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>
                         {hostOf(co.website)}
                       </a>
                     )}
-                    <div style={{ ...s.muted, fontSize: 12 }}>
-                      {co.phone && <a href={`tel:${co.phone.replace(/\s/g, "")}`} style={{ color: "inherit", marginRight: 8 }}>{co.phone}</a>}
-                      {co.email && <a href={`mailto:${co.email}`} style={{ color: "inherit" }}>{co.email}</a>}
+                    <div className="kp-matrix-sub">
+                      {co.phone && <a href={`tel:${co.phone.replace(/\s/g, "")}`}>{co.phone}</a>}
+                      {co.email && <a href={`mailto:${co.email}`}>{co.email}</a>}
                     </div>
-                    {co.city && <div style={{ ...s.muted, fontSize: 12 }}>{co.city}</div>}
+                    {co.city && <div className="kp-matrix-sub">{co.city}</div>}
                   </td>
                   {criteria.map((c) => (
-                    <td key={c.key} style={s.td}>
+                    <td key={c.key}>
                       <Cell r={co.criteria.find((r) => r.criterionKey === c.key)} />
                     </td>
                   ))}

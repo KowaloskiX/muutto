@@ -75,6 +75,7 @@
 .ev { font-size: .85rem; border-left: 2px solid var(--line-strong, rgba(16, 17, 19, .22)); padding-left: 10px; }
 .evSrc { color: var(--muted, #737373); font-size: .75rem; text-transform: uppercase; letter-spacing: .03em; }
 .evQuote { margin: 2px 0; font-style: italic; overflow-wrap: anywhere; }
+.evRecord { margin: 2px 0; font-family: var(--font-geist-mono, monospace); font-size: .8rem; overflow-wrap: anywhere; }
 .evLink { color: var(--accent-deep, #0084cc); display: inline-flex; align-items: center; gap: 3px; font-size: .8rem; }
 
 .red { border-left-color: var(--qc-red); }

@@ -61,7 +61,11 @@ function CheckRow({ check }: { check: QuoteCheck }) {
             {check.evidence.map((e, i) => (
               <li key={i} className={styles.ev}>
                 <span className={styles.evSrc}>{SOURCE_LABEL[e.source]}{e.url ? ` · ${host(e.url)}` : ""}</span>
-                <blockquote className={styles.evQuote}>“{e.quote}”</blockquote>
+                {e.record || e.source === "registry" ? (
+                  e.quote && <p className={styles.evRecord}>{e.quote}</p>
+                ) : (
+                  <blockquote className={styles.evQuote}>“{e.quote}”</blockquote>
+                )}
                 {e.url && (
                   <a href={e.source === "quote" ? e.url : withTextFragment(e.url, e.quote)} target="_blank" rel="noopener noreferrer" className={styles.evLink} title={e.quote && e.source !== "quote" ? JUMP_HINT : undefined}>
                     {e.quote && e.source !== "quote" ? "Open at this sentence" : "Open source"} <ArrowSquareOut />
@@ -127,7 +131,7 @@ export default function QuoteChecker({ defaultWebsite }: { defaultWebsite?: stri
       <div className={styles.row}>
         <input className={styles.input} value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="Company website (optional)" />
         <input className={styles.input} value={businessId} onChange={(e) => setBusinessId(e.target.value)} placeholder="Y-tunnus (optional)" />
-        <button type="button" className={styles.primary} onClick={run} disabled={busy || text.trim().length < 20}>
+        <button type="button" className={styles.primary} onClick={run} disabled={busy || !text.trim()}>
           {busy ? <><SpinnerGap className={styles.spin} /> Checking…</> : "Check this quote"}
         </button>
       </div>

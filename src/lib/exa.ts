@@ -4,16 +4,62 @@ const BASE = "https://api.exa.ai";
 
 export type ExaTrace = { endpoint: string; summary: string; ms: number; ok: boolean };
 
+// ---- Rate limiting --------------------------------------------------------
+// Exa answers 429 once a key goes past ~10 requests in flight/second. One /api/find
+// fans out ~20 calls (4 companies x service/reputation/site/id), and judges may run
+// queries side by side, so without this most checks silently came back "failed".
+// Process-wide limiter: at most MAX_PER_SEC starts per rolling second and
+// MAX_INFLIGHT open requests; 429/5xx are retried with backoff.
+const MAX_PER_SEC = Number(process.env.EXA_MAX_QPS ?? 8);
+const MAX_INFLIGHT = Number(process.env.EXA_MAX_INFLIGHT ?? 10);
+const starts: number[] = [];
+let inflight = 0;
+const waiters: (() => void)[] = [];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function acquire(): Promise<void> {
+  for (;;) {
+    const now = Date.now();
+    while (starts.length && now - starts[0] >= 1000) starts.shift();
+    if (starts.length < MAX_PER_SEC && inflight < MAX_INFLIGHT) {
+      starts.push(now);
+      inflight++;
+      return;
+    }
+    if (inflight >= MAX_INFLIGHT) await new Promise<void>((r) => waiters.push(r));
+    else await sleep(1000 - (now - starts[0]) + 5);
+  }
+}
+function release() {
+  inflight--;
+  waiters.shift()?.();
+}
+
+async function limitedFetch(url: string, init: RequestInit, timeoutMs = 20000): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    await acquire();
+    let res: Response;
+    try {
+      res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    } finally {
+      release();
+    }
+    const retryable = res.status === 429 || res.status === 502 || res.status === 503;
+    if (!retryable || attempt >= 3) return res;
+    const after = Number(res.headers.get("retry-after"));
+    await sleep(Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 4000) : 400 * 2 ** attempt + Math.random() * 300);
+  }
+}
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 async function post(path: string, body: unknown, trace?: ExaTrace[], summary = "", extraHeaders?: Record<string, string>): Promise<any> {
   const key = process.env.EXA_API_KEY;
   if (!key) throw new Error("EXA_API_KEY is not set");
   const t0 = Date.now();
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await limitedFetch(`${BASE}${path}`, {
     method: "POST",
     headers: { "x-api-key": key, "Content-Type": "application/json", ...extraHeaders },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(20000),
   });
   const ms = Date.now() - t0;
   trace?.push({ endpoint: path, summary, ms, ok: res.ok });
@@ -72,11 +118,10 @@ export async function call(method: string, path: string, body?: unknown, trace?:
   const key = process.env.EXA_API_KEY;
   if (!key) throw new Error("EXA_API_KEY is not set");
   const t0 = Date.now();
-  const res = await fetch(`${BASE}${path}`, {
+  const res = await limitedFetch(`${BASE}${path}`, {
     method,
     headers: { "x-api-key": key, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(20000),
   });
   trace?.push({ endpoint: `${method} ${path}`, summary, ms: Date.now() - t0, ok: res.ok });
   if (!res.ok) throw new Error(`Exa ${method} ${path} ${res.status}: ${(await res.text()).slice(0, 300)}`);
@@ -107,6 +152,27 @@ export async function createCompanyMonitor(name: string, domain: string | undefi
 export const triggerMonitor = (id: string) => call("POST", `/monitors/${id}/trigger`, {});
 export const monitorRuns = (id: string) => call("GET", `/monitors/${id}/runs`);
 
+export const NOT_A_CONTRACTOR = [
+  "tori.fi", "fonecta.fi", "finder.fi", "urakkamaailma.fi", "fixmera.com", "facebook.com", "instagram.com", "linkedin.com",
+  "yelp.com", "tripadvisor.com", "wikipedia.org", "youtube.com", "kilpailuttaja.fi", "rakentaja.fi", "oikotie.fi", "duunitori.fi",
+  "asiakastieto.fi", "kauppalehti.fi", "yle.fi", "hs.fi", "taloon.com", "k-rauta.fi", "bauhaus.fi", "exa.ai",
+  "suomiguide.fi", "profinder.fi", "yritysopas.fi", "palveluhaku.fi", "remontti.fi", "fixmate.fi", "mestarit.fi", "ytj.fi", "vainu.com", "proff.fi",
+  // more directories / marketplaces / lead-gen sites seen in results
+  "remppatori.fi", "urakkatori.fi", "kilpailutakaikki.fi", "eniro.fi", "sortter.fi", "tarjouspalvelu.fi", "kotikatu.fi", "palvelutori.fi",
+  "veted.eu", "yritystele.fi", "yrityshaku.fi", "katalogi.fi", "infoweb.fi", "01.fi", "taloyhtio.net", "google.com", "maps.app.goo.gl",
+  "trustpilot.com", "reddit.com", "x.com", "twitter.com", "tiktok.com", "kotitalousvahennys.fi", "vero.fi", "suomi.fi", "prh.fi",
+  "hintaopas.fi", "rakennusteollisuus.fi", "motiva.fi", "sahkoala.fi", "tukes.fi", "duuni.fi", "mol.fi",
+];
+const isDirectory = (url: string) => {
+  let host: string;
+  try {
+    host = new URL(url.startsWith("http") ? url : `https://${url}`).hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return true;
+  }
+  return NOT_A_CONTRACTOR.some((d) => host === d || host.endsWith(`.${d}`));
+};
+
 // ---- Places -------------------------------------------------------------
 export type Place = {
   name: string;
@@ -128,11 +194,15 @@ function parsePlace(e: any): Place | null {
     typeof a === "string"
       ? a
       : [a?.street, a?.postcode, a?.locality ?? a?.region].filter(Boolean).join(", ") || undefined;
+  // Some listings stuff keywords into the name: "ACS-Sähkö | Sähköasennukset | Sähköurakointi | …".
+  const name = String(p.name).split(/\s+[|•·]\s+/)[0].trim();
+  const website = p.websites?.[0];
   return {
-    name: p.name,
+    name,
     address,
     phone: p.phoneNumbers?.[0],
-    website: p.websites?.[0],
+    // A listing whose "website" is a directory page (finder.fi/…) has no own site to verify.
+    website: website && !isDirectory(website) ? website : undefined,
     rating: p.rating?.score ? { score: p.rating.score, count: p.rating.count ?? 0 } : undefined,
     categories: p.categories ?? [],
     lat: p.location?.lat ?? p.latitude,
@@ -173,12 +243,40 @@ export async function findPlaces(
 // ---- Service-specific company search ------------------------------------
 // Places only fires for generic trades ("plumber in Espoo"). A specific job
 // ("pipe relining") is better served by semantic search over company sites.
-const NOT_A_CONTRACTOR = [
-  "tori.fi", "fonecta.fi", "finder.fi", "urakkamaailma.fi", "fixmera.com", "facebook.com", "instagram.com", "linkedin.com",
-  "yelp.com", "tripadvisor.com", "wikipedia.org", "youtube.com", "kilpailuttaja.fi", "rakentaja.fi", "oikotie.fi", "duunitori.fi",
-  "asiakastieto.fi", "kauppalehti.fi", "yle.fi", "hs.fi", "taloon.com", "k-rauta.fi", "bauhaus.fi", "exa.ai",
-  "suomiguide.fi", "profinder.fi", "yritysopas.fi", "palveluhaku.fi", "remontti.fi", "fixmate.fi", "mestarit.fi", "ytj.fi", "vainu.com", "proff.fi",
-];
+
+
+// Aggregator pages that list many firms ("10 best plumbers in Espoo", /yritykset/).
+function looksLikeListing(url: string, title?: string): boolean {
+  if (/\/(yritykset|yrityshaku|hakemisto|directory|companies|listing)\b/i.test(url)) return true;
+  return /\b(\d+\s+(best|parasta|top)|top\s*\d+|parhaat|vertailu|compare)\b/i.test(title ?? "");
+}
+
+const flatName = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "");
+const LEGAL = /\b(oy|oyj|ab|ky|tmi|ay|ltd)\b/i;
+
+/**
+ * Page titles are "Service City | Brand" or "Brand – slogan". Pick the segment that names
+ * the business (matches the domain or carries a legal form); if none does, the domain is a
+ * better name than an SEO title like "Kiukaan asennus".
+ */
+export function nameFromTitle(title: string | undefined, hostname: string): string {
+  const host = hostname.replace(/^www\./, "").toLowerCase();
+  const stem = host.split(".").slice(-2)[0] ?? host;
+  const fstem = flatName(stem);
+  const segs = (title ?? "").split(/\s+[|–—:-]\s+|\s*[|–—]\s*|\s+I\s+/).map((x) => x.trim()).filter((x) => x.length > 1);
+  const score = (seg: string) => {
+    const f = flatName(seg);
+    let sc = 0;
+    if (f && fstem && (fstem.includes(f) || f.includes(fstem))) sc += 4;
+    else if (seg.split(/\s+/).some((w) => flatName(w).length >= 4 && fstem.includes(flatName(w)))) sc += 2;
+    if (LEGAL.test(seg)) sc += 2;
+    return sc;
+  };
+  const best = segs.map((seg) => ({ seg, sc: score(seg) })).sort((a, b) => b.sc - a.sc)[0];
+  if (best && best.sc > 0) return best.seg.slice(0, 60);
+  const pretty = stem.replace(/-/g, " ");
+  return pretty.charAt(0).toUpperCase() + pretty.slice(1);
+}
 
 export type WebCompany = { name: string; website: string; url: string; title?: string; highlight?: string };
 
@@ -204,9 +302,9 @@ export async function findCompaniesWeb(service: string, city: string, trace?: Ex
     } catch {
       continue;
     }
-    if (byOrigin.has(origin)) continue;
+    if (byOrigin.has(origin) || isDirectory(r.url) || looksLikeListing(r.url, r.title)) continue;
     const ent = (r.entities ?? []).find((e: any) => e.type === "company")?.properties;
-    const name = ent?.name ?? (r.title ?? new URL(r.url).hostname).split(/[|–—-]/)[0].trim();
+    const name = ent?.name ?? nameFromTitle(r.title, new URL(r.url).hostname);
     byOrigin.set(origin, { name, website: origin, url: r.url, title: r.title, highlight: r.highlights?.[0] });
   }
   return [...byOrigin.values()];
