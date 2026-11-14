@@ -68,7 +68,7 @@ export default function CaseMap({ site, pins, selected, onSelect }: { site?: { l
           iconAnchor: on ? [17, 17] : [13, 13],
         });
         return (
-          <Marker key={p.key} position={[p.lat, p.lng]} icon={icon} zIndexOffset={on ? 900 : 0} eventHandlers={{ click: () => onSelect(p.key) }}>
+          <Marker key={p.key} position={[p.lat, p.lng]} icon={icon} zIndexOffset={on ? 900 : 500 - (p.rank ?? 99) * 10 /* better rank on top when pins overlap */} eventHandlers={{ click: () => onSelect(p.key) }}>
             <Tooltip direction="top" offset={[0, -12]}>
               <b>{p.label}</b>
               {p.sub && (

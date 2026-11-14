@@ -10,8 +10,8 @@ export const EN = {
   ranking: "Ranking by trust…",
   results: "Top {n}, best fit first. {name} looks strongest. Each card leads with the finding that matters most.",
   resultsFlags: "Top {n}, best fit first. {name} looks strongest. Something to clarify at {flagged} of them, shown on each card. The full checklist is in the case file.",
-  askTop: "Draft an RFQ (YSE 1998) and a tilaajavastuu document request to {names}? Nothing is sent until you approve.",
-  askTopFlags: "Draft an RFQ (YSE 1998) and a tilaajavastuu document request to {names}, with a question about each of the {asks} warnings? Nothing is sent until you approve.",
+  askTop: "Draft quote requests and document requests for the top {n}? Nothing is sent until you approve.",
+  askTopFlags: "Draft quote requests and document requests for the top {n}, with a question on each of the {asks} warnings? Nothing is sent until you approve.",
   chipAskTop: "Yes, draft RFQs for the top {n}",
   chipPick: "Pick myself",
   chipNotNow: "Not now",
@@ -97,7 +97,7 @@ export function format(tpl: string, vars: Record<string, string | number> = {}) 
   return tpl.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m));
 }
 
-const STORE = "kilpi-chat-i18n-b2b-v2";
+const STORE = "kilpi-chat-i18n-b2b-v3";
 const cache: Record<string, Table> = {};
 const pending: Record<string, Promise<Table>> = {};
 
