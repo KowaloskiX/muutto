@@ -1007,8 +1007,8 @@ export default function ChatApp() {
         return (
           <div className={s.welcome}>
             <figure className={s.welcomeFig}>
-              <Image src="/media/site.webp" alt="" width={960} height={1200} unoptimized />
-              <figcaption>Photo: K8 / Unsplash</figcaption>
+              <Image src="/media/facade.webp" alt="" fill sizes="100vw" unoptimized priority />
+              <figcaption>Image: AI-generated</figcaption>
             </figure>
             <h1 className={s.welcomeLead}>{m.text}</h1>
             <p className={s.welcomeSub}>{WELCOME_SUB}</p>

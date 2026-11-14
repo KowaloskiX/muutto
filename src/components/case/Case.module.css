@@ -44,16 +44,29 @@
 .heroSteps li { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
 .heroSteps strong { font-weight: 400; }
 .heroSteps p { margin: 0; color: var(--muted); }
-/* the photograph: muted, warm, editorial; the credit sits under it in 11px */
-.heroFig { display: none; flex-direction: column; gap: 8px; margin: 0; min-width: 0; }
-@container (min-width: 760px) { .heroFig { display: flex; } }
-.heroImg { position: relative; aspect-ratio: 4 / 5; max-height: calc(100dvh - 160px); border-radius: 4px; overflow: hidden; background: var(--sand); }
-.heroImg img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 40%; filter: saturate(.72) sepia(.08) contrast(.96); }
-.heroImg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(250 246 238 / .14), rgb(250 246 238 / 0) 40%, rgb(13 16 22 / .06)); pointer-events: none; }
-.heroFig figcaption { color: var(--muted); font-size: 11px; }
-.heroFig figcaption a { color: inherit; text-decoration: none; }
-.heroFig figcaption a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 2px; }
-@media (prefers-color-scheme: dark) { .heroImg img { filter: saturate(.6) sepia(.06) brightness(.82); } .heroImg::after { background: rgb(13 16 22 / .12); } }
+/* the atmosphere: an aerial of courtyard blocks, full-bleed behind the case area, washed out
+   by a paper gradient from the text side so the headline sits on plain paper (desktop only) */
+.heroBg { display: none; position: absolute; inset: 0 0 0 30%; z-index: 0; overflow: hidden; pointer-events: none; animation: fade .9s var(--ease-out) both; }
+@media (min-width: 1024px) { .heroBg { display: block; } }
+.heroBg img { object-fit: cover; object-position: 56% 50%; filter: saturate(.7) sepia(.06) contrast(.94); opacity: .9; }
+.heroBg::after { content: ""; position: absolute; inset: 0; background:
+  linear-gradient(90deg, var(--page) 0%, var(--page) 30%, color-mix(in srgb, var(--page) 80%, transparent) 46%, color-mix(in srgb, var(--page) 32%, transparent) 72%, color-mix(in srgb, var(--page) 12%, transparent) 100%),
+  linear-gradient(180deg, color-mix(in srgb, var(--page) 35%, transparent), transparent 22%, transparent 80%, color-mix(in srgb, var(--page) 30%, transparent)); }
+.heroBg ~ .scroller { position: relative; z-index: 1; }
+.hero .heroText { max-width: 560px; }
+/* the AI-image disclosure: 11px, bottom corner, never competing with the content */
+.aiCredit { position: absolute; right: 12px; bottom: 8px; z-index: 1; color: rgb(255 255 255 / .9); font-size: 11px; line-height: 1; text-shadow: 0 1px 2px rgb(0 0 0 / .45); }
+.heroBg .aiCredit { color: var(--muted); text-shadow: 0 0 6px var(--page); }
+/* while the first search runs and nothing is listed yet: a small framed editorial image beside
+   the "Checking" status; it leaves as soon as the first candidate renders */
+.waitImg { display: none; position: relative; width: 240px; aspect-ratio: 16 / 10; margin-bottom: -48px; /* never pushes the page down, so nothing jumps when it leaves */ border-radius: 4px; overflow: hidden; background: var(--sand); animation: fade .8s var(--ease-out) both; }
+@container (min-width: 760px) { .project:has(.waitImg) { grid-template-columns: minmax(0, 1fr) 240px; gap: 48px; } .waitImg { display: block; } }
+.waitImg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgb(13 16 22 / 0) 55%, rgb(13 16 22 / .3)); pointer-events: none; }
+.waitImg img { object-fit: cover; object-position: 50% 40%; filter: saturate(.65) sepia(.06) contrast(.94); opacity: .9; }
+@media (prefers-color-scheme: dark) {
+  .heroBg img { filter: saturate(.5) brightness(.7) contrast(.95); opacity: .75; }
+  .waitImg img { filter: saturate(.5) brightness(.72); opacity: .8; }
+}
 @container (max-width: 560px) { .heroSteps li { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
 @media (max-width: 1023px) { .hero { padding: 16px 0 32px; } .heroTitle { font-size: 34px; } }
 
@@ -279,7 +292,7 @@ button.k_flag:hover { background: color-mix(in srgb, var(--destructive) 18%, tra
   .drawer { width: min(480px, 100%); height: 100%; box-shadow: var(--shadow-modal); }
 }
 @media (max-width: 1023px) { .drawer { width: 100%; border-left: 0; box-shadow: none; } }
-@media (prefers-reduced-motion: reduce) { .drawer, .scrim, .noticeBody, .detail, .hero, .project, .section { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .drawer, .scrim, .noticeBody, .detail, .hero, .heroBg, .waitImg, .project, .section { animation: none; } }
 
 .dHead { display: flex; align-items: flex-start; gap: 12px; padding: 24px 24px 16px; }
 .dTitle { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }

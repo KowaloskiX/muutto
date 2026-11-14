@@ -185,6 +185,12 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
 
   return (
     <div className={`${s.case} ${openCand ? s.caseOpen : ""}`}>
+      {empty && (
+        <div className={s.heroBg} aria-hidden>
+          <Image src="/media/aerial.webp" alt="" fill sizes="(min-width: 1024px) 75vw, 0px" unoptimized priority />
+          <span className={s.aiCredit}>Image: AI-generated</span>
+        </div>
+      )}
       <div className={`${s.scroller} ${empty ? s.scrollerEmpty : ""}`}>
         {empty ? (
           <section className={s.hero} aria-labelledby="case-hero">
@@ -209,17 +215,6 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
                 </li>
               </ol>
             </div>
-            <figure className={s.heroFig}>
-              <div className={s.heroImg}>
-                <Image src="/media/site.webp" alt="Apartment building under facade renovation, wrapped in scaffolding, Jyväskylä" width={960} height={1200} unoptimized priority />
-              </div>
-              <figcaption>
-                Photo:{" "}
-                <a href="https://unsplash.com/photos/brown-concrete-building-under-white-sky-during-daytime-OvvfmRm4ja4" target="_blank" rel="noopener noreferrer">
-                  K8 / Unsplash
-                </a>
-              </figcaption>
-            </figure>
           </section>
         ) : (
         <>
@@ -256,7 +251,12 @@ export default function CaseFile({ ctx, outbox, compare, busy, picked, onToggleP
               </p>
             )}
           </div>
-
+          {ctx.searching && !cands.length && (
+            <div className={s.waitImg} aria-hidden>
+              <Image src="/media/corridor.webp" alt="" fill sizes="240px" unoptimized />
+              <span className={s.aiCredit}>Image: AI-generated</span>
+            </div>
+          )}
         </header>
 
         {showMap && (
