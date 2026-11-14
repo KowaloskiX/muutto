@@ -8,6 +8,7 @@ import { withTimeout } from "./exa-grounded";
 import { cached, HOUR } from "./cache";
 import type { Check, CompanyReport, Evidence, Status } from "./verify";
 import { fitAdjust } from "./sitefit";
+import { monthYear } from "./public-wins";
 
 export type Why = { sentence: string; status: Status; evidence: Evidence[] };
 export type Ranked = { place: Place; report: CompanyReport; why: Why[]; fit: number };
@@ -85,7 +86,10 @@ function fitScoreB2B(report: CompanyReport): number {
   pts -= 3 * report.checks.filter((c) => c.id.startsWith("claim-") && c.status === "yellow").length;
   // Job search: off-trade registered line or a firm far from the site ranks lower.
   const adj = report.siteFit ? fitAdjust(report.siteFit) : 0;
-  return Math.max(0, Math.min(100, Math.round((pts / MAX_B2B) * 100) + adj));
+  // Won public contracts in this trade (Hilma award notices): a modest bonus, never a penalty.
+  const relWins = find(report, "cap-public-wins")?.wins?.items.filter((w) => w.relevant).length ?? 0;
+  const winsBonus = relWins >= 2 ? 5 : relWins === 1 ? 3 : 0;
+  return Math.max(0, Math.min(100, Math.round((pts / MAX_B2B) * 100) + adj + winsBonus));
 }
 
 export function fitScore(place: Place, report: CompanyReport): number {
@@ -167,6 +171,18 @@ function candidatesB2B(r: CompanyReport, service: string): Cand[] {
   const refs = c("cap-references");
   if (refs?.status === "green") add(72, "green", refs.detail, refs.evidence);
   else if (refs && refs.evidence.length) add(40, "grey", refs.detail.split(/(?<=\.)\s/)[0], refs.evidence);
+
+  const pw = c("cap-public-wins");
+  const wins = pw?.status === "green" ? pw.wins : undefined;
+  if (pw && wins?.items.length) {
+    const rel = wins.items.filter((w) => w.relevant);
+    const shown = rel.length ? rel : wins.items;
+    const latest = shown[0];
+    const meta = [monthYear(latest.date) && `latest ${monthYear(latest.date)}`, latest.buyer].filter(Boolean).join(", ");
+    const kind = rel.length && wins.tradeLabel ? `${wins.tradeLabel} ` : "";
+    const ev = pw.evidence.filter((e) => shown.some((w) => w.url === e.url));
+    add(rel.length ? 74 : 52, "green", `Won ${plural(shown.length, `public ${kind}contract`)} in Hilma${meta ? ` (${meta})` : ""}`, ev);
+  }
 
   const lic = c("cap-licence");
   if (lic?.status === "green") add(68, "green", lic.detail.split(/(?<=\.)\s/)[0], lic.evidence);

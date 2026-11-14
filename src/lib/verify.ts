@@ -7,6 +7,7 @@ import { domainOf, prhByBusinessId, prhByName, prhFailedSince, prhOkSince, type 
 import { fallbackNote, type RegistryFallback } from "./registry-fallback";
 import { extractYTunnukset, isValidYTunnus, normalizeYTunnus } from "./ytunnus";
 import { b2bChecks, type DocRequest } from "./tilaajavastuu";
+import { publicWins, tradeRelevance, winLine, type PublicWin } from "./public-wins";
 import type { CompanyProfile } from "./exa";
 import type { SiteFit } from "./sitefit";
 
@@ -43,6 +44,8 @@ export type Check = {
   law?: string;
   /** A one-click manual check the user can do (e.g. YTJ tax-debt register, Tukes register). */
   action?: { label: string; url: string };
+  /** cap-public-wins: the parsed award notices (newest first) and the job trade they were matched against. */
+  wins?: { items: PublicWin[]; tradeLabel?: string };
 };
 export type Audience = "consumer" | "b2b";
 export type CompanyReport = {
@@ -471,6 +474,29 @@ function extractContact(pages: Page[], domain: string | null) {
   return { emails: emails.slice(0, 3), phones: phones.slice(0, 2) };
 }
 
+// ---- public contracts won (Hilma) -----------------------------------------
+// Award notices that name the company as winner. Informational only: never yellow/red,
+// since most subcontractors work under main contractors and never appear in Hilma.
+async function publicWinsCheck(prh: PrhCompany, jobText: string, trace: ExaTrace[]): Promise<Check> {
+  const base = { id: "cap-public-wins", label: "Public contracts won", group: "capability" as const };
+  const res = await withTimeout(publicWins({ businessId: prh.businessId, name: prh.name }, trace), 20000, "Hilma search").catch(() => null);
+  if (!res || res.failed) return { ...base, status: "grey", detail: "Could not search Hilma (public procurement notices) right now.", evidence: [] };
+  if (!res.wins.length)
+    return { ...base, status: "grey", detail: "No awarded public contracts found in Hilma. Normal for subcontractors who work under main contractors.", evidence: [] };
+  const { wins, label } = tradeRelevance(res.wins, jobText);
+  const rel = wins.filter((w) => w.relevant);
+  const n = wins.length;
+  const tradeNote = label && rel.length ? ` ${rel.length === n ? (n === 1 ? "It is" : "All are") : `${rel.length} of ${n} are`} ${label} work.` : "";
+  const list = wins.map((w: PublicWin, i: number) => `${i + 1}. ${winLine(w)}`).join(" ");
+  return {
+    ...base,
+    status: "green",
+    detail: `Won ${n} public contract${n === 1 ? "" : "s"} in Hilma: ${list}.${tradeNote} Each award notice names ${prh.name} (${prh.businessId}) as the winner.`,
+    evidence: wins.map((w) => ({ url: w.url, quote: w.quote, source: "web" as const, via: "Hilma award notice via Exa search", claim: winLine(w) })),
+    wins: { items: wins, tradeLabel: label },
+  };
+}
+
 // ---- main ---------------------------------------------------------------
 
 export async function verifyCompany(input: {
@@ -548,13 +574,16 @@ export async function verifyCompany(input: {
   const b2bPromise = b2b
     ? b2bChecks({ name, domain, prh, pages, service: input.service, trade: input.trade, scope: input.scope }, trace).catch(() => null)
     : Promise.resolve(null);
-  const [service, claims, reputation, prices, sub] = await Promise.all([servicePromise, siteClaimChecks(pages, prh), reputationPromise, pricesPromise, b2bPromise]);
+  // Public contract track record (Hilma award notices): needs the registered ID and legal name.
+  const winsPromise = b2b && prh?.businessId ? publicWinsCheck(prh, `${input.trade ?? ""} ${input.service} ${input.scope ?? ""}`, trace) : Promise.resolve<Check | null>(null);
+  const [service, claims, reputation, prices, sub, wins] = await Promise.all([servicePromise, siteClaimChecks(pages, prh), reputationPromise, pricesPromise, b2bPromise, winsPromise]);
 
   const checks = [
     ...identityChecks(pages, domain, prh, siteIds, claimedId, !prh && prhFailedSince(startedAt)),
     ...registryChecks(prh, householdWork, b2b),
     ...(service ? [service] : []),
     ...(sub?.checks ?? []),
+    ...(wins ? [wins] : []),
     ...claims,
     reputation,
     ...(prices ? [prices] : []),
@@ -597,7 +626,7 @@ const reportKey = (i: VerifyInput) =>
     i.city?.toLowerCase() ?? "",
     i.householdWork ?? null,
     // B2B reports carry different checks; consumer keys stay exactly as before.
-    ...(i.audience === "b2b" ? ["b2b-v6", (i.trade ?? "").toLowerCase(), (i.scope ?? "").toLowerCase()] : []),
+    ...(i.audience === "b2b" ? ["b2b-v7", (i.trade ?? "").toLowerCase(), (i.scope ?? "").toLowerCase()] : []),
   ]);
 
 /** A cached report for this company+job, with `cachedAt` set, and its age. */
