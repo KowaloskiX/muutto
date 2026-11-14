@@ -13,7 +13,7 @@ import L from "leaflet";
 import { Circle, MapContainer, Marker, Pane, Polygon, TileLayer, Tooltip, WMSTileLayer, useMap } from "react-leaflet";
 import type { Area, Place } from "@/lib/move/types";
 import DriveTimeLayer, { DriveLegend, driveCaption, useHeat } from "./DriveTimeLayer";
-import { FIT_WORD, PLACE_WORD, type Tone } from "./model";
+import { FIT_WORD, PLACE_WORD, placeGroup, type Tone } from "./model";
 import m from "@/components/case/Map.module.css";
 import x from "./Move.module.css";
 
@@ -72,12 +72,17 @@ const PLACE_STYLE: Record<Place["kind"], { color: string; svg: string }> = {
   school: { color: "#2f5d9e", svg: '<path d="M1.5 6.5 8 3.5l6.5 3L8 9.5z"/><path d="M4.5 8v3c2 1.5 5 1.5 7 0V8"/>' },
   daycare: { color: "#2f5d9e", svg: '<circle cx="8" cy="5" r="2.2"/><path d="M4 14c0-3 1.8-5 4-5s4 2 4 5"/>' },
   park: { color: "#2b7a4b", svg: '<circle cx="8" cy="6.5" r="4"/><path d="M8 10.5V15"/>' },
+  custom: { color: "#005032", svg: '<path d="M8 1.8l1.9 3.9 4.3.6-3.1 3 .7 4.3L8 11.6l-3.8 2 .7-4.3-3.1-3 4.3-.6z" fill="currentColor" stroke="none"/>' },
   transit: { color: "#6b4fa0", svg: '<rect x="3.5" y="2" width="9" height="10" rx="2"/><path d="M3.5 8h9M5.5 14.5l1-2.5M10.5 14.5l-1-2.5"/>' },
 };
-const placeIcon = (k: Place["kind"]) =>
+// The user's own criteria get one colour each (first, second, third), all with the star glyph.
+const CUSTOM_COLORS = ["#005032", "#b0306a", "#1f6f8b"];
+const placeColor = (p: Pick<Place, "kind" | "criterion">, customOrder: string[]) =>
+  p.kind === "custom" ? CUSTOM_COLORS[Math.max(0, customOrder.indexOf(p.criterion ?? "")) % CUSTOM_COLORS.length] : PLACE_STYLE[p.kind].color;
+const placeIcon = (k: Place["kind"], color = PLACE_STYLE[k].color) =>
   L.divIcon({
     className: m.icon,
-    html: `<span class="${x.placeIcon}" style="color:${PLACE_STYLE[k].color}"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${PLACE_STYLE[k].svg}</svg></span>`,
+    html: `<span class="${x.placeIcon}" style="color:${color}"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${PLACE_STYLE[k].svg}</svg></span>`,
     iconSize: [20, 20],
     iconAnchor: [10, 10],
     tooltipAnchor: [0, -10],
@@ -320,7 +325,8 @@ export default function MoveMap({
   const center: [number, number] = points[0] ?? [60.19, 24.94];
   const tones = new Set(pins.map((p) => p.tone));
   const hasShapes = pins.some((p) => p.polygon);
-  const kinds = [...new Set(places.map((p) => p.kind))];
+  const customOrder = [...new Set(places.filter((p) => p.kind === "custom").map((p) => p.criterion ?? ""))];
+  const kinds = [...new Map(places.map((p) => [placeGroup(p), placeColor(p, customOrder)] as const)).entries()];
   const dotIcon = useMemo(() => L.divIcon({ className: m.icon, html: `<span class="${x.dot}"></span>`, iconSize: [10, 10], iconAnchor: [5, 5], tooltipAnchor: [0, -8] }), []);
   const priceIcon = (d: ListingDot) =>
     L.divIcon({ className: m.icon, html: `<span class="${x.pricePin}">${d.price ?? "•"}</span>`, iconSize: [0, 0], iconAnchor: [0, 0], tooltipAnchor: [0, -26] });
@@ -353,10 +359,10 @@ export default function MoveMap({
   } else if (layer === "daily") {
     legend = kinds.length ? (
       <>
-        {kinds.map((k) => (
-          <span key={k}>
-            <i className={x.lgPlace} style={{ color: PLACE_STYLE[k].color }} />
-            {PLACE_WORD[k]}
+        {kinds.map(([label, color]) => (
+          <span key={label}>
+            <i className={x.lgPlace} style={{ color }} />
+            {label}
           </span>
         ))}
         {circle && (
@@ -433,11 +439,11 @@ export default function MoveMap({
           )}
           {layer === "daily" &&
             places.map((p, i) => (
-              <Marker key={`${p.kind}-${p.name}-${i}`} position={[p.geo.lat, p.geo.lng]} icon={placeIcon(p.kind)} zIndexOffset={200}>
+              <Marker key={`${p.kind}-${p.name}-${i}`} position={[p.geo.lat, p.geo.lng]} icon={placeIcon(p.kind, placeColor(p, customOrder))} zIndexOffset={200}>
                 <Tooltip direction="top" className={m.tip} opacity={1}>
                   <b>{p.name}</b>
                   <small>
-                    {PLACE_WORD[p.kind]} · {p.distanceM < 1000 ? `${Math.round(p.distanceM)} m` : `${(p.distanceM / 1000).toFixed(1)} km`}
+                    {placeGroup(p)} · {p.distanceM < 1000 ? `${Math.round(p.distanceM)} m` : `${(p.distanceM / 1000).toFixed(1)} km`}
                   </small>
                 </Tooltip>
               </Marker>

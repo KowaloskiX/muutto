@@ -11,6 +11,7 @@ import { paavoAreas, paavoSource, pickCandidates, type Candidate } from "@/lib/m
 import { railStations } from "@/lib/move/region";
 import { batchCommute, isMorningRush, routeTraffic, TRANSIT_ESTIMATE_NOTE, walkTimes } from "@/lib/move/commute";
 import { measureAmenities, regionPois } from "@/lib/move/amenities";
+import { measureCustom } from "@/lib/move/custom";
 import { measureAir } from "@/lib/move/air";
 import { measureNoise } from "@/lib/move/noise";
 import { areaNews, constructionCriterion } from "@/lib/move/news";
@@ -151,7 +152,7 @@ export async function POST(req: Request) {
         if (!process.env.DIGITRANSIT_KEY) send({ type: "notice", message: TRANSIT_ESTIMATE_NOTE });
 
         // ---- measure + listings ----
-        send({ type: "stage", id: "measure", status: "active", detail: "Services, air, noise, works, traffic" });
+        send({ type: "stage", id: "measure", status: "active", detail: `Services, air, noise, works, traffic${intent.customPlaces?.length ? `, ${intent.customPlaces.map((c) => c.label.toLowerCase()).join(", ")} (Exa Places)` : ""}` });
         send({ type: "stage", id: "listings", status: "active", detail: "Live listings on oikotie, vuokraovi, etuovi" });
         const w = weights(intent);
         const lq: ListingQuery = { tenure: intent.tenure, budget: intent.budget, minRooms: u.minRooms, maxRooms: u.maxRooms };
@@ -159,6 +160,14 @@ export async function POST(req: Request) {
         const done: Area[] = [];
 
         await pool(scored, 4, async ({ c, cm }) => {
+          const customP = Promise.all(
+            (intent.customPlaces ?? []).map((cp) =>
+              withTimeout(measureCustom(cp, c, trace), 15_000, "timeout").catch((e) => ({
+                criterion: { id: cp.id, label: cp.label, status: "unknown", value: null, detail: `Exa Places unavailable (${(e as Error).message}).`, sources: [] } as Criterion,
+                places: [],
+              })),
+            ),
+          );
           const [am, air, noise, news, listings, traffic] = await Promise.all([
             withTimeout(measureAmenities(c.center, { hasKids: u.hasKids }), 30_000, "amenities timeout").catch((e) => {
               amenityNotes.add(`Amenities: ${(e as Error).message}`);
@@ -170,6 +179,7 @@ export async function POST(req: Request) {
             withTimeout(areaListings({ ...c, postalCode: c.postalCode }, lq, trace), 22_000, "timeout").catch(() => ({ all: [], ok: false })),
             trafficCriterion(c, work, cm),
           ]);
+          const custom = await customP;
           am?.notes.forEach((n) => amenityNotes.add(n));
           const walk = await Promise.race([walkP, new Promise<null>((r) => setTimeout(() => r(null), 1500))]);
           const wi = scored.findIndex((x) => x.c.id === c.id);
@@ -188,6 +198,7 @@ export async function POST(req: Request) {
             noise,
             constructionCriterion(news.items, news.ok),
             traffic,
+            ...custom.map((x) => x.criterion),
           ];
           const ps = paavoSource(c);
           const area: Area = {
@@ -200,7 +211,7 @@ export async function POST(req: Request) {
             fit: fitScore(criteria, w),
             criteria,
             listings: shown,
-            places: am?.places ?? [],
+            places: [...(am?.places ?? []), ...custom.flatMap((x) => x.places)],
             news: news.items.map(({ title, url, date, quote, tone }) => ({ title, url, date, quote, tone })),
             commute: cm,
             why: whyLines(criteria, w),

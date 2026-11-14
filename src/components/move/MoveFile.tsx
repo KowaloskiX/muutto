@@ -42,7 +42,7 @@ type Props = {
 };
 
 const PROMPTS = [
-  "I start at Wolt HQ, Arkadiankatu 6, Helsinki in January. Rent up to €1,300, 1–2 rooms, short commute, quiet, pharmacy and cafés nearby",
+  "I start at Wolt HQ, Arkadiankatu 6, Helsinki in January. Rent up to €1,300, 1–2 rooms, short commute, quiet, cafés, a gym and a climbing wall nearby",
   "New job at Nokia, Karakaari 7, Espoo — family with 2 kids, rent up to €2,000, schools, parks, clean air",
   "Work at Helsinki-Vantaa airport, buy a 2-room flat under €250k",
 ];

@@ -240,8 +240,8 @@ function parsePlace(e: any): Place | null {
     website: website && !isDirectory(website) ? website : undefined,
     rating: p.rating?.score ? { score: p.rating.score, count: p.rating.count ?? 0 } : undefined,
     categories: p.categories ?? [],
-    lat: p.location?.lat ?? p.latitude,
-    lng: p.location?.lng ?? p.longitude,
+    lat: p.location?.lat ?? p.location?.latitude ?? p.latitude,
+    lng: p.location?.lng ?? p.location?.longitude ?? p.longitude,
     placeUrl: e?.id ?? e?.url,
   };
 }

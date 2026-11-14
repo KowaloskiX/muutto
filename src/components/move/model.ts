@@ -93,6 +93,10 @@ export function columnsFor(areas: Area[]): Col[] {
   } else if (areas.some((a) => a.criteria.some((c) => c.id === "commute"))) {
     cols.push({ key: "commute", label: "Commute", crit: "commute", get: (a) => fromCriterion(a, "commute") });
   }
+  // The user's own criteria (Exa Places) come first after commute: they asked for them by name.
+  const custom = new Map<CriterionId, string>();
+  for (const a of areas) for (const c of a.criteria) if (c.id.startsWith("custom:") && !custom.has(c.id)) custom.set(c.id, c.label);
+  for (const [id, label] of custom) cols.push({ key: id, label, crit: id, get: (a) => fromCriterion(a, id) });
   for (const id of ORDER) {
     if (!areas.some((a) => a.criteria.some((c) => c.id === id))) continue;
     cols.push({ key: id, label: SHORT[id] ?? id, crit: id, get: (a) => fromCriterion(a, id) });
@@ -108,7 +112,11 @@ export const PLACE_WORD: Record<Place["kind"], string> = {
   park: "Park",
   transit: "Transit stop",
   cafe: "Café",
+  custom: "Your pick",
 };
+
+/** Group label for a place: the user's own criterion name for custom places. */
+export const placeGroup = (p: Place) => (p.kind === "custom" ? p.what ?? PLACE_WORD.custom : PLACE_WORD[p.kind]);
 
 /** All listings across the ranked areas, in rank order, de-duplicated by URL. */
 export function allListings(areas: Area[]): { listing: Listing; area: Area; rank: number }[] {

@@ -7,6 +7,7 @@ import { geocode } from "@/lib/geo";
 import { search, type ExaTrace } from "@/lib/exa";
 import type { MoveIntent, Source } from "./types";
 import { haversineM } from "./util";
+import { customId } from "./custom";
 
 const Parsed = z.object({
   workAddress: z.string().describe("The workplace street address exactly as given (e.g. 'Arkadiankatu 6, Helsinki'). Empty if only a company name is given"),
@@ -26,8 +27,24 @@ const Parsed = z.object({
       "Ordered list of what they care about, most important first, using these short phrases where they fit: 'short commute', 'quiet', 'pharmacy nearby', 'cafés nearby', 'grocery nearby', 'schools', 'daycare', 'parks', 'clean air', 'low rent', 'public transport', 'little construction', 'car-friendly'. Always include 'short commute'.",
     ),
   maxCommuteMin: z.number().describe("Max one-way commute in minutes if stated, else 0"),
+  customPlaces: z
+    .array(z.object({ what: z.string().describe("Search phrase, English plural, specific: 'gyms', 'climbing gyms', 'Lidl supermarkets', 'dog parks', 'international schools', 'public saunas', 'tennis courts'"), label: z.string().describe("Short singular column label, e.g. 'Gym', 'Climbing gym', 'Lidl', 'Dog park'") }))
+    .describe(
+      "Other kinds of places they want near home that are NOT already covered by: pharmacy, café, grocery/supermarket in general, school, daycare, park, public transport stop. Max 3, in the order mentioned. Empty if none.",
+    ),
   summary: z.string().describe("One short English sentence restating the request"),
 });
+
+function dedupeCustom(list: { what: string; label: string }[]): MoveIntent["customPlaces"] {
+  const seen = new Set<string>();
+  const out = list
+    .map((c) => ({ what: c.what.trim(), label: (c.label || c.what).trim() }))
+    .filter((c) => c.what.length >= 3)
+    .map((c) => ({ ...c, id: customId(c.what) }))
+    .filter((c) => !seen.has(c.id) && seen.add(c.id))
+    .slice(0, 3);
+  return out.length ? out : undefined;
+}
 
 export type IntentResult = { intent: MoveIntent; workSources: Source[]; minRooms?: number; maxRooms?: number; hasKids: boolean };
 
@@ -103,6 +120,7 @@ export async function understand(query: string, trace: ExaTrace[]): Promise<Inte
     priorities,
     maxCommuteMin: p.maxCommuteMin > 0 ? p.maxCommuteMin : 35,
     summary: p.summary,
+    customPlaces: dedupeCustom(p.customPlaces),
   };
   return { intent, workSources, minRooms: p.minRooms || undefined, maxRooms: p.maxRooms || undefined, hasKids: p.hasKids };
 }

@@ -35,6 +35,9 @@ export type MoveIntent = {
   summary: string;
   /** Where the work location came from (Exa page with the office address, Nominatim geocode). */
   workSources?: Source[];
+  /** Anything else the user wants near home, beyond the built-in criteria: "gyms", "climbing gyms",
+   *  "Lidl", "dog parks". Each becomes a `custom:<slug>` criterion measured with Exa Places. */
+  customPlaces?: { id: `custom:${string}`; what: string; label: string }[];
 };
 
 /** A criterion measured for an area. `id` is stable so the UI can build matrix columns. */
@@ -51,7 +54,8 @@ export type CriterionId =
   | "noise" // traffic/rail noise level
   | "construction" // ongoing works, blasting, noise permits (news + city decisions)
   | "transit" // nearest metro/train/tram stop + public-transport commute
-  | "safety"; // only if a credible public source exists; otherwise omitted
+  | "safety" // only if a credible public source exists; otherwise omitted
+  | `custom:${string}`; // a user-named place type (see MoveIntent.customPlaces)
 
 export type Criterion = {
   id: CriterionId;
@@ -136,7 +140,16 @@ export type WatchRuns = {
   skipped: number;
 };
 
-export type Place = { name: string; kind: "pharmacy" | "grocery" | "school" | "daycare" | "park" | "transit" | "cafe"; geo: LatLng; distanceM: number; url?: string };
+export type Place = {
+  name: string;
+  kind: "pharmacy" | "grocery" | "school" | "daycare" | "park" | "transit" | "cafe" | "custom";
+  geo: LatLng;
+  distanceM: number;
+  url?: string;
+  /** For kind "custom": which user criterion it answers, and its label ("Climbing gym"). */
+  criterion?: `custom:${string}`;
+  what?: string;
+};
 
 /** Travel times from an area (or listing) to the workplace, by mode. Null when not measurable. */
 export type Commute = {

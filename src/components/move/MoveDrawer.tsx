@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUpRight, CaretDown, Check, CircleNotch, Copy, Globe, WarningCircle, X } from "@phosphor-icons/react";
 import { withTextFragment } from "@/lib/textFragment";
 import type { Area, Commute, Criterion, CriterionId, Listing, ListingResearch, MoveIntent, Source, ViewingDraft } from "@/lib/move/types";
-import { DASH, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, PLACE_WORD, price, sizeLine } from "./model";
+import { DASH, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, placeGroup, price, sizeLine } from "./model";
 import type { DraftState, ResearchState, View } from "./types";
 import { AreaStats, SettlingIn } from "./SettlingIn";
 import d from "@/components/case/Drawer.module.css";
@@ -208,7 +208,7 @@ export function ListingRow({
 
 function AreaView({ a, view, tenure, onListing, onResearch, onDraft }: { a: Area; view: Extract<View, { kind: "area" }>; tenure?: MoveIntent["tenure"]; onListing: (l: Listing) => void; onResearch: (l: Listing) => void; onDraft: (l: Listing) => void }) {
   const places = [...a.places].sort((p, q) => p.distanceM - q.distanceM);
-  const kinds = [...new Set(places.map((p) => p.kind))];
+  const kinds = [...new Set(places.map(placeGroup))];
   return (
     <>
       {a.why.length > 0 && (
@@ -251,10 +251,10 @@ function AreaView({ a, view, tenure, onListing, onResearch, onDraft }: { a: Area
           <div className={x.places}>
             {kinds.map((k) => (
               <div key={k} className={x.placeGroup}>
-                <h4>{PLACE_WORD[k]}</h4>
+                <h4>{k}</h4>
                 <ul>
                   {places
-                    .filter((p) => p.kind === k)
+                    .filter((p) => placeGroup(p) === k)
                     .slice(0, 4)
                     .map((p, i) => (
                       <li key={`${p.name}-${i}`}>

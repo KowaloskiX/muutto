@@ -29,6 +29,8 @@ export function weights(intent: MoveIntent): Map<CriterionId, number> {
     for (const [re, ids] of MAP) if (re.test(p)) ids.forEach((id) => w.set(id, Math.max(w.get(id) ?? 0, wt)));
   });
   if (!w.has("commute")) w.set("commute", 5);
+  // Places the user named themselves ("a gym nearby") weigh like a top-three priority.
+  intent.customPlaces?.forEach((c, i) => w.set(c.id, Math.max(3, 5 - i)));
   if (intent.budget && !w.has("rent")) w.set("rent", 4);
   // Everything else still counts a little.
   for (const id of ["transit", "pharmacy", "grocery", "cafe", "school", "park", "air", "noise", "construction", "traffic", "rent"] as CriterionId[]) if (!w.has(id)) w.set(id, 1);
