@@ -176,10 +176,23 @@ export function legalNamesOnSite(pages: Page[], domain: string | null): string[]
 
 // ---- individual checks --------------------------------------------------
 
-function identityChecks(pages: Page[], domain: string | null, prh: PrhCompany | null, siteIds: Map<string, Page>, claimedId?: string): Check[] {
+function identityChecks(pages: Page[], domain: string | null, prh: PrhCompany | null, siteIds: Map<string, Page>, claimedId?: string, registerDown = false): Check[] {
   const checks: Check[] = [];
   if (claimedId && !isValidYTunnus(claimedId)) {
     checks.push({ id: "id-checksum", label: "Business ID", status: "red", detail: `"${claimedId}" is not a valid Finnish business ID (checksum fails).`, evidence: [] });
+    return checks;
+  }
+  if (!prh && siteIds.size && registerDown) {
+    // No answer is not "not registered": PRH was unreachable and no stored copy of the register page was found.
+    const [id, page] = [...siteIds.entries()][0];
+    checks.push({
+      id: "identity",
+      label: "Who is behind this site",
+      status: "grey",
+      detail: `Business ID ${id} is on their site and passes the checksum. The trade register (PRH) is unreachable right now and we found no stored copy of its register page, so we could not confirm who it belongs to. Check it in YTJ.`,
+      evidence: [{ url: page.url, quote: lineAround(page.text, id), source: "site" }],
+      action: { label: "Check in YTJ", url: `https://tietopalvelu.ytj.fi/yritys/${id}` },
+    });
     return checks;
   }
   if (!prh && siteIds.size) {
@@ -474,6 +487,7 @@ export async function verifyCompany(input: {
   scope?: string;
 }): Promise<CompanyReport> {
   const b2b = input.audience === "b2b";
+  const startedAt = Date.now();
   const trace: ExaTrace[] = [];
   const claimedId = input.businessId ? normalizeYTunnus(input.businessId) ?? input.businessId : undefined;
   // Only a business ID given: the register usually knows the website (and the real name).
@@ -537,7 +551,7 @@ export async function verifyCompany(input: {
   const [service, claims, reputation, prices, sub] = await Promise.all([servicePromise, siteClaimChecks(pages, prh), reputationPromise, pricesPromise, b2bPromise]);
 
   const checks = [
-    ...identityChecks(pages, domain, prh, siteIds, claimedId),
+    ...identityChecks(pages, domain, prh, siteIds, claimedId, !prh && prhFailedSince(startedAt)),
     ...registryChecks(prh, householdWork, b2b),
     ...(service ? [service] : []),
     ...(sub?.checks ?? []),
