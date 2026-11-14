@@ -1,6 +1,8 @@
 // Geocoding for any Finnish place (city, municipality, district, station...) via
 // OpenStreetMap Nominatim. Usage policy: max 1 request/second, identifying User-Agent,
 // cache results. We keep an in-process cache and a serial 1.1 s gate.
+import { cacheGet, cacheSet, HOUR } from "./cache";
+
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 const UA = "kilpailutus-hackathon-demo";
 
@@ -56,10 +58,17 @@ export function geocode(q: string): Promise<GeoPoint | null> {
   if (!key) return Promise.resolve(null);
   const hit = cache.get(key);
   if (hit) return hit;
+  // Successful lookups also go to the shared cache (survives hot reloads/restarts), so a
+  // Nominatim hiccup on a later run can't move the search centre and change the shortlist.
+  const stored = cacheGet<GeoPoint>("geo", key, 24 * HOUR);
+  if (stored) return Promise.resolve(stored.value);
   const p = nominatimOnce(q.trim()).catch(() => null);
   cache.set(key, p);
   // Don't cache transient failures forever.
-  p.then((v) => { if (!v) setTimeout(() => cache.delete(key), 60_000); });
+  p.then((v) => {
+    if (v) cacheSet("geo", key, v);
+    else setTimeout(() => cache.delete(key), 60_000);
+  });
   return p;
 }
 

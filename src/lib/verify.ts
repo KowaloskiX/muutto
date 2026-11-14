@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { askJson } from "./llm";
+import { cacheGet, cacheSet, HOUR } from "./cache";
 import { contents, search, type ExaTrace } from "./exa";
 import { groundedReputation, groundedServiceProof, priceHistory, withTimeout, type Confidence } from "./exa-grounded";
 import { domainOf, prhByBusinessId, prhByName, type PrhCompany } from "./prh";
@@ -32,6 +33,8 @@ export type CompanyReport = {
   contact: { emails: string[]; phones: string[] };
   score: number;
   trace: ExaTrace[];
+  /** Set when this report is served from the cache: ISO time of the live checks that produced it. */
+  cachedAt?: string;
 };
 
 const POINTS: Record<Status, number> = { green: 2, yellow: 0, grey: 0, red: -4 };
@@ -461,4 +464,41 @@ export async function verifyCompany(input: { name?: string; website?: string; bu
     score: checks.reduce((s, c) => s + POINTS[c.status], 0),
     trace,
   };
+}
+
+// ---- report cache ---------------------------------------------------------
+// A company's checks don't change minute to minute, but Exa deep search and the LLM
+// judges are sampled, so borderline checks could flip between two runs of the same
+// query. Reusing the report from an earlier live run (with its timestamp) keeps the
+// shortlist stable and makes repeat queries instant.
+
+type VerifyInput = Parameters<typeof verifyCompany>[0];
+/** Younger than this: served without re-checking. Older (up to 24 h): shown at once, then re-checked. */
+export const REPORT_FRESH_MS = Number(process.env.REPORT_CACHE_TTL_MS ?? 6 * HOUR);
+export const REPORT_STALE_MS = 24 * HOUR;
+
+const reportKey = (i: VerifyInput) =>
+  JSON.stringify([
+    (domainOf(i.website) ?? "") || (i.businessId ? normalizeYTunnus(i.businessId) ?? i.businessId : "") || (i.name ?? "").toLowerCase().trim(),
+    i.service.toLowerCase().replace(/\s+/g, " ").trim(),
+    i.city?.toLowerCase() ?? "",
+    i.householdWork ?? null,
+  ]);
+
+/** A cached report for this company+job, with `cachedAt` set, and its age. */
+export function cachedReport(input: VerifyInput, maxAgeMs = REPORT_STALE_MS): { report: CompanyReport; ageMs: number } | undefined {
+  const hit = cacheGet<CompanyReport>("report", reportKey(input), maxAgeMs);
+  if (!hit) return undefined;
+  return {
+    ageMs: hit.ageMs,
+    report: { ...hit.value, cachedAt: new Date(hit.at).toISOString(), trace: hit.value.trace.map((t) => ({ ...t, cached: true })) },
+  };
+}
+
+/** Run the live checks and remember the result, unless a transient failure degraded it. */
+export async function verifyCompanyCached(input: VerifyInput): Promise<CompanyReport> {
+  const report = await verifyCompany(input);
+  const degraded = report.trace.some((t) => !t.ok && !t.summary.includes("[beta")) || report.checks.some((c) => c.id === "reputation" && /search failed/i.test(c.detail));
+  if (!degraded) cacheSet("report", reportKey(input), report);
+  return report;
 }

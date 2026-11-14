@@ -2,7 +2,10 @@
 // show a "what Exa did" trace panel (query, endpoint, latency).
 const BASE = "https://api.exa.ai";
 
-export type ExaTrace = { endpoint: string; summary: string; ms: number; ok: boolean };
+import { cached, HOUR } from "./cache";
+
+/** `cached`: served from the response cache (a real Exa response from an earlier identical request). */
+export type ExaTrace = { endpoint: string; summary: string; ms: number; ok: boolean; cached?: boolean };
 
 // ---- Rate limiting --------------------------------------------------------
 // Exa answers 429 once a key goes past ~10 requests in flight/second. One /api/find
@@ -41,10 +44,15 @@ async function limitedFetch(url: string, init: RequestInit, timeoutMs = 20000): 
     let res: Response;
     try {
       res = await fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (e) {
+      // Connection reset / DNS hiccup: retry once. A timeout is not retried (it would double the wait).
+      if ((e as Error).name === "TimeoutError" || attempt >= 1) throw e;
+      await sleep(300 + Math.random() * 300);
+      continue;
     } finally {
       release();
     }
-    const retryable = res.status === 429 || res.status === 502 || res.status === 503;
+    const retryable = res.status === 429 || res.status === 500 || res.status === 502 || res.status === 503 || res.status === 504;
     if (!retryable || attempt >= 3) return res;
     const after = Number(res.headers.get("retry-after"));
     await sleep(Number.isFinite(after) && after > 0 ? Math.min(after * 1000, 4000) : 400 * 2 ** attempt + Math.random() * 300);
@@ -52,7 +60,34 @@ async function limitedFetch(url: string, init: RequestInit, timeoutMs = 20000): 
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+// Identical /search and /contents requests within an hour reuse the earlier response:
+// same input -> same companies and same evidence on a re-run, and no extra Exa spend.
+const EXA_TTL = Number(process.env.EXA_CACHE_TTL_MS ?? HOUR);
+
 async function post(path: string, body: unknown, trace?: ExaTrace[], summary = "", extraHeaders?: Record<string, string>): Promise<any> {
+  const key = JSON.stringify([path, body, extraHeaders ?? null]);
+  const t0 = Date.now();
+  let fresh: ExaTrace | undefined;
+  let r: Awaited<ReturnType<typeof cached<any>>>;
+  try {
+    r = await cached("exa", key, EXA_TTL, async () => {
+      const local: ExaTrace[] = [];
+      try {
+        return await postLive(path, body, local, summary, extraHeaders);
+      } finally {
+        fresh = local[0];
+      }
+    });
+  } catch (e) {
+    trace?.push(fresh ?? { endpoint: path, summary, ms: Date.now() - t0, ok: false });
+    throw e;
+  }
+  if (r.hit) trace?.push({ endpoint: path, summary: `${summary} (cached ${Math.round(r.ageMs / 60000)} min ago)`, ms: Date.now() - t0, ok: true, cached: true });
+  else trace?.push(fresh ?? { endpoint: path, summary, ms: Date.now() - t0, ok: true });
+  return r.value;
+}
+
+async function postLive(path: string, body: unknown, trace?: ExaTrace[], summary = "", extraHeaders?: Record<string, string>): Promise<any> {
   const key = process.env.EXA_API_KEY;
   if (!key) throw new Error("EXA_API_KEY is not set");
   const t0 = Date.now();

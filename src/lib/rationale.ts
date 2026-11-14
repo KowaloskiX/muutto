@@ -5,6 +5,7 @@ import { z } from "zod";
 import { askJson } from "./llm";
 import type { Place } from "./exa";
 import { withTimeout } from "./exa-grounded";
+import { cached, HOUR } from "./cache";
 import type { Check, CompanyReport, Evidence, Status } from "./verify";
 
 export type Why = { sentence: string; status: Status; evidence: Evidence[] };
@@ -169,7 +170,9 @@ export function buildRanking(items: { place: Place; report: CompanyReport }[], s
   // "Pipe relining" -> "pipe relining" mid-sentence (keep acronyms like "LVI").
   const service = /^[A-Z][a-z]/.test(serviceName) ? serviceName[0].toLowerCase() + serviceName.slice(1) : serviceName;
   const list: Ranked[] = items.map(({ place, report }) => ({ place, report, fit: fitScore(place, report), why: [] }));
-  list.sort((a, b) => b.fit - a.fit || b.report.score - a.report.score);
+  // Ties break on the domain, never on which check happened to finish first.
+  const id = (x: Ranked) => x.report.domain ?? x.report.name;
+  list.sort((a, b) => b.fit - a.fit || b.report.score - a.report.score || id(a).localeCompare(id(b)));
   list.forEach((x, i) => {
     const cands = candidates(x.place, x.report, service);
     const why: Why[] = cands.slice(0, 3).map(({ sentence, status, evidence }) => ({ sentence, status, evidence }));
@@ -194,13 +197,15 @@ const facts = (s: string) => new Set((s.match(/\d+(?:[.,]\d+)?|[a-z0-9-]+\.[a-z]
 export async function polishWhy(list: Ranked[], ms = 9000): Promise<Ranked[]> {
   if (!process.env.OPENAI_API_KEY || !list.length) return list;
   try {
-    const out = await withTimeout(
-      askJson({
+    const user = JSON.stringify(list.map((x, i) => ({ i, company: x.report.name, sentences: x.why.map((w) => w.sentence) })));
+    // Same reasons in -> same wording out (the rewrite is cosmetic; don't let it vary between runs).
+    const { value: out } = await withTimeout(
+      cached("polish", user, 6 * HOUR, () => askJson({
         system:
           "Rewrite short reasons a customer sees next to a ranking of local businesses. Never mention tax credits unless the original sentence does. Keep comparisons exact: 'Only company of 4 confirmed in X' means this company is the single one of the 4 with X. Keep each reason's meaning, keep every number, company name and website exactly, add no new facts, max 14 words each, plain English, no exclamation marks. Return the same number of sentences per item in the same order.",
-        user: JSON.stringify(list.map((x, i) => ({ i, company: x.report.name, sentences: x.why.map((w) => w.sentence) }))),
+        user,
         schema: Polished,
-      }),
+      })),
       ms,
       "LLM polish",
     );
