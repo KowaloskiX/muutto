@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUp, NotePencil, Paperclip, ShieldCheck, SquaresFour } from "@phosphor-icons/react";
+import { ActionCard, PlanCard, str } from "./Agent";
 import type { Ranked } from "@/lib/rationale";
 import type { QuoteInput, QuoteRow, Recommendation } from "@/lib/compare";
 import type { QuoteReport } from "@/lib/quote";
 import { keywordIntent, type RouteArgs, type RouteOut } from "./intent";
 import { CheckingCard, CitedText, CompanyCard, CompanyDetailCard, CompareCard, DraftCard, ExaBadge, NumberedSources, QuoteCheckCard, Sources, WatchCard, companyKey, host } from "./Bubbles";
 import { loadTable, t, type Key, type Table } from "./i18n";
-import { EMPTY_CTX, type Action, type Chip, type Ctx, type Draft, type Msg, type NewMsg, type Source } from "./types";
+import { EMPTY_CTX, type Action, type AgentAction, type Chip, type Ctx, type Draft, type Evidence, type Msg, type NewMsg, type PlanStep, type Source } from "./types";
 import s from "./Chat.module.css";
 
 const STORE = "kilpi-chat-v2";
@@ -18,17 +19,18 @@ const uid = () => Math.random().toString(36).slice(2, 10);
 const EXAMPLE = "Need someone to reline the pipes in my Espoo flat, English speaking";
 
 const welcomeChips = (): Chip[] => [
-  { label: "Reline the pipes in my Espoo flat", action: "example", payload: EXAMPLE, primary: true },
-  { label: "What is YSE 1998?", action: "example", payload: "What is YSE 1998?" },
+  { label: "My flight landed 4 hours late", action: "example", payload: "My Finnair flight from Helsinki to Berlin last Friday landed 4 hours late. Am I owed compensation, and can you help me claim it?" },
+  { label: "Cancel a subscription", action: "example", payload: "I want to cancel my gym membership at Elixia in Helsinki. How do I do it, what's the notice period, and can you draft the cancellation?" },
+  { label: "Book a table for 4 on Friday", action: "example", payload: "Find a good restaurant in central Helsinki for 4 people this Friday at 19:00 and help me book a table." },
 ];
 
-const WELCOME_TEXT = "Hi, I'm Kilpi. Tell me what needs doing at home, or ask me anything about hiring a contractor in Finland. I find and check companies, get quotes, compare them and keep an eye on whoever you hire. Every claim comes with its source, and nothing goes out without your OK.";
+const WELCOME_TEXT = "Hi, I'm Kilpi, your personal butler. Tell me what you need done: a claim, a cancellation, a booking, a complaint. I research it with Exa, show you where every fact comes from, and prepare the next step. Nothing goes out without your OK.";
 
-const welcome = (): Msg => ({
+const welcome = (text = WELCOME_TEXT): Msg => ({
   id: uid(),
   role: "bot",
-  kind: "text",
-  text: WELCOME_TEXT,
+  kind: "welcome",
+  text,
   chips: welcomeChips(),
 });
 
@@ -88,6 +90,7 @@ function routerState(c: Ctx) {
     watched: c.watched.map((w) => ({ name: w.name, domain: w.domain })),
     hired: c.hired,
     checked: c.checked ? item(c.checked, 0) : undefined,
+    errand: c.errand,
   };
 }
 
@@ -121,7 +124,11 @@ export default function ChatApp() {
         if (Array.isArray(saved.msgs) && saved.msgs.length) {
           // Anything that was mid-flight when the tab closed is not coming back.
           const restoredMsgs = saved.msgs.map((m) =>
-            m.kind === "checking" ? { ...m, items: m.items.map((i) => (i.status === "scanning" ? { ...i, status: "failed" as const } : i)) } : m,
+            m.kind === "checking"
+              ? { ...m, items: m.items.map((i) => (i.status === "scanning" ? { ...i, status: "failed" as const } : i)) }
+              : m.kind === "plan" && !m.finished
+                ? { ...m, finished: true, failed: true, steps: m.steps.map((x) => (x.status === "active" ? { ...x, status: "failed" as const } : x)) }
+                : m,
           );
           setMsgs(() => restoredMsgs);
           ctxRef.current = { ...EMPTY_CTX, ...saved.ctx };
@@ -424,6 +431,171 @@ export default function ChatApp() {
     }
   }
 
+  /** The visible conversation as agent turns (progress lines dropped, proposed actions summarised). */
+  function agentMessages() {
+    const turns: { role: "user" | "assistant"; content: string }[] = [];
+    for (const m of msgsRef.current) {
+      let turn: { role: "user" | "assistant"; content: string } | undefined;
+      if (m.kind === "text" && m.text && !(m.role === "bot" && m.tone === "progress")) turn = { role: m.role === "user" ? "user" : "assistant", content: m.text.slice(0, 2000) };
+      else if (m.kind === "action") turn = { role: "assistant", content: `[Proposed ${m.action.kind.replace("_", " ")}: ${m.action.title}${m.status === "done" ? " — the user approved it" : ""}]` };
+      if (!turn) continue;
+      const last = turns[turns.length - 1];
+      if (last?.role === turn.role) last.content += `\n\n${turn.content}`;
+      else turns.push(turn);
+    }
+    while (turns.length && turns[0].role !== "user") turns.shift();
+    return turns.slice(-14);
+  }
+
+  const ACTION_KINDS = ["email", "letter", "calendar", "booking_link", "call_script", "watch", "form_link"];
+
+  /** A general errand: stream /api/agent and render its plan, evidence, cited answer and proposed actions. */
+  async function runErrand(text: string, args: RouteArgs, table: Promise<Table>) {
+    const prev = ctxRef.current.errand;
+    setCtx((c) => ({ ...c, errand: { topic: prev && text.length < 80 ? prev.topic : text.slice(0, 300), last: prev?.last } }));
+    let planId: string | null = null;
+    let plan: string[] = [];
+    let steps: PlanStep[] = [];
+    const evidence: Evidence[] = [];
+    let handoff: string | undefined;
+    let replied = false;
+    let lastText: string | undefined;
+    // Proposed actions are shown right after the answer that explains them.
+    let queued: AgentAction[] = [];
+    const flush = () => {
+      queued.forEach((action) => push({ role: "bot", kind: "action", action, status: "pending" }));
+      queued = [];
+    };
+    const syncPlan = (finished?: boolean, failed?: boolean) => {
+      const next = { plan, steps: [...steps], evidence: evidence.map((x) => ({ ...x })), finished, failed };
+      if (!planId) planId = push({ role: "bot", kind: "plan", ...next });
+      else patch(planId, (m) => ({ ...m, ...next }) as Msg);
+    };
+    const closePlan = (failed: boolean) => {
+      if (!planId && !steps.length && !plan.length) return;
+      steps = steps.map((x) => (x.status === "active" ? { ...x, status: failed ? "failed" : "done" } : x.status === "pending" ? { ...x, status: "skipped" } : x));
+      syncPlan(true, failed);
+    };
+    const retry: Chip[] = [{ label: tr("chipRetry"), action: "retry_errand", payload: text }];
+    try {
+      const res = await fetch("/api/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: agentMessages(), state: ctxRef.current.agentState }),
+      });
+      // Agent not deployed (yet): answer questions the old way, from Exa with sources.
+      if (res.status === 404 || res.status === 405) return runAsk(text, args, table);
+      if (!res.ok || !res.body) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `agent failed (${res.status})`);
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      let finished = false;
+      const handle = (line: string) => {
+        let e: Record<string, unknown> & { type?: string };
+        try {
+          e = JSON.parse(line);
+        } catch {
+          return; // a partial or non-JSON line: skip it
+        }
+        if (e.type === "plan" && Array.isArray(e.steps)) {
+          // The plan is what the agent intends to do (strings); tool calls arrive as separate `step` events.
+          plan = (e.steps as unknown[]).map((x) => (typeof x === "string" ? x : String((x as { label?: string })?.label ?? ""))).filter(Boolean);
+          syncPlan();
+        } else if (e.type === "step") {
+          const id = String(e.id);
+          const i = steps.findIndex((x) => x.id === id);
+          const old = steps[i];
+          const st = String(e.status);
+          const status: PlanStep["status"] = st === "running" || st === "active" ? "active" : st === "error" || st === "failed" ? "failed" : st === "done" ? "done" : "pending";
+          const row: PlanStep = { id, label: (e.label as string) || old?.label || "", status, tool: (e.tool as string) || old?.tool, detail: (e.detail as string) || old?.detail };
+          if (i < 0) steps = [...steps, row];
+          else steps = steps.map((x, k) => (k === i ? row : x));
+          syncPlan();
+        } else if (e.type === "evidence" && Array.isArray(e.items)) {
+          // The same evidence id can arrive again (e.g. searched, then read): merge by id, else by url.
+          for (const it of e.items as Evidence[]) {
+            if (!it?.url || !/^https?:/i.test(it.url)) continue;
+            const i = evidence.findIndex((x) => (it.id && x.id === it.id) || x.url === it.url);
+            if (i < 0) evidence.push(it);
+            else evidence[i] = { ...evidence[i], ...Object.fromEntries(Object.entries(it).filter(([, v]) => v != null && v !== "")) };
+          }
+          syncPlan();
+        } else if (e.type === "message" && typeof e.text === "string" && e.text.trim()) {
+          const sources: Source[] = ((e.sources as Source[] | undefined) ?? []).filter((x) => x?.url && /^https?:/i.test(x.url)).map((x, i) => ({ ...x, n: x.n ?? i + 1 }));
+          say(e.text, { sources, exa: sources.length > 0 });
+          flush();
+          replied = true;
+          lastText = e.text;
+        } else if (e.type === "action" && e.action && typeof e.action === "object") {
+          const a = e.action as Partial<AgentAction>;
+          if (!a.kind || !ACTION_KINDS.includes(a.kind)) return;
+          const action: AgentAction = { id: String(a.id ?? uid()), kind: a.kind, title: a.title || a.kind.replace("_", " "), payload: a.payload && typeof a.payload === "object" ? a.payload : {}, requiresApproval: true };
+          queued.push(action);
+          replied = true;
+        } else if (e.type === "handoff" && e.to === "contractors") {
+          handoff = (typeof e.query === "string" && e.query.trim()) || text;
+        } else if (e.type === "done") {
+          finished = true;
+          setCtx((c) => ({ ...c, agentState: e.state ?? c.agentState }));
+          const calls = Number((e.stats as { exaCalls?: number } | undefined)?.exaCalls);
+          if (planId && calls > 0) patch(planId, (m) => ({ ...m, exaCalls: calls }) as Msg);
+        } else if (e.type === "error") {
+          throw new Error(typeof e.message === "string" ? e.message : "agent error");
+        }
+      };
+      while (!finished) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) if (line.trim()) handle(line);
+      }
+      if (!finished && buf.trim()) handle(buf);
+      closePlan(false);
+      flush();
+      if (lastText) setCtx((c) => ({ ...c, errand: c.errand && { ...c.errand, last: lastText!.slice(0, 400) } }));
+      if (handoff) {
+        await table;
+        setCtx((c) => ({ ...c, errand: undefined }));
+        if (!replied) sayT("handoff", undefined, { tone: "progress" });
+        return runFind(handoff, "job", table);
+      }
+      if (!replied) {
+        await table;
+        sayT("agentNoAnswer", undefined, { chips: retry });
+      }
+    } catch (err) {
+      closePlan(true);
+      flush();
+      await table;
+      sayT("agentError", { msg: (err as Error).message }, { tone: "error", chips: retry });
+    }
+  }
+
+  async function approveWatch(msgId: string, a: AgentAction) {
+    const p = a.payload ?? {};
+    const endpoint = str(p, "endpoint");
+    const name = str(p, "name", "target", "query", "topic") ?? a.title;
+    try {
+      let out: { id?: string; monitorId?: string };
+      if (endpoint) {
+        // Only our own API: never let a suggested action call an arbitrary URL.
+        if (!/^\/api\/[\w/-]+(\?[^#]*)?$/.test(endpoint)) throw new Error("this watch has no valid endpoint");
+        const body = p.body && typeof p.body === "object" ? p.body : Object.fromEntries(Object.entries(p).filter(([k]) => !["endpoint", "method"].includes(k)));
+        out = await postJson(endpoint, body);
+      } else {
+        // The errand agent creates the Exa Monitor only on this explicit approval.
+        out = await postJson("/api/agent", { approve: { kind: "watch", payload: { query: str(p, "query") ?? name, why: str(p, "why"), includeDomains: Array.isArray(p.includeDomains) ? p.includeDomains : [] } } });
+      }
+      const id = out.id ?? out.monitorId;
+      if (id) setCtx((x) => ({ ...x, watched: [...x.watched.filter((w) => w.monitorId !== id), { name, monitorId: id }] }));
+      patch(msgId, (m) => ({ ...m, status: "done", result: undefined }) as Msg);
+    } catch (err) {
+      patch(msgId, (m) => ({ ...m, status: "failed", result: tr("actionFailed", { msg: (err as Error).message }) }) as Msg);
+    }
+  }
+
   // ---- input -------------------------------------------------------------
   async function work(fn: () => Promise<void>) {
     setBusy(true);
@@ -513,13 +685,13 @@ export default function ChatApp() {
         case "unwatch":
           await table;
           return runUnwatch(a.target || a.company || (refItems[0] && nameOf(refItems[0])));
-        case "ask":
-          return runAsk(text, a, table);
+        case "errand":
+          return runErrand(text, a, table);
         case "start_over":
           ctxRef.current = { ...EMPTY_CTX, lang: r.lang };
           setCtxState(ctxRef.current);
           setMsgs(() => []);
-          push({ role: "bot", kind: "text", text: r.reply || WELCOME_TEXT, chips: welcomeChips() });
+          push(welcome(r.reply || WELCOME_TEXT));
           return;
         default:
           // Generated replies are already in the user's language: no need to wait for the UI strings.
@@ -540,6 +712,10 @@ export default function ChatApp() {
     if (act === "paste_another") {
       inputRef.current?.focus();
       return;
+    }
+    if (act === "retry_errand") {
+      retireChips();
+      return work(() => runErrand(chip.payload ?? "", {}, table));
     }
     retireChips();
     echo(chip.label);
@@ -573,6 +749,17 @@ export default function ChatApp() {
     setCtx((c) => ({ ...c, selected: c.selected.includes(key) ? c.selected.filter((k) => k !== key) : [...c.selected, key] }));
 
   // ---- render ------------------------------------------------------------
+  /** The sources an action rests on (payload.basedOn), with the quote we read there for deep links. */
+  const basisOf = (a: AgentAction): Source[] => {
+    const based = Array.isArray(a.payload?.basedOn) ? (a.payload.basedOn as { id?: string; url?: string; title?: string }[]) : [];
+    const read = msgs.flatMap((m) => (m.kind === "plan" ? m.evidence : []));
+    return based
+      .filter((b) => b?.url && /^https?:/i.test(b.url))
+      .map((b) => {
+        const ev = read.find((e) => (b.id && e.id === b.id) || e.url === b.url);
+        return { url: b.url!, title: b.title ?? ev?.title, quote: ev?.quote };
+      });
+  };
   const lastChipMsg = [...msgs].reverse().find((m) => m.chips?.length && !m.chipsUsed)?.id;
 
   function body(m: Msg) {
@@ -626,6 +813,47 @@ export default function ChatApp() {
         return <CompareCard rows={m.rows} recommendation={m.recommendation} />;
       case "watch":
         return <WatchCard name={m.name} domain={m.domain} monitorId={m.monitorId} mode={m.mode} />;
+      case "welcome":
+        return (
+          <>
+            <div className={`${s.bubble} ${s.bot}`}>
+              <span className={s.text}>{m.text}</span>
+            </div>
+            <div className={`${s.card} ${s.flagship}`}>
+              <div className={s.flagTop}>
+                <ShieldCheck weight="fill" />
+                <div>
+                  <small>What I do best</small>
+                  <strong>Hiring someone? I&apos;ll check them before you pay.</strong>
+                </div>
+              </div>
+              <ul>
+                <li>Finds local companies and checks the trade and tax registers, their site and reviews</li>
+                <li>Drafts your quote requests, then checks and compares the quotes</li>
+                <li>Keeps an eye on whoever you hire</li>
+              </ul>
+              <button type="button" className={s.approve} onClick={() => send(EXAMPLE)} disabled={busy}>
+                Find and vet a plumber in Espoo
+              </button>
+            </div>
+          </>
+        );
+      case "plan":
+        return <PlanCard plan={m.plan} steps={m.steps} evidence={m.evidence} finished={m.finished} failed={m.failed} exaCalls={m.exaCalls} lang={ctx.lang} />;
+      case "action":
+        return (
+          <ActionCard
+            action={m.action}
+            status={m.status}
+            edit={m.edit}
+            editing={m.editing}
+            result={m.result}
+            basis={basisOf(m.action)}
+            lang={ctx.lang}
+            onChange={(x) => patch(m.id, (y) => ({ ...y, ...x }) as Msg)}
+            onWatch={() => approveWatch(m.id, m.action)}
+          />
+        );
     }
   }
 
@@ -633,8 +861,8 @@ export default function ChatApp() {
     <div className={s.stage}>
       <aside className={s.aside}>
         <span className={s.asideMark}><ShieldCheck weight="fill" /></span>
-        <h1>Text Kilpi the job. It does the legwork.</h1>
-        <p>Finds local contractors with Exa, checks each one against the Finnish trade register and their own site, drafts your quote requests and compares the replies. Ask it anything about hiring in Finland: every answer is sourced. You approve every step.</p>
+        <h1>Tell Kilpi what you need done. It does the legwork.</h1>
+        <p>A personal butler for real-life errands: flight compensation, cancellations, bookings, complaints. It researches with Exa, cites every fact, and prepares the email, booking or reminder for you to approve. Hiring a contractor? It checks them against the Finnish registers before you pay.</p>
         <Link href="/" className={s.asideLink}><SquaresFour weight="bold" /> Open the classic view</Link>
       </aside>
 
@@ -643,7 +871,7 @@ export default function ChatApp() {
           <span className={s.avatar} aria-hidden><ShieldCheck weight="fill" /></span>
           <div className={s.who}>
             <strong>Kilpi</strong>
-            <small>{busy ? "working on it…" : "your contractor butler"}</small>
+            <small>{busy ? "working on it…" : "your personal butler"}</small>
           </div>
           <Link href="/" className={s.headBtn} title="Classic view"><SquaresFour weight="bold" /><span>Classic</span></Link>
           <button type="button" className={s.headBtn} onClick={newChat} disabled={busy} title="New chat"><NotePencil weight="bold" /><span>New chat</span></button>
@@ -674,7 +902,7 @@ export default function ChatApp() {
               </div>
             );
           })}
-          {busy && (
+          {busy && !(msgs[msgs.length - 1]?.kind === "plan" && !(msgs[msgs.length - 1] as { finished?: boolean }).finished) && (
             <div className={`${s.row} ${s.rowBot}`}>
               <span className={s.mini} aria-hidden><ShieldCheck weight="fill" /></span>
               <div className={`${s.bubble} ${s.bot} ${s.typing}`} aria-label="Kilpi is typing"><i /><i /><i /></div>
@@ -693,7 +921,7 @@ export default function ChatApp() {
             ref={inputRef}
             value={input}
             rows={1}
-            placeholder={ctx.ranked.length ? "Message Kilpi, or paste a quote…" : "What needs doing? Or ask a question…"}
+            placeholder={ctx.ranked.length ? "Message Kilpi, or paste a quote…" : "Tell me what you need done…"}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

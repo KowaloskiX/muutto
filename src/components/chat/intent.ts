@@ -9,10 +9,10 @@ export const INTENTS = [
   "compare_quotes",
   "watch",
   "unwatch",
-  "ask", // a factual question answered from the web (Exa) with sources
+  "errand", // any other real-life task or question: streamed from /api/agent (Exa research + proposed actions)
   "start_over",
   "smalltalk",
-  "out_of_scope",
+  "out_of_scope", // true nonsense only (gibberish, harmful requests)
 ] as const;
 export type ChatIntent = (typeof INTENTS)[number];
 
@@ -23,6 +23,7 @@ export type RouteArgs = {
   company?: string;
   refs?: number[];
   target?: string;
+  /** errand: a web search query, used only if /api/agent is unavailable (falls back to /api/ask). */
   searchQuery?: string;
   finland?: boolean;
 };
@@ -46,11 +47,12 @@ export function keywordIntent(text: string): ChatIntent {
   if (/\b(stop watching|unwatch|lopeta seuranta)\b/.test(t)) return "unwatch";
   if (/\b(watch|monitor|keep an eye|seuraa)\b/.test(t)) return "watch";
   if (/\b(start over|reset|alusta)\b/.test(t)) return "start_over";
-  if (/\?$/.test(t.trim()) || /^(what|how|why|is|are|can|do|does|mikä|mitä|miten|onko|voiko)\b/.test(t)) return "ask";
+  // Only a named trade goes to the contractor search; everything else is a general errand.
   if (
-    /\b(need|find|looking for|someone|contractor|plumber|electrician|painter|cleaner|mover|fix|install|repair|reline|renovat|etsi|tarvitsen)\w*/.test(t) ||
-    /putki|sähkö|remontti|muutto|siivous|maalari|lvi/.test(t)
+    /\b(contractor|plumber|electrician|painter|cleaner|mover|carpenter|roofer|tiler|handyman|reline|relining|renovat)\w*/.test(t) ||
+    /putki|sähkö|remontti|muutto|siivous|maalari|lvi|kirvesmies|katto/.test(t)
   )
     return "find_contractor";
-  return "smalltalk";
+  if (/^(hi|hello|hey|thanks|thank you|moi|hei|kiitos|terve)\b[\s!.]*$/.test(t.trim())) return "smalltalk";
+  return "errand";
 }

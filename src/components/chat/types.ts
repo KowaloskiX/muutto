@@ -15,7 +15,8 @@ export type Action =
   | "hire"
   | "not_yet"
   | "find_again"
-  | "watch_name";
+  | "watch_name"
+  | "retry_errand";
 
 export type Chip = { label: string; action: Action; payload?: string; primary?: boolean };
 
@@ -31,6 +32,17 @@ export type Draft = {
   sent?: boolean;
 };
 
+// ---- general errands: events from /api/agent (NDJSON) ----------------------------
+export type StepStatus = "pending" | "active" | "done" | "failed" | "skipped";
+/** One tool call the agent made (live: running -> done/failed). */
+export type PlanStep = { id: string; label: string; status: StepStatus; tool?: string; detail?: string };
+export type Evidence = { id?: string; url: string; title?: string; quote?: string; via?: string };
+export type ActionKind = "email" | "letter" | "calendar" | "booking_link" | "call_script" | "watch" | "form_link";
+export type AgentAction = { id: string; kind: ActionKind; title: string; payload: Record<string, unknown>; requiresApproval?: boolean };
+/** pending until the user clicks; never shown as done before that. */
+export type ActionStatus = "pending" | "done" | "failed";
+export type ActionEdit = { to?: string; subject?: string; body?: string };
+
 type Base = { id: string; chips?: Chip[]; chipsUsed?: boolean };
 
 export type Msg = Base &
@@ -44,6 +56,9 @@ export type Msg = Base &
     | { role: "bot"; kind: "quoteCheck"; company: string; report: QuoteReport }
     | { role: "bot"; kind: "compare"; rows: QuoteRow[]; recommendation: Recommendation }
     | { role: "bot"; kind: "watch"; name: string; domain?: string; monitorId?: string; mode?: string }
+    | { role: "bot"; kind: "welcome"; text: string }
+    | { role: "bot"; kind: "plan"; plan?: string[]; steps: PlanStep[]; evidence: Evidence[]; finished?: boolean; failed?: boolean; exaCalls?: number }
+    | { role: "bot"; kind: "action"; action: AgentAction; status: ActionStatus; edit?: ActionEdit; editing?: boolean; result?: string }
   );
 
 export type Ctx = {
@@ -62,6 +77,10 @@ export type Ctx = {
   checked?: Ranked;
   comparison?: { headline: string; pick?: string; rows: { company: string; total?: number; upfrontPct?: number; reds: number; yellows: number }[]; reasons: string[] };
   watched: { name: string; domain?: string; monitorId: string }[];
+  /** Opaque state returned by /api/agent on `done`, sent back with the next errand turn. */
+  agentState?: unknown;
+  /** The errand in progress (for the router: follow-ups like "AY1234" or "yes, do it" belong to it). */
+  errand?: { topic: string; last?: string };
 };
 
 export const EMPTY_CTX: Ctx = { ranked: [], selected: [], quotes: [], watched: [] };

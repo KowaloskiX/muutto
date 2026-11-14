@@ -201,3 +201,57 @@ a.meta:hover { color: var(--accent-deep); }
 .srcList { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .srcList .src b { font-weight: 800; margin-right: 2px; }
 .note { display: block; margin-top: 6px; color: var(--muted); font-size: 12px; }
+
+/* ---- errands (/api/agent): live plan, evidence, action cards ---- */
+.plan { padding: 10px 12px; }
+.planHead { display: flex; align-items: center; gap: 6px; color: var(--accent-deep); }
+.planHead svg { width: 15px; height: 15px; }
+.planHead small { flex: 1; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.planCount { color: var(--muted); font-size: 11.5px; font-weight: 600; }
+.steps { display: flex; flex-direction: column; gap: 5px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13.5px; }
+.steps li { display: flex; align-items: flex-start; gap: 7px; min-width: 0; color: var(--ink); }
+.steps li > span:first-of-type { flex: 1; min-width: 0; }
+.steps .spin, .steps .dot { margin-top: 1px; }
+.stepIdle { color: var(--muted) !important; }
+.tool { flex: none; padding: 0 7px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--accent-deep); font-size: 10.5px; font-weight: 650; line-height: 18px; white-space: nowrap; }
+.evidence { margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--line); }
+.evidence > small { display: block; margin-bottom: 4px; color: var(--muted); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.evRow { display: flex; flex-wrap: wrap; gap: 4px; }
+.more { padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 11px; font-weight: 700; line-height: 18px; }
+
+.action { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.okBadge { flex: none; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--warning) 16%, var(--surface)); color: var(--warning); font-size: 10.5px; font-weight: 700; line-height: 18px; white-space: nowrap; }
+.actMeta { display: flex; flex-direction: column; gap: 4px; margin: 6px 0 0; color: var(--muted); font-size: 12.5px; }
+.actMeta:empty { display: none; }
+.actNote { color: var(--ink-soft); font-size: 13px; }
+.actInput { width: 100%; margin-top: 6px; padding: 7px 11px; border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); font-size: 13px; }
+.actInput:focus-visible, .draftEdit:focus-visible { outline: none; border-color: var(--accent); }
+.action .draftEdit { margin-top: 6px; }
+.actList { margin: 8px 0 0; padding-left: 20px; color: var(--ink-soft); font-size: 13px; }
+.actList li + li { margin-top: 3px; }
+.fields { display: grid; gap: 4px; margin: 8px 0 0; padding: 8px 10px; border-radius: 12px; background: var(--surface-strong); font-size: 12.5px; }
+.fields div { display: flex; gap: 8px; }
+.fields dt { flex: none; min-width: 84px; color: var(--muted); text-transform: capitalize; }
+.fields dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+.draftActions { flex-wrap: wrap; }
+.approve { gap: 6px; border: 0; cursor: pointer; }
+.approve:disabled { opacity: .5; cursor: not-allowed; }
+.approve svg { width: 15px; height: 15px; }
+
+/* ---- welcome: flagship contractor check ---- */
+.flagship { display: flex; flex-direction: column; gap: 8px; background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 12%, var(--surface)), var(--surface)); border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+.flagTop { display: flex; align-items: center; gap: 9px; }
+.flagTop > svg { flex: none; width: 26px; height: 26px; color: var(--accent); }
+.flagTop strong { font-size: 15px; line-height: 1.25; font-weight: 680; }
+.flagTop small { display: block; color: var(--accent-deep); font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.flagship ul { margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: 13px; }
+.flagship .approve { align-self: flex-start; }
+.activity { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 12.5px; }
+.stepDetail { display: block; color: var(--danger); font-size: 11.5px; }
+.warnings { margin: 8px 0 0; padding: 6px 10px 6px 26px; border-radius: 10px; background: color-mix(in srgb, var(--warning) 12%, var(--surface)); color: var(--ink-soft); font-size: 12px; }
+.basis { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 8px 0 0; }
+.basis > small { color: var(--muted); font-size: 11px; font-weight: 600; }
+.fold { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; width: 100%; border: 0; border-top: 1px dashed var(--line); background: transparent; padding: 8px 0 0; text-align: left; cursor: pointer; }
+.foldHint { margin-left: auto; color: var(--muted); font-size: 11px; font-weight: 600; text-decoration: underline dotted; }
+.srcN { margin-left: 2px; padding: 0 4px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 22%, var(--surface)); font-size: 10px; }
+.inlineLink { color: var(--accent-deep); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }

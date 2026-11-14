@@ -335,10 +335,24 @@ export function CompanyDetailCard({ item, rank }: { item: Ranked; rank?: number 
 /** Answer text with inline [n] markers turned into links to the numbered sources. */
 export function CitedText({ text, sources }: { text: string; sources: Source[] }) {
   const byN = new Map(sources.filter((x) => x.n != null).map((x) => [x.n!, x]));
-  const parts = text.split(/(\[\d+\])/g);
+  // Light markdown from the agent: "## Heading" and **bold** become bold, "- item" a bullet.
+  const md = text
+    .replace(/^\s*#{1,6}\s+(.+)$/gm, "**$1**")
+    .replace(/^(\s*)[-*]\s+/gm, "$1• ")
+    .replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, "$1$2")
+    .replace(/\n{3,}/g, "\n\n");
+  const parts = md.split(/(\[\d+\]|\*\*[^*\n]+\*\*|\[[^\]\n]+\]\(https?:\/\/[^)\s]+\))/g);
   return (
     <span className={s.text}>
       {parts.map((p, i) => {
+        if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={i}>{p.slice(2, -2)}</strong>;
+        const link = /^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/.exec(p);
+        if (link)
+          return (
+            <a key={i} className={s.inlineLink} href={link[2]} target="_blank" rel="noopener noreferrer">
+              {link[1]}
+            </a>
+          );
         const m = /^\[(\d+)\]$/.exec(p);
         const src = m ? byN.get(Number(m[1])) : undefined;
         if (!m) return p;
