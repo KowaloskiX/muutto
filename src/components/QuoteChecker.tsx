@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ArrowSquareOut, CheckCircle, FileText, Question, SpinnerGap, Warning, XCircle } from "@phosphor-icons/react";
 import type { QuoteCheck, QuoteEvidence, QuoteReport, Status } from "@/lib/quote";
+import { JUMP_HINT, withTextFragment } from "@/lib/textFragment";
 import styles from "./QuoteChecker.module.css";
 
 export const SAMPLE_QUOTE = `TARJOUS nro 2026-114
@@ -62,8 +63,8 @@ function CheckRow({ check }: { check: QuoteCheck }) {
                 <span className={styles.evSrc}>{SOURCE_LABEL[e.source]}{e.url ? ` · ${host(e.url)}` : ""}</span>
                 <blockquote className={styles.evQuote}>“{e.quote}”</blockquote>
                 {e.url && (
-                  <a href={e.url} target="_blank" rel="noopener noreferrer" className={styles.evLink}>
-                    Open source <ArrowSquareOut />
+                  <a href={e.source === "quote" ? e.url : withTextFragment(e.url, e.quote)} target="_blank" rel="noopener noreferrer" className={styles.evLink} title={e.quote && e.source !== "quote" ? JUMP_HINT : undefined}>
+                    {e.quote && e.source !== "quote" ? "Open at this sentence" : "Open source"} <ArrowSquareOut />
                   </a>
                 )}
               </li>

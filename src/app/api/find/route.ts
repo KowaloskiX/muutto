@@ -2,7 +2,12 @@ import { z } from "zod";
 import { askJson } from "@/lib/claude";
 import { findCompaniesWeb, findPlaces, type ExaTrace, type Place } from "@/lib/exa";
 import { domainOf } from "@/lib/prh";
+import { buildRanking, polishWhy, type Ranked, type Why } from "@/lib/rationale";
 import { verifyCompany, type CompanyReport } from "@/lib/verify";
+
+/** One row of the final ranking: `fit` is 0-100, `why` has 2-4 evidence-backed reasons (most important first). */
+export type RankedItem = Ranked;
+export type { Why };
 
 export const maxDuration = 300;
 
@@ -39,7 +44,9 @@ function guessIntent(q: string): z.infer<typeof Intent> {
     .replace(/\b(in|at|for my flat in)\s+(espoo|helsinki|vantaa)\b/gi, "")
     .replace(/[,.]?\s*english speaking/i, "")
     .replace(/\s+/g, " ")
-    .trim();
+    .trim()
+    // "Electrician to install a sauna heater" -> "install a sauna heater"
+    .replace(/^[\p{L}-]+\s+(?:to|for)\s+/iu, "");
   return { service, trade, city, summary: q };
 }
 
@@ -48,7 +55,7 @@ export type FindEvent =
   | { type: "intent"; service: string; city: string; summary: string }
   | { type: "places"; places: Place[] }
   | { type: "company"; domain: string; status: "scanning" | "done" | "failed"; place: Place; report?: CompanyReport }
-  | { type: "done"; ranked: { place: Place; report: CompanyReport }[]; trace: ExaTrace[] }
+  | { type: "done"; ranked: RankedItem[]; trace: ExaTrace[] }
   | { type: "error"; message: string };
 
 export async function POST(req: Request) {
@@ -115,15 +122,14 @@ export async function POST(req: Request) {
         send({ type: "stage", id: "verify", status: "done" });
 
         send({ type: "stage", id: "rank", status: "active" });
-        // One company can run several brands/domains: keep the best-scoring per business ID.
-        ranked.sort((a, b) => b.report.score - a.report.score);
-        for (let i = ranked.length - 1; i >= 0; i--) {
-          const id = ranked[i].report.businessId;
-          if (!id) continue;
-          if (ranked.findIndex((r) => r.report.businessId === id) !== i) ranked.splice(i, 1);
-        }
-        send({ type: "stage", id: "rank", status: "done" });
-        send({ type: "done", ranked, trace });
+        // Fit score (service proof weighted highest) + evidence-backed "why" reasons, sorted by fit.
+        let scored = buildRanking(ranked, intent.service);
+        // One company can run several brands/domains: keep the best-fitting per business ID.
+        scored = scored.filter((r, i) => !r.report.businessId || scored.findIndex((x) => x.report.businessId === r.report.businessId) === i);
+        scored = buildRanking(scored, intent.service); // recompute comparisons against the de-duplicated shortlist
+        scored = await polishWhy(scored);
+        send({ type: "stage", id: "rank", status: "done", detail: scored[0] ? `${scored[0].report.name} fits best (${scored[0].fit}/100)` : undefined });
+        send({ type: "done", ranked: scored, trace });
       } catch (e) {
         send({ type: "error", message: (e as Error).message });
       } finally {

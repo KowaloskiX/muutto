@@ -9,6 +9,7 @@ import {
   Bell,
   Check,
   EnvelopeSimple,
+  Highlighter,
   Copy,
   CaretDown,
   Lightning,
@@ -26,7 +27,8 @@ import {
 } from "@phosphor-icons/react";
 import type { FindEvent } from "./api/find/route";
 import type { ExaTrace, Place } from "@/lib/exa";
-import type { Check as VerifyCheck, CompanyReport, Status } from "@/lib/verify";
+import type { Check as VerifyCheck, CompanyReport, Evidence, Status } from "@/lib/verify";
+import { JUMP_HINT, withTextFragment } from "@/lib/textFragment";
 import type { DraftOut } from "./api/draft/route";
 import CriteriaMatrix from "@/components/CriteriaMatrix";
 import WatchPanel from "@/components/WatchPanel";
@@ -35,7 +37,9 @@ import QuoteChecker from "@/components/QuoteChecker";
 type View = "home" | "searching" | "results";
 type StageId = "understand" | "find" | "verify" | "rank";
 type StageLive = { status: "pending" | "active" | "done"; detail?: string };
-type Ranked = { place: Place; report: CompanyReport };
+type Why = { sentence: string; status: Status; evidence: Evidence[] };
+/** `why` and `fit` come from the ranking step; both optional so older payloads still render. */
+type Ranked = { place: Place; report: CompanyReport; why?: Why[]; fit?: number };
 
 const PIPELINE: { id: StageId; label: string; agent: string }[] = [
   { id: "understand", label: "Understanding the job", agent: "Claude" },
@@ -74,6 +78,67 @@ function hostOf(url: string) {
   }
 }
 
+/** Small marker on links that open the source scrolled to the quoted sentence. */
+function JumpHint() {
+  return <span className="kp-jump" title={JUMP_HINT} aria-label={JUMP_HINT}><Highlighter weight="bold" />jump to quote</span>;
+}
+
+function SourceChips({ evidence, max = 3 }: { evidence: Evidence[]; max?: number }) {
+  const uniq = evidence.filter((e, i, a) => e.url && a.findIndex((x) => x.url === e.url) === i).slice(0, max);
+  if (!uniq.length) return null;
+  return (
+    <span className="kp-chips">
+      {uniq.map((e, i) => (
+        <a
+          key={i}
+          className="kp-chip"
+          href={withTextFragment(e.url, e.quote)}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={e.quote ? `“${clip(e.quote.replace(/\s+/g, " ").trim(), 220)}” · ${JUMP_HINT}` : e.url}
+        >
+          {e.quote ? <Highlighter weight="bold" /> : <ArrowSquareOut weight="bold" />}
+          {hostOf(e.url)}
+        </a>
+      ))}
+    </span>
+  );
+}
+
+function WhyList({ why, max }: { why: Why[]; max: number }) {
+  return (
+    <ul className="kp-why-list">
+      {why.slice(0, max).map((w, i) => (
+        <li key={i} className={`kp-why-item ${w.status}`}>
+          <span className="kp-dot" aria-label={w.status} />
+          <span className="kp-why-text">{w.sentence}</span>
+          <SourceChips evidence={w.evidence ?? []} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function fitTone(fit: number): Status {
+  return fit >= 70 ? "green" : fit >= 45 ? "yellow" : "red";
+}
+
+function WhyBlock({ why, fit, rank }: { why?: Why[]; fit?: number; rank: number }) {
+  const items = (why ?? []).filter((w) => w?.sentence);
+  const hasFit = typeof fit === "number" && Number.isFinite(fit);
+  if (!items.length && !hasFit) return null;
+  const score = hasFit ? Math.max(0, Math.min(100, Math.round(fit))) : 0;
+  return (
+    <section className="kp-why" aria-label={`Why ranked #${rank}`}>
+      <div className="kp-why-head">
+        <span className="kp-why-title">Why #{rank}</span>
+        {hasFit && <span className={`kp-fit ${fitTone(score)}`} title="How well this company fits your job, 0–100">{score}<small>/100 fit</small></span>}
+      </div>
+      {items.length > 0 && <WhyList why={items} max={4} />}
+    </section>
+  );
+}
+
 function CheckRow({ check }: { check: VerifyCheck }) {
   const [open, setOpen] = useState(check.status === "red" || check.status === "yellow");
   return (
@@ -87,10 +152,11 @@ function CheckRow({ check }: { check: VerifyCheck }) {
         <div className="kp-check-body">
           <p>{check.detail}</p>
           {check.evidence.map((ev, i) => (
-            <a key={i} className="kp-evidence" href={ev.url} target="_blank" rel="noopener noreferrer">
+            <a key={i} className="kp-evidence" href={withTextFragment(ev.url, ev.quote)} target="_blank" rel="noopener noreferrer" title={ev.quote ? JUMP_HINT : undefined}>
               {ev.quote && <q>{ev.quote}</q>}
               <span className="kp-evidence-src">
                 {ev.source === "registry" ? "Trade register" : ev.source === "site" ? "Their website" : "Web"} · {hostOf(ev.url)} <ArrowSquareOut />
+                {ev.quote && <JumpHint />}
               </span>
             </a>
           ))}
@@ -187,14 +253,14 @@ function ExaSummary({ trace }: { trace: ExaTrace[] }) {
   );
 }
 
-function siteQuotes(report: CompanyReport): { url: string; quote: string }[] {
+function siteQuotes(report: CompanyReport): { url: string; quote: string; href: string }[] {
   const service = report.checks.find((c) => c.id === "service");
   const claims = report.checks.filter((c) => c.id.startsWith("claim-"));
   return [service, ...claims]
     .flatMap((c) => c?.evidence ?? [])
     .filter((e): e is { url: string; quote: string; source: "site" } => e.source === "site" && !!e.quote)
     .slice(0, 2)
-    .map((e) => ({ url: e.url, quote: clip(e.quote.replace(/\s+/g, " ").trim(), 170) }));
+    .map((e) => ({ url: e.url, href: withTextFragment(e.url, e.quote), quote: clip(e.quote.replace(/\s+/g, " ").trim(), 170) }));
 }
 
 function SiteQuotes({ report }: { report: CompanyReport }) {
@@ -203,9 +269,9 @@ function SiteQuotes({ report }: { report: CompanyReport }) {
   return (
     <div className="kp-quotes">
       {quotes.map((q, i) => (
-        <a key={i} className="kp-quote" href={q.url} target="_blank" rel="noopener noreferrer">
+        <a key={i} className="kp-quote" href={q.href} target="_blank" rel="noopener noreferrer" title={JUMP_HINT}>
           <q>{q.quote}</q>
-          <span className="kp-quote-src">From their site · {hostOf(q.url)} · via Exa <ArrowSquareOut /></span>
+          <span className="kp-quote-src">From their site · {hostOf(q.url)} · via Exa <ArrowSquareOut /><JumpHint /></span>
         </a>
       ))}
     </div>
@@ -219,6 +285,7 @@ function genericAnswer(service: string, city: string) {
 
 function WithWithout({ top, service, city }: { top: Ranked; service: string; city: string }) {
   const { place, report } = top;
+  const why = (top.why ?? []).filter((w) => w?.sentence);
   const phone = place.phone ?? report.contact?.phones?.[0];
   const quote = siteQuotes(report)[0];
   const site = place.website ?? report.website ?? (report.domain ? `https://${report.domain}` : undefined);
@@ -239,10 +306,39 @@ function WithWithout({ top, service, city }: { top: Ranked; service: string; cit
           {report.businessId && <a href={`https://tietopalvelu.ytj.fi/yritys/${report.businessId}`} target="_blank" rel="noopener noreferrer"><ShieldCheck weight="bold" />Y-tunnus {report.businessId}</a>}
           {site && <a href={site} target="_blank" rel="noopener noreferrer"><ArrowSquareOut weight="bold" />{hostOf(site)}</a>}
         </div>
-        {quote && <a className="kp-quote" href={quote.url} target="_blank" rel="noopener noreferrer"><q>{quote.quote}</q><span className="kp-quote-src">From their site · {hostOf(quote.url)} · via Exa <ArrowSquareOut /></span></a>}
+        {why.length > 0 && <WhyList why={why} max={2} />}
+        {quote && <a className="kp-quote" href={quote.href} target="_blank" rel="noopener noreferrer" title={JUMP_HINT}><q>{quote.quote}</q><span className="kp-quote-src">From their site · {hostOf(quote.url)} · via Exa <ArrowSquareOut /><JumpHint /></span></a>}
         <span className="kp-compare-foot">{report.trace.length} Exa calls for this company · every claim linked</span>
       </div>
     </section>
+  );
+}
+
+function ConnectRecord({ report }: { report: CompanyReport }) {
+  const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
+  const [check, setCheck] = useState<VerifyCheck | null>(null);
+  const [cost, setCost] = useState<number | null>(null);
+  async function run() {
+    setState("busy");
+    try {
+      const res = await fetch("/api/verify-connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: report.name, businessId: report.businessId, website: report.website }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setCheck({ id: "exa-connect", label: data.label ?? "Company record (Exa Connect)", status: data.status, detail: data.detail, evidence: data.evidence ?? [] });
+      setCost(typeof data.costDollars === "number" ? data.costDollars : null);
+      setState("done");
+    } catch {
+      setState("error");
+    }
+  }
+  if (check) return <><CheckRow check={check} />{cost != null && <li className="kp-connect-cost">Exa Connect · Fiber.ai · ${cost.toFixed(2)}</li>}</>;
+  return (
+    <li>
+      <button type="button" className="kp-connect-btn" onClick={() => void run()} disabled={state === "busy"} title="Exa Agent run with partner data (Fiber.ai): LinkedIn, size, key people. ~30–60 s, ~$0.15">
+        {state === "busy" ? <SpinnerGap className="spin" /> : <Lightning weight="bold" />}
+        {state === "busy" ? "Looking up company record…" : state === "error" ? "Exa Connect lookup failed, retry" : "Company record via Exa Connect"}
+      </button>
+    </li>
   );
 }
 
@@ -276,10 +372,12 @@ function CompanyCard({ item, rank, active, selected, onToggle, watching, onWatch
         </div>
         <h2>{report.name}</h2>
         {place.address && <p className="match-reason">{place.address}</p>}
+        <WhyBlock why={item.why} fit={item.fit} rank={rank} />
         <SiteQuotes report={report} />
         <ul className="kp-checks">
           {exaChecks.map((c) => <CheckRow key={c.id} check={c} />)}
           <RegistryRow checks={registry} />
+          <ConnectRecord report={report} />
         </ul>
         <div className="kp-actions">
           <button type="button" className={`offer-link-button ${selected ? "" : "kp-secondary"}`} onClick={onToggle}>

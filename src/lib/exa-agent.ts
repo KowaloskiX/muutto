@@ -12,6 +12,11 @@ export type AgentCompany = {
   phone?: string;
   email?: string;
   city?: string;
+  /** Key contact from Exa Connect (Fiber.ai) when enabled. */
+  contactPerson?: string;
+  contactTitle?: string;
+  linkedinUrl?: string;
+  employeeCount?: number;
   criteria: CriterionResult[];
   citations: { url: string; title?: string }[];
 };
@@ -30,6 +35,11 @@ export type MoreRun = {
 
 export const AGENT_EFFORT = "low" as const;
 const MAX_COMPANIES = 5;
+// Exa Connect: let the agent query Fiber.ai's B2B database for a key contact
+// (owner/CEO name, work email, phone). ~$0.02/credit, roughly $0.05-0.35 per
+// company. Disable with EXA_CONNECT_FIBER=0.
+// Off by default: Fiber adds ~$0.05–0.35 per company to a run. Enable with EXA_CONNECT_FIBER=1.
+export const USE_FIBER = process.env.EXA_CONNECT_FIBER === "1";
 
 // Static template + one job-specific criterion first.
 export function deriveCriteria(job: string, city: string): Criterion[] {
@@ -58,6 +68,10 @@ function outputSchema(criteria: Criterion[]) {
             phone: { type: ["string", "null"], format: "phone" },
             email: { type: ["string", "null"], format: "email" },
             city: { type: ["string", "null"] },
+            contactPerson: { type: ["string", "null"], description: "Owner/CEO or key contact person name" },
+            contactTitle: { type: ["string", "null"] },
+            linkedinUrl: { type: ["string", "null"], format: "uri" },
+            employeeCount: { type: ["number", "null"] },
             criteria: {
               type: "array",
               description: `One entry per criterion key: ${criteria.map((c) => c.key).join(", ")}`,
@@ -91,7 +105,12 @@ export async function startMoreRun(
     `that do "${input.job}" for homeowners/housing companies in ${input.city}, Finland. ` +
     `For each, give the company website, phone and email if published, and evaluate every criterion below as met / not_met / unknown ` +
     `with a short quote and the source URL as evidence. Use unknown when you found no evidence.\n\n` +
-    criteria.map((c) => `- ${c.key}: ${c.description}`).join("\n");
+    criteria.map((c) => `- ${c.key}: ${c.description}`).join("\n") +
+    (USE_FIBER
+      ? `\n\nAlso use the Fiber.ai B2B database (one company lookup, numResults 1, per company) to add the company's LinkedIn URL, employee count ` +
+        `and one key contact person (owner/CEO) with title and work email/phone. Prefer contact details published on the company's own site; ` +
+        `leave fields null when Fiber has no match.`
+      : "");
   const body: Record<string, unknown> = {
     query,
     effort: AGENT_EFFORT,
@@ -100,6 +119,7 @@ export async function startMoreRun(
   };
   const exclusion = input.exclude.filter((e) => e.name || e.website).map((e) => ({ name: e.name, ...(e.website ? { website: e.website } : {}) }));
   if (exclusion.length) body.input = { exclusion };
+  if (USE_FIBER) body.dataSources = [{ provider: "fiber" }];
   const run = await call("POST", "/agent/runs", body, trace, `agent(${AGENT_EFFORT}): more ${input.job} in ${input.city}`);
   return { id: run.id, criteria };
 }
@@ -123,6 +143,10 @@ export function normalizeRun(run: any): MoreRun {
       phone: c.phone ?? undefined,
       email: c.email ?? undefined,
       city: c.city ?? undefined,
+      contactPerson: c.contactPerson ?? undefined,
+      contactTitle: c.contactTitle ?? undefined,
+      linkedinUrl: c.linkedinUrl ?? undefined,
+      employeeCount: typeof c.employeeCount === "number" ? c.employeeCount : undefined,
       criteria: (c.criteria ?? []).map((r: any) => ({
         criterionKey: r.criterionKey,
         status: ["met", "not_met"].includes(r.status) ? r.status : "unknown",

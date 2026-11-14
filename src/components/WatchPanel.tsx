@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowSquareOut, Bell, ClockCounterClockwise, SpinnerGap, Trash } from "@phosphor-icons/react";
+import { JUMP_HINT, withTextFragment } from "@/lib/textFragment";
 import s from "./WatchPanel.module.css";
 
 type Item = {
@@ -70,7 +71,7 @@ function ItemList({ items, showDropped }: { items: Item[]; showDropped: boolean 
         <li key={i.url} className={i.sent ? undefined : s.isDropped}>
           <time>{fmt(i.date)}</time>
           <div className={s.body}>
-            <a href={i.url} target="_blank" rel="noreferrer">
+            <a href={withTextFragment(i.url, i.snippet)} target="_blank" rel="noreferrer" title={i.snippet ? JUMP_HINT : undefined}>
               {i.title} <ArrowSquareOut size={12} />
             </a>
             {i.snippet && i.sent && <p>{i.snippet}</p>}

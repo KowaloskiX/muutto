@@ -733,3 +733,55 @@ img { display: block; max-width: 100%; }
 .kp-quote-home summary { cursor: pointer; font-size: 14px; font-weight: 680; color: var(--ink); }
 .kp-quote-home[open] summary { margin-bottom: 12px; }
 .kp-quote-results { max-width: none; }
+
+/* ---- Deep links ("jump to quote") + "Why #N" rationale ---- */
+.kp-jump { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; padding: 1px 6px; border-radius: var(--pill-radius); background: color-mix(in srgb, #f5c518 26%, var(--surface)); color: var(--ink-soft); font-family: var(--font-geist-mono), monospace; font-size: 9.5px; font-weight: 700; text-transform: lowercase; letter-spacing: .02em; white-space: nowrap; }
+.kp-jump svg { width: 11px; height: 11px; }
+.kp-why { flex: 0 0 auto; margin-top: 12px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line)); border-radius: 14px; background: color-mix(in srgb, var(--accent) 6%, var(--surface)); min-width: 0; }
+.kp-why-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.kp-why-title { color: var(--accent-deep); font-family: var(--font-geist-mono), monospace; font-size: 10.5px; font-weight: 750; text-transform: uppercase; letter-spacing: .05em; }
+.kp-fit { display: inline-flex; align-items: baseline; gap: 3px; padding: 2px 9px; border-radius: var(--pill-radius); color: #fff; background: var(--unk); font-size: 14px; font-weight: 800; letter-spacing: -.02em; }
+.kp-fit small { font-size: 10px; font-weight: 650; opacity: .9; letter-spacing: 0; }
+.kp-fit.green { background: var(--ok); }
+.kp-fit.yellow { background: var(--warn); }
+.kp-fit.red { background: var(--bad); }
+.kp-why-list { display: grid; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; min-width: 0; }
+.kp-why-item { display: grid; grid-template-columns: 8px minmax(0, 1fr); column-gap: 8px; row-gap: 3px; align-items: baseline; font-size: 12.5px; line-height: 1.4; color: var(--ink); }
+.kp-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--unk); transform: translateY(-1px); }
+.kp-why-item.green .kp-dot { background: var(--ok); }
+.kp-why-item.yellow .kp-dot { background: var(--warn); }
+.kp-why-item.red .kp-dot { background: var(--bad); }
+.kp-why-text { min-width: 0; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.kp-chips { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
+.kp-chip { display: inline-flex; align-items: center; gap: 3px; max-width: 100%; padding: 1px 7px; border: 1px solid var(--line); border-radius: var(--pill-radius); background: var(--surface); color: var(--accent-deep); font-family: var(--font-geist-mono), monospace; font-size: 10px; font-weight: 650; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kp-chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.kp-chip svg { flex: 0 0 auto; width: 10px; height: 10px; }
+.kp-compare-box .kp-why-list { margin-top: 0; }
+.kp-compare-box { min-width: 0; }
+
+/* Card height: keep cards within ~900px-high screens; the checks list scrolls inside. */
+@media (min-width: 761px) {
+  .kp-card { max-height: min(80dvh, 760px); grid-template-rows: minmax(0, 1fr); }
+  .kp-card .product-copy { min-height: 0; overflow: hidden; padding: clamp(18px, 2.4vw, 30px); }
+  .kp-card .product-copy h2 { margin-top: 10px; }
+  .kp-card .match-reason { margin-top: 6px; }
+  .kp-card .kp-checks { flex: 1 1 auto; min-height: 96px; max-height: none; margin-top: 12px; overscroll-behavior: contain; }
+  .kp-card .product-copy > :not(.kp-checks) { flex-shrink: 0; }
+  .kp-card .kp-actions { margin-top: 12px; }
+  .kp-card .kp-quotes { margin-top: 10px; }
+  .kp-card .kp-quote q { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+}
+@media (min-width: 761px) and (max-height: 920px) {
+  .kp-card .kp-quotes .kp-quote:nth-child(n+2) { display: none; }
+  .kp-card .kp-why-item:nth-child(n+4) { display: none; }
+  .kp-card .kp-actions .offer-link-button { min-height: 38px; }
+}
+.kp-trace { min-width: 0; }
+.kp-trace-head > span:nth-of-type(1) { white-space: nowrap; }
+.kp-trace-meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; }
+.kp-trace-list { max-height: 180px; }
+.kp-trace-list li { min-width: 0; }
+.kp-connect-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 14px; background: transparent; color: var(--accent-deep); font-size: 12.5px; font-weight: 650; text-align: left; }
+.kp-connect-btn:hover:not(:disabled) { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.kp-connect-btn svg { width: 15px; height: 15px; }
+.kp-connect-cost { padding: 0 12px; color: var(--muted); font-size: 11px; list-style: none; }

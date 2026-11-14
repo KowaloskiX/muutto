@@ -1,7 +1,7 @@
 // Exa-native structured output with per-field grounding, plus Exa Snapshot
 // (historical page versions). Every request goes through exa.ts so it lands in
 // the UI trace panel.
-import { contents, search, type ExaResult, type ExaTrace } from "./exa";
+import { contents, search, searchDynamic, type ExaResult, type ExaTrace } from "./exa";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -48,8 +48,12 @@ export function nameMatcher(name: string, businessId?: string): (text: string) =
 }
 
 /** POST /search with outputSchema; returns output.content + output.grounding + raw results. */
-export async function groundedSearch<T>(body: Record<string, unknown>, trace?: ExaTrace[]): Promise<{ content: T; grounding: Grounding[]; results: ExaResult[] }> {
-  const data = await search(body, trace);
+export async function groundedSearch<T>(
+  body: Record<string, unknown>,
+  trace?: ExaTrace[],
+  dynamicHighlights?: Parameters<typeof searchDynamic>[1],
+): Promise<{ content: T; grounding: Grounding[]; results: ExaResult[] }> {
+  const data = dynamicHighlights ? await searchDynamic(body, dynamicHighlights, trace) : await search(body, trace);
   const out = data.output;
   if (!out || out.content == null) throw new Error("Exa returned no structured output");
   const content = typeof out.content === "string" ? JSON.parse(out.content) : out.content;
@@ -65,6 +69,8 @@ export function groundingFor(grounding: Grounding[], prefix: string): { urls: st
     if (g.field !== prefix && !g.field.startsWith(`${prefix}.`) && !g.field.startsWith(`${prefix}[`)) continue;
     if (!confidence || RANK[g.confidence] > RANK[confidence]) confidence = g.confidence;
     for (const c of g.citations ?? []) {
+      // Exa's own library/directory pages are aggregates, not a review or news source.
+      if (/^https?:\/\/(www\.)?exa\.ai\//.test(c.url)) continue;
       if (!urls.includes(c.url)) urls.push(c.url);
       if (c.title) titles.set(c.url, c.title);
     }
@@ -128,7 +134,6 @@ export async function groundedReputation(
       query: `${name}${domain ? ` ${domain}` : ""} kokemuksia arvostelu reklamaatio konkurssi`,
       type: GROUNDED_TYPE,
       userLocation: "FI",
-      contents: { highlights: { query: `${name}: customer reviews, complaints, unfinished work, bankruptcy`, maxCharacters: 800 } },
       systemPrompt: [
         `You screen the reputation of a Finnish home-services company for a homeowner about to hire them.`,
         `Company: "${name}"${domain ? `, website ${domain}` : ""}${businessId ? `, business ID (Y-tunnus) ${businessId}` : ""}.`,
@@ -141,6 +146,9 @@ export async function groundedReputation(
       outputSchema: REPUTATION_SCHEMA,
     },
     trace,
+    // Shared highlight budget: pages that actually discuss the company get long passages,
+    // generic directory pages get little or nothing. Cited pages are re-fetched in full below for anchoring.
+    { query: `${name}: customer reviews, complaints, unfinished work, bankruptcy`, maxTotalCharacters: 4000, fallbackMaxCharacters: 800 },
   );
 
   const raw = (content.findings ?? []).map((f: any, i: number) => {

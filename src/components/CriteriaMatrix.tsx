@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { JUMP_HINT, withTextFragment } from "@/lib/textFragment";
 import type { AgentCompany, Criterion, CriterionResult, MoreRun } from "@/lib/exa-agent";
 
 type Props = { job: string; city: string; exclude: { name: string; website?: string }[] };
@@ -46,8 +47,8 @@ function Cell({ r }: { r?: CriterionResult }) {
         <div style={s.pop}>
           {r?.evidence && <div style={{ fontStyle: "italic" }}>{r.evidence}</div>}
           {r?.sourceUrl && (
-            <a href={r.sourceUrl} target="_blank" rel="noreferrer" style={{ color: "#2563eb", wordBreak: "break-all" }}>
-              {hostOf(r.sourceUrl)}
+            <a href={withTextFragment(r.sourceUrl, r.evidence)} target="_blank" rel="noreferrer" title={r.evidence ? JUMP_HINT : undefined} style={{ color: "#2563eb", wordBreak: "break-all" }}>
+              {hostOf(r.sourceUrl)}{r.evidence ? " · jump to quote ↗" : ""}
             </a>
           )}
         </div>

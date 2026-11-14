@@ -5,13 +5,13 @@ const BASE = "https://api.exa.ai";
 export type ExaTrace = { endpoint: string; summary: string; ms: number; ok: boolean };
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-async function post(path: string, body: unknown, trace?: ExaTrace[], summary = ""): Promise<any> {
+async function post(path: string, body: unknown, trace?: ExaTrace[], summary = "", extraHeaders?: Record<string, string>): Promise<any> {
   const key = process.env.EXA_API_KEY;
   if (!key) throw new Error("EXA_API_KEY is not set");
   const t0 = Date.now();
   const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers: { "x-api-key": key, "Content-Type": "application/json" },
+    headers: { "x-api-key": key, "Content-Type": "application/json", ...extraHeaders },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20000),
   });
@@ -30,8 +30,37 @@ export type ExaResult = {
   entities?: any[];
 };
 
-export async function search(body: Record<string, unknown>, trace?: ExaTrace[]): Promise<{ results: ExaResult[]; output?: any }> {
-  return post("/search", body, trace, `search(${body.type ?? "auto"}): ${String(body.query).slice(0, 80)}`);
+export async function search(body: Record<string, unknown>, trace?: ExaTrace[], opts?: { beta?: string }): Promise<{ results: ExaResult[]; output?: any }> {
+  const tag = opts?.beta ? ` [beta ${opts.beta.replace(/-\d{4}-\d{2}-\d{2}$/, "")}]` : "";
+  return post("/search", body, trace, `search(${body.type ?? "auto"})${tag}: ${String(body.query).slice(0, 80)}`, opts?.beta ? { "Exa-Beta": opts.beta } : undefined);
+}
+
+// Dynamic highlights (beta): one character budget shared across all results, so
+// the most relevant pages get longer passages and weak ones a short line.
+// Incompatible with highlights.maxCharacters. Measured on "pipe relining Espoo"
+// (15 results): 7,293 -> 5,045 highlight chars (-31%) at the same request cost.
+export const DYNAMIC_HIGHLIGHTS_BETA = "dynamic-highlights-2026-08-28";
+export const dynamicHighlightsEnabled = () => process.env.EXA_DYNAMIC_HIGHLIGHTS !== "0";
+
+/**
+ * Search with dynamic highlights; falls back to per-result maxCharacters if the
+ * beta is rejected (header retired, key not enrolled).
+ */
+export async function searchDynamic(
+  body: Record<string, unknown>,
+  highlights: { query?: string; maxTotalCharacters: number; fallbackMaxCharacters: number },
+  trace?: ExaTrace[],
+): Promise<{ results: ExaResult[]; output?: any }> {
+  const { fallbackMaxCharacters, ...dyn } = highlights;
+  const contents = (body.contents as Record<string, unknown> | undefined) ?? {};
+  if (dynamicHighlightsEnabled()) {
+    try {
+      return await search({ ...body, contents: { ...contents, highlights: { ...dyn, dynamic: true } } }, trace, { beta: DYNAMIC_HIGHLIGHTS_BETA });
+    } catch (e) {
+      if (!/\b4\d\d\b/.test((e as Error).message)) throw e;
+    }
+  }
+  return search({ ...body, contents: { ...contents, highlights: { query: dyn.query, maxCharacters: fallbackMaxCharacters } } }, trace);
 }
 
 export async function contents(body: Record<string, unknown>, trace?: ExaTrace[]): Promise<{ results: ExaResult[]; statuses?: any[] }> {
@@ -154,15 +183,17 @@ const NOT_A_CONTRACTOR = [
 export type WebCompany = { name: string; website: string; url: string; title?: string; highlight?: string };
 
 export async function findCompaniesWeb(service: string, city: string, trace?: ExaTrace[]): Promise<WebCompany[]> {
-  const data = await search(
+  // Budget 2500: below ~4000 Exa honours the shared budget (plus a ~200-char floor per result);
+  // at 4000 we measured it falling back to ~4k chars per result, so keep it well under.
+  const data = await searchDynamic(
     {
       query: `local company offering ${service} in ${city}, Finland`,
       type: "auto",
       numResults: 15,
       userLocation: "FI",
       excludeDomains: NOT_A_CONTRACTOR,
-      contents: { highlights: { query: `${service} in ${city}`, maxCharacters: 500 } },
     },
+    { query: `${service} in ${city}`, maxTotalCharacters: 2500, fallbackMaxCharacters: 500 },
     trace,
   );
   const byOrigin = new Map<string, WebCompany>();
