@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { askJson } from "./claude";
+import { askJson } from "./llm";
 import { contents, search, type ExaTrace } from "./exa";
 import { groundedReputation, groundedServiceProof, priceHistory, withTimeout, type Confidence } from "./exa-grounded";
 import { domainOf, prhByBusinessId, prhByName, type PrhCompany } from "./prh";

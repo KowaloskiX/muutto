@@ -148,7 +148,7 @@ export default function QuoteCompare({ companies }: { companies: Company[] }) {
                   {hired === "on" ? `Hired. Exa is watching ${picked.company} until the job is done` : hired === "error" ? "Could not start the watcher, retry" : `Hire ${picked.company} and keep watching them`}
                 </button>
               )}
-              <span className="kp-cmp-foot">Recommendation from verified checks only ({rec.decidedBy === "claude" ? "Claude, citing check ids" : "rule-based"})</span>
+              <span className="kp-cmp-foot">Recommendation from verified checks only ({rec.decidedBy === "claude" ? "LLM, citing check ids" : "rule-based"})</span>
             </div>
           )}
         </>

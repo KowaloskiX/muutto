@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { askJson } from "@/lib/claude";
+import { askJson } from "@/lib/llm";
 import { findCompaniesWeb, findPlaces, type ExaTrace, type Place } from "@/lib/exa";
 import { domainOf } from "@/lib/prh";
 import { buildRanking, polishWhy, type Ranked, type Why } from "@/lib/rationale";

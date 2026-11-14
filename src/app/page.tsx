@@ -43,7 +43,7 @@ type Why = { sentence: string; status: Status; evidence: Evidence[] };
 type Ranked = { place: Place; report: CompanyReport; why?: Why[]; fit?: number };
 
 const PIPELINE: { id: StageId; label: string; agent: string }[] = [
-  { id: "understand", label: "Understanding the job", agent: "Claude" },
+  { id: "understand", label: "Understanding the job", agent: "LLM" },
   { id: "find", label: "Finding local businesses", agent: "Exa Places" },
   { id: "verify", label: "Checking each company", agent: "Exa + trade register" },
   { id: "rank", label: "Ranking by trust", agent: "Agent" },

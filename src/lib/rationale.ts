@@ -2,7 +2,7 @@
 // built deterministically from the verification checks. Every reason carries the
 // evidence of the check it came from, so nothing is asserted without a source.
 import { z } from "zod";
-import { askJson } from "./claude";
+import { askJson } from "./llm";
 import type { Place } from "./exa";
 import { withTimeout } from "./exa-grounded";
 import type { Check, CompanyReport, Evidence, Status } from "./verify";
@@ -174,7 +174,7 @@ const facts = (s: string) => new Set((s.match(/\d+(?:[.,]\d+)?|[a-z0-9-]+\.[a-z]
  * number / domain in a rewrite must already be in the original sentence, else keep the original.
  */
 export async function polishWhy(list: Ranked[], ms = 9000): Promise<Ranked[]> {
-  if (!process.env.ANTHROPIC_API_KEY || !list.length) return list;
+  if (!process.env.OPENAI_API_KEY || !list.length) return list;
   try {
     const out = await withTimeout(
       askJson({
@@ -184,7 +184,7 @@ export async function polishWhy(list: Ranked[], ms = 9000): Promise<Ranked[]> {
         schema: Polished,
       }),
       ms,
-      "Claude polish",
+      "LLM polish",
     );
     return list.map((x, i) => {
       const p = out.items.find((it) => it.i === i);

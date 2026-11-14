@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { askJson } from "./claude";
+import { askJson } from "./llm";
 import { checkQuote, type QuoteCheck, type QuoteReport } from "./quote";
 
 export type QuoteInput = { company: string; website?: string; text: string };

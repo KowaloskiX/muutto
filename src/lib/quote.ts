@@ -6,7 +6,7 @@
 // verbatim supporting sentence (only kept if it really appears in the fetched
 // text) and an explicit `contradicts` line when the evidence disagrees.
 import { z } from "zod";
-import { askJson } from "./claude";
+import { askJson } from "./llm";
 import { contents, search, type ExaTrace } from "./exa";
 import { domainOf, prhByBusinessId, type PrhCompany } from "./prh";
 import { verifyCompany, type Status } from "./verify";
@@ -180,7 +180,7 @@ const LlmExtract = z.object({
 });
 
 async function llmExtract(text: string): Promise<{ job: string; claims: Claim[] } | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null;
+  if (!process.env.OPENAI_API_KEY) return null;
   try {
     const out = await askJson({
       system:

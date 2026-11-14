@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { askJson } from "@/lib/claude";
+import { askJson } from "@/lib/llm";
 
 const Body = z.object({
   job: z.string(),

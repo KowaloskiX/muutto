@@ -139,7 +139,7 @@ export default function QuoteChecker({ defaultWebsite }: { defaultWebsite?: stri
             {counts.filter(([, n]) => n > 0).map(([s, n]) => (
               <span key={s} className={`${styles.pill} ${styles[s]}`}><StatusIcon status={s} /> {n}</span>
             ))}
-            <span className={styles.meta}>{report.trace.length} Exa lookups · claims read by {report.extractor === "claude" ? "Claude" : "rules"}</span>
+            <span className={styles.meta}>{report.trace.length} Exa lookups · claims read by {report.extractor === "claude" ? "LLM" : "rules"}</span>
           </div>
           <ul className={styles.list}>
             {[...report.checks].sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status)).map((c) => <CheckRow key={c.id} check={c} />)}
