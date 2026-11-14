@@ -117,9 +117,6 @@ export function CompanyCard({ item, rank, selected, onToggle }: { item: Ranked; 
   const site = item.place.website ?? item.report.website;
   const fitCls = item.fit >= 70 ? s.fitHigh : item.fit >= 45 ? s.fitMid : s.fitLow;
   const key = keyFinding(item);
-  const keyUrls = new Set(key?.sources.map((x) => x.url));
-  // Only lines with evidence are shown; the key finding isn't repeated.
-  const rest = item.why.filter((w) => w.sentence !== key?.text && toSources(w.evidence).length && !toSources(w.evidence).every((x) => keyUrls.has(x.url))).slice(0, 2);
   return (
     <div className={s.card}>
       <div className={s.cardHead}>
@@ -131,27 +128,9 @@ export function CompanyCard({ item, rank, selected, onToggle }: { item: Ranked; 
         <span className={`${s.fit} ${fitCls}`} title="Fit score: service proof, register, reputation, rating">{item.fit}<small>/100</small></span>
       </div>
       {key && (
-        <div className={`${s.finding} ${s[`f_${key.status}`]}`}>
-          <div className={s.findingHead}>
-            <Dot status={key.status} />
-            <small>{key.label}</small>
-          </div>
-          <p className={s.findingText}>{key.text}</p>
-          {key.quote && <q className={s.findingQuote}>{key.quote}</q>}
-          <Sources list={key.sources} />
-        </div>
-      )}
-      {rest.length > 0 && (
-        <ul className={`${s.why} ${s.whyCompact}`}>
-          {rest.map((w, i) => (
-            <li key={i}>
-              <Dot status={w.status} />
-              <span>
-                {w.sentence} <Sources list={toSources(w.evidence)} />
-              </span>
-            </li>
-          ))}
-        </ul>
+        <p className={s.findingText}>
+          <Dot status={key.status} /> <span>{key.text}</span>
+        </p>
       )}
       <div className={s.cardFoot}>
         {phone && (

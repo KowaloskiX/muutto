@@ -3,32 +3,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import {
-  Bell,
-  Buildings,
-  CalendarBlank,
+  CaretDown,
   CheckCircle,
   CircleNotch,
-  ClipboardText,
   Copy,
   Envelope,
-  FileText,
   Gavel,
-  MapPin,
-  MapTrifold,
-  PaperPlaneTilt,
-  Scales,
-  UsersThree,
-  XCircle,
 } from "@phosphor-icons/react";
 import type { Ranked } from "@/lib/rationale";
 import type { QuoteRow, Recommendation } from "@/lib/compare";
-import { Sources, draftBody, keyFinding } from "@/components/chat/Bubbles";
+import { Sources, draftBody } from "@/components/chat/Bubbles";
 import type { Ctx, Draft } from "@/components/chat/types";
-import { CandidateDrawer, Dot } from "./CandidateDrawer";
+import { CandidateDrawer, VerdictBadge } from "./CandidateDrawer";
 import {
   addressOf,
   compliance,
   fmtKm,
+  findingOf,
   fromRanked,
   geocodeClient,
   keyOf,
@@ -45,7 +36,7 @@ const CaseMap = dynamic(() => import("./CaseMap"), {
   ssr: false,
   loading: () => (
     <div className={s.mapLoading}>
-      <CircleNotch className={s.spin} /> Loading map…
+      <CircleNotch className={s.spin} /> Loading map
     </div>
   ),
 });
@@ -85,7 +76,12 @@ export default function CaseFile({
   const [selected, setSelected] = useState<string | undefined>();
   const [open, setOpen] = useState<string | undefined>();
   const [geo, setGeo] = useState<Record<string, Geo | null>>({});
-  const rows = useRef<Record<string, HTMLLIElement | null>>({});
+  const [mapOpen, setMapOpen] = useState(true);
+  // Phones: the map stays folded until asked for; the table carries the distances.
+  useEffect(() => {
+    if (window.matchMedia("(max-width: 1023px)").matches) setMapOpen(false);
+  }, []);
+  const rows = useRef<Record<string, HTMLTableRowElement | null>>({});
   const p = ctx.project;
 
   // ---- candidates: the live search while it runs, then the ranking (+ any company checked on its own)
@@ -168,310 +164,241 @@ export default function CaseFile({
   };
 
   const openCand = cands.find((c) => c.key === open);
-  const docsToRequest = cands.reduce(
-    (n, c) => n + (compliance(c.report)?.docs ?? 0),
-    0,
-  );
   const unsent = outbox.filter((o) => !o.draft.sent).length;
   const empty =
     !p && !cands.length && !outbox.length && !compare && !ctx.watched.length;
-
-  const nav: { id: string; label: string; n?: number }[] = [
-    { id: "case-map", label: "Map", n: pins.length || undefined },
-    { id: "case-cands", label: "Candidates", n: cands.length || undefined },
-    { id: "case-outbox", label: "Outbox", n: outbox.length || undefined },
-    { id: "case-quotes", label: "Quotes", n: compare?.rows.length },
-    { id: "case-watch", label: "Watching", n: ctx.watched.length || undefined },
-  ];
+  const counts = {
+    green: cands.filter((c) => verdict(c) === "green").length,
+    yellow: cands.filter((c) => verdict(c) === "yellow").length,
+    red: cands.filter((c) => verdict(c) === "red").length,
+  };
+  const facts = p
+    ? [
+        p.trade && { k: "Trade", v: p.trade },
+        (p.site?.label || p.place) && { k: "Site", v: p.site?.label || p.place },
+        p.startDate
+          ? { k: "Start", v: p.startDate }
+          : p.contractValueEur
+            ? { k: "Value", v: `~${eur(p.contractValueEur)} excl. VAT` }
+            : null,
+      ].filter((x): x is { k: string; v: string } => !!x)
+    : [];
+  const showMap = !!(site || pins.length);
 
   return (
-    <div className={s.case}>
+    <div className={`${s.case} ${openCand ? s.caseOpen : ""}`}>
       <div className={s.scroller}>
-        {/* (a) project header */}
-        <section className={s.project}>
-          <div className={s.eyebrow}>
-            <ClipboardText weight="fill" /> Case file
-            {ctx.searching && (
-              <span className={s.live}>
-                <i /> live
-              </span>
-            )}
-          </div>
-          {p ? (
-            <>
-              <h2>
-                {p.scope || p.service || p.summary || "Subcontractor search"}
-              </h2>
-              <div className={s.facts}>
-                {p.trade && (
-                  <span>
-                    <Buildings weight="bold" /> {p.trade}
-                  </span>
-                )}
-                {(p.site?.label || p.place) && (
-                  <span>
-                    <MapPin weight="bold" /> {p.site?.label || p.place}
-                  </span>
-                )}
-                {p.startDate && (
-                  <span>
-                    <CalendarBlank weight="bold" /> Start {p.startDate}
-                  </span>
-                )}
-                {p.contractValueEur ? (
-                  <span>
-                    <Scales weight="bold" /> ~{eur(p.contractValueEur)} excl.
-                    VAT
-                  </span>
-                ) : null}
-              </div>
-              {p.tilaajavastuu && (
-                <div
-                  className={`${s.tv} ${p.tilaajavastuu.applies === "below_threshold" ? s.tvSoft : ""}`}
-                >
-                  <Gavel weight="fill" />
-                  <div>
-                    <strong>
-                      {p.tilaajavastuu.applies === "below_threshold"
-                        ? "Below the tilaajavastuu threshold"
-                        : p.tilaajavastuu.applies === "yes"
-                          ? "Tilaajavastuulaki applies"
-                          : "Tilaajavastuulaki applies from €9,000"}
-                    </strong>
-                    <p>{p.tilaajavastuu.note}</p>
-                    <Sources list={p.tilaajavastuu.evidence} />
-                  </div>
-                </div>
-              )}
-              {cands.length > 0 && (
-                <div className={s.stats}>
-                  <div>
-                    <b>{cands.length}</b>
-                    <small>candidates</small>
-                  </div>
-                  <div>
-                    <b className={s.okText}>
-                      {cands.filter((c) => verdict(c) === "green").length}
-                    </b>
-                    <small>look clear</small>
-                  </div>
-                  <div>
-                    <b className={s.redText}>
-                      {cands.filter((c) => verdict(c) === "red").length}
-                    </b>
-                    <small>red flags</small>
-                  </div>
-                  <div>
-                    <b>{docsToRequest}</b>
-                    <small>docs to request</small>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <h2>{cands.length ? "Subcontractor check" : "New project"}</h2>
-              {empty && (
-                <p className={s.lead}>
-                  Describe the trade, the project and the site in the chat. This
-                  file fills in as Kilpi works: the site and every candidate on
-                  a map, the tilaajavastuu checklist per company, drafted quote
-                  and document requests, quotes side by side, and the companies
-                  you keep watching.
-                </p>
-              )}
-            </>
-          )}
-        </section>
-
-        <nav className={s.nav} aria-label="Case file sections">
-          {nav.map((n) => (
-            <a
-              key={n.id}
-              href={`#${n.id}`}
-              onClick={(e) => {
-                e.preventDefault();
-                document
-                  .getElementById(n.id)
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              {n.label}
-              {n.n != null && <b>{n.n}</b>}
-            </a>
-          ))}
-        </nav>
-
-        {/* (b) map */}
-        <section id="case-map" className={s.section}>
-          <header className={s.secHead}>
-            <MapTrifold weight="fill" />
-            <h3>Site and candidates</h3>
-            <span className={s.legend}>
-              <i className={s.lg_site} />
-              Site
-              <i className={s.lg_green} />
-              Clear
-              <i className={s.lg_yellow} />
-              Clarify
-              <i className={s.lg_red} />
-              Flag
-              <i className={s.lg_grey} />
-              Checking
-            </span>
-          </header>
-          <div className={s.mapBox}>
-            {site || pins.length ? (
-              <CaseMap
-                site={site}
-                pins={pins}
-                selected={selected}
-                onSelect={(k) => select(k, true)}
-              />
-            ) : (
-              <div className={s.mapEmpty}>
-                <MapPin weight="duotone" />
-                <span>
-                  The project site and each subcontractor appear here once you
-                  describe the job.
+        {/* project */}
+        <header className={s.project}>
+          <div className={s.projectText}>
+            <span className={s.eyebrow}>
+              Project
+              {ctx.searching && (
+                <span className={s.live}>
+                  <CircleNotch className={s.spin} /> checking candidates
                 </span>
+              )}
+            </span>
+            <h1 className={s.title}>
+              {p
+                ? p.scope || p.service || p.summary || "Subcontractor search"
+                : cands.length
+                  ? "Subcontractor check"
+                  : "New project"}
+            </h1>
+            {facts.length > 0 && (
+              <dl className={s.facts}>
+                {facts.map((f) => (
+                  <div key={f.k}>
+                    <dt>{f.k}</dt>
+                    <dd>{f.v}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+            {p?.tilaajavastuu && (
+              <div className={s.notice}>
+                <Gavel weight="bold" aria-hidden />
+                <div>
+                  <strong>
+                    {p.tilaajavastuu.applies === "below_threshold"
+                      ? "Below the tilaajavastuu threshold"
+                      : p.tilaajavastuu.applies === "yes"
+                        ? "Tilaajavastuulaki applies"
+                        : "Tilaajavastuulaki applies from €9,000"}
+                  </strong>
+                  <p>{p.tilaajavastuu.note}</p>
+                  <Sources list={p.tilaajavastuu.evidence} />
+                </div>
               </div>
             )}
+            {empty && (
+              <p className={s.lead}>
+                Describe the trade, the project and the site in the chat. The
+                candidates, their tilaajavastuu checks and your drafted requests
+                appear here.
+              </p>
+            )}
           </div>
-          {site?.source === "default" && (
-            <small className={s.hint}>
-              No site given, so the search is centred on Espoo. Name the
-              site&apos;s city or district for distances that matter.
-            </small>
-          )}
-        </section>
 
-        {/* (c) candidates */}
-        <section id="case-cands" className={s.section}>
-          <header className={s.secHead}>
-            <UsersThree weight="fill" />
-            <h3>Candidates</h3>
+          {showMap && (
+            <div className={s.mapCard}>
+              <button
+                type="button"
+                className={s.mapToggle}
+                onClick={() => setMapOpen((x) => !x)}
+                aria-expanded={mapOpen}
+                aria-controls="case-map"
+              >
+                <span>Map</span>
+                <small>
+                  {pins.length ? `${pins.length} of ${cands.length} placed` : "site"}
+                </small>
+                <CaretDown weight="bold" className={mapOpen ? s.caretUp : ""} />
+              </button>
+              {mapOpen && (
+                <>
+                  <div id="case-map" className={s.mapBox}>
+                    <CaseMap
+                      site={site}
+                      pins={pins}
+                      selected={selected}
+                      onSelect={(k) => select(k, true)}
+                    />
+                  </div>
+                  <span className={s.legend} aria-hidden>
+                    <span><i className={s.lg_site} />Site</span>
+                    <span><i className={s.lg_green} />Clear</span>
+                    <span><i className={s.lg_yellow} />Clarify</span>
+                    <span><i className={s.lg_red} />Flag</span>
+                  </span>
+                  {site?.source === "default" && (
+                    <small className={s.hint}>
+                      No site given, so the map is centred on Espoo.
+                    </small>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </header>
+
+        {/* candidates */}
+        <section className={s.section} aria-labelledby="case-cands">
+          <div className={s.secHead}>
+            <h2 id="case-cands">Candidates</h2>
             {cands.length > 0 && (
               <small>
                 {ctx.searching
-                  ? "checking…"
-                  : "best fit first · tap for the full checklist"}
+                  ? `${cands.filter((c) => c.status === "done").length} of ${cands.length} checked`
+                  : [
+                      `${cands.length} checked`,
+                      counts.green && `${counts.green} look clear`,
+                      counts.yellow && `${counts.yellow} to clarify`,
+                      counts.red && `${counts.red} red flag${counts.red === 1 ? "" : "s"}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
               </small>
             )}
-          </header>
+          </div>
           {cands.length ? (
-            <ul className={s.cands}>
-              {cands.map((c) => {
-                const v = verdict(c);
-                const comp = compliance(c.report);
-                const d = dist(c);
-                const k =
-                  c.report && c.status === "done"
-                    ? keyFinding({
-                        place: c.place,
-                        report: c.report,
-                        why: c.why,
-                        fit: c.fit ?? 0,
-                      })
-                    : null;
-                return (
-                  <li
-                    key={c.key}
-                    ref={(el) => {
-                      rows.current[c.key] = el;
-                    }}
-                    className={`${s.cand} ${selected === c.key ? s.candOn : ""}`}
-                    onMouseEnter={() => setSelected(c.key)}
-                  >
-                    <button
-                      type="button"
-                      className={s.candBtn}
-                      onClick={() => {
-                        select(c.key);
-                        if (c.report) setOpen(c.key);
-                      }}
-                      disabled={!c.report}
-                    >
-                      <span className={`${s.badge} ${s[`b_${v}`]}`}>
-                        {c.status === "scanning" ? (
-                          <CircleNotch className={s.spin} />
-                        ) : (
-                          (c.rank ?? (c.origin === "checked" ? "✓" : "•"))
-                        )}
-                      </span>
-                      <span className={s.candMain}>
-                        <span className={s.candTop}>
+            <div className={s.tableWrap}>
+              <table className={s.table}>
+                <thead>
+                  <tr>
+                    <th className={s.colRank}>#</th>
+                    <th>Company</th>
+                    <th>Verdict</th>
+                    <th className={s.colNum}>Fit</th>
+                    <th className={s.colFinding}>Key finding</th>
+                    <th className={s.colComp}>§ 5 checks</th>
+                    <th className={`${s.colNum} ${s.colDocs}`}>Docs</th>
+                    <th className={`${s.colNum} ${s.colKm}`}>Distance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cands.map((c) => {
+                    const v = verdict(c);
+                    const comp = compliance(c.report);
+                    const d = dist(c);
+                    const k = findingOf(c);
+                    const can = !!c.report;
+                    const go = () => {
+                      select(c.key);
+                      if (can) setOpen(c.key);
+                    };
+                    return (
+                      <tr
+                        key={c.key}
+                        ref={(el) => {
+                          rows.current[c.key] = el;
+                        }}
+                        className={`${can ? s.rowLink : ""} ${selected === c.key || open === c.key ? s.rowOn : ""}`}
+                        onMouseEnter={() => setSelected(c.key)}
+                        onClick={go}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            go();
+                          }
+                        }}
+                        tabIndex={can ? 0 : -1}
+                        aria-selected={open === c.key}
+                      >
+                        <td className={s.colRank}>
+                          {c.rank ?? (c.origin === "checked" ? "–" : "")}
+                        </td>
+                        <td className={s.nameCell}>
                           <strong>{c.name}</strong>
-                          {c.fit != null && (
-                            <span
-                              className={`${s.fit} ${c.fit >= 70 ? s.fitHi : c.fit >= 45 ? s.fitMid : s.fitLo}`}
-                            >
-                              {c.fit}
+                          <small>
+                            {c.origin === "checked"
+                              ? "checked on its own"
+                              : c.report?.businessId || c.domain || ""}
+                          </small>
+                          {k && <span className={s.findingInline}>{k.text}</span>}
+                        </td>
+                        <td>
+                          {c.status === "scanning" ? (
+                            <span className={s.checkingTag}>
+                              <CircleNotch className={s.spin} /> Checking
                             </span>
+                          ) : c.status === "failed" ? (
+                            <span className={s.checkingTag}>Not checked</span>
+                          ) : (
+                            <VerdictBadge v={v} />
                           )}
-                        </span>
-                        <span className={s.candMeta}>
-                          {c.origin === "checked" && (
-                            <em>checked on its own</em>
-                          )}
-                          {c.domain && <span>{c.domain}</span>}
-                          {d != null && (
-                            <span className={s.km}>
-                              <MapPin weight="fill" />
-                              {fmtKm(d)} from site
-                            </span>
-                          )}
-                          {c.status === "scanning" && (
-                            <span>checking registers and site…</span>
-                          )}
-                          {c.status === "failed" && (
-                            <span>could not be checked</span>
-                          )}
-                        </span>
-                        {k && (
-                          <span className={`${s.kf} ${s[`kf_${k.status}`]}`}>
-                            <Dot status={k.status} />
-                            <span>{k.text}</span>
-                          </span>
-                        )}
-                        {comp && (
-                          <span className={s.comp}>
-                            <span className={s.bar} aria-hidden>
-                              <i
-                                style={{
-                                  width: `${comp.total ? (100 * comp.verified) / comp.total : 0}%`,
-                                }}
-                              />
-                              {comp.red > 0 && (
+                        </td>
+                        <td className={s.colNum}>{c.fit ?? ""}</td>
+                        <td className={s.colFinding}>
+                          <span className={s.finding}>{k?.text ?? ""}</span>
+                        </td>
+                        <td className={s.colComp}>
+                          {comp ? (
+                            <span className={s.comp}>
+                              <span className={s.bar} aria-hidden>
                                 <i
-                                  className={s.barRed}
                                   style={{
-                                    width: `${(100 * comp.red) / comp.total}%`,
+                                    width: `${comp.total ? (100 * comp.verified) / comp.total : 0}%`,
                                   }}
                                 />
-                              )}
+                              </span>
+                              {comp.verified}/{comp.total}
                             </span>
-                            <span>
-                              <b>
-                                {comp.verified}/{comp.total}
-                              </b>{" "}
-                              {comp.b2b ? "tilaajavastuu checks" : "checks"}
-                              {comp.docs > 0 && (
-                                <>
-                                  {" "}
-                                  · <b>{comp.docs}</b> doc
-                                  {comp.docs === 1 ? "" : "s"} to request
-                                </>
-                              )}
-                            </span>
-                          </span>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+                          ) : null}
+                        </td>
+                        <td className={`${s.colNum} ${s.colDocs}`}>
+                          {comp?.docs || ""}
+                        </td>
+                        <td className={`${s.colNum} ${s.colKm}`}>
+                          {d != null ? fmtKm(d) : ""}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           ) : (
             <p className={s.empty}>
               No candidates yet. Ask for a trade and a site, or paste a company
@@ -480,17 +407,16 @@ export default function CaseFile({
           )}
         </section>
 
-        {/* (d) outbox */}
-        <section id="case-outbox" className={s.section}>
-          <header className={s.secHead}>
-            <PaperPlaneTilt weight="fill" />
-            <h3>Outbox</h3>
+        {/* outbox */}
+        <section className={s.section} aria-labelledby="case-outbox">
+          <div className={s.secHead}>
+            <h2 id="case-outbox">Outbox</h2>
             {outbox.length > 0 && (
               <small>
                 {unsent ? `${unsent} waiting for your OK` : "all approved"}
               </small>
             )}
-          </header>
+          </div>
           {outbox.length ? (
             <ul className={s.outbox}>
               {outbox.map((o) => (
@@ -503,115 +429,99 @@ export default function CaseFile({
             </ul>
           ) : (
             <p className={s.empty}>
-              Quote requests (RFQ) and tilaajavastuu document requests land
-              here. Nothing is sent without your OK.
+              Quote requests and tilaajavastuu document requests land here.
+              Nothing is sent without your OK.
             </p>
           )}
         </section>
 
-        {/* (e) quotes */}
-        <section id="case-quotes" className={s.section}>
-          <header className={s.secHead}>
-            <FileText weight="fill" />
-            <h3>Quotes</h3>
-          </header>
-          {compare ? (
-            <>
-              <p className={s.reco}>{compare.recommendation.headline}</p>
-              <div className={s.qWrap}>
-                <table className={s.qTable}>
-                  <thead>
-                    <tr>
-                      <th>Company</th>
-                      <th>Total</th>
-                      <th>Upfront</th>
-                      <th>Labour</th>
-                      <th>Issues</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {compare.rows.map((r, i) => (
-                      <tr
-                        key={i}
-                        className={
-                          i === compare.recommendation.pick ? s.qPick : ""
-                        }
-                      >
-                        <td>
-                          {r.company}
-                          {i === compare.recommendation.pick && <em> pick</em>}
-                        </td>
-                        <td>{eur(r.totalWithVat ?? r.total)}</td>
-                        <td
-                          className={(r.upfrontPct ?? 0) > 30 ? s.redText : ""}
-                        >
-                          {r.upfrontPct != null ? `${r.upfrontPct}%` : "?"}
-                        </td>
-                        <td>
-                          {r.labourItemised ? (
-                            <CheckCircle weight="fill" className={s.okText} />
-                          ) : (
-                            <XCircle weight="fill" className={s.redText} />
-                          )}
-                        </td>
-                        <td>
-                          {r.reds > 0 && (
-                            <span className={`${s.flag} ${s.flagRed}`}>
-                              {r.reds}
-                            </span>
-                          )}
-                          {r.yellows > 0 && (
-                            <span className={`${s.flag} ${s.flagYellow}`}>
-                              {r.yellows}
-                            </span>
-                          )}
-                          {!r.reds && !r.yellows && (
-                            <CheckCircle weight="fill" className={s.okText} />
-                          )}
-                        </td>
+        {/* quotes */}
+        {(compare || ctx.quotes.length > 0) && (
+          <section className={s.section} aria-labelledby="case-quotes">
+            <div className={s.secHead}>
+              <h2 id="case-quotes">Quotes</h2>
+            </div>
+            {compare ? (
+              <>
+                <p className={s.reco}>{compare.recommendation.headline}</p>
+                <div className={s.tableWrap}>
+                  <table className={s.table}>
+                    <thead>
+                      <tr>
+                        <th>Company</th>
+                        <th className={s.colNum}>Total</th>
+                        <th className={s.colNum}>Upfront</th>
+                        <th>Labour</th>
+                        <th>Issues</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          ) : (
-            <p className={s.empty}>
-              {ctx.quotes.length === 1
-                ? `One quote in (${ctx.quotes[0].company}). Paste the next one in the chat to compare.`
-                : "Paste subcontractor quotes into the chat: each is checked, then compared side by side here."}
-            </p>
-          )}
-        </section>
+                    </thead>
+                    <tbody>
+                      {compare.rows.map((r, i) => (
+                        <tr key={i}>
+                          <td className={s.nameCell}>
+                            <strong>{r.company}</strong>
+                            {i === compare.recommendation.pick && (
+                              <small>recommended</small>
+                            )}
+                          </td>
+                          <td className={s.colNum}>
+                            {eur(r.totalWithVat ?? r.total)}
+                          </td>
+                          <td
+                            className={`${s.colNum} ${(r.upfrontPct ?? 0) > 30 ? s.redText : ""}`}
+                          >
+                            {r.upfrontPct != null ? `${r.upfrontPct}%` : "?"}
+                          </td>
+                          <td>
+                            {r.labourItemised ? "Itemised" : (
+                              <span className={s.redText}>Not itemised</span>
+                            )}
+                          </td>
+                          <td>
+                            {r.reds || r.yellows
+                              ? [
+                                  r.reds && `${r.reds} serious`,
+                                  r.yellows && `${r.yellows} to clarify`,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")
+                              : "None"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : (
+              <p className={s.empty}>
+                One quote in ({ctx.quotes[0].company}). Paste the next one in
+                the chat to compare.
+              </p>
+            )}
+          </section>
+        )}
 
-        {/* (f) watching */}
-        <section id="case-watch" className={s.section}>
-          <header className={s.secHead}>
-            <Bell weight="fill" />
-            <h3>Watching</h3>
-          </header>
-          {ctx.watched.length ? (
-            <ul className={s.watchList}>
+        {/* watching */}
+        {ctx.watched.length > 0 && (
+          <section className={s.section} aria-labelledby="case-watch">
+            <div className={s.secHead}>
+              <h2 id="case-watch">Watching</h2>
+              <small>daily Exa Monitor</small>
+            </div>
+            <ul className={s.plainList}>
               {ctx.watched.map((w) => (
                 <li key={w.monitorId}>
-                  <span className={s.pulse} aria-hidden />
-                  <div>
-                    <strong>{w.name}</strong>
-                    <small>
-                      Daily Exa Monitor: news, register changes, bankruptcy and
-                      payment-default notices{w.domain ? ` · ${w.domain}` : ""}
-                    </small>
-                  </div>
+                  <strong>{w.name}</strong>
+                  <small>
+                    News, register changes, bankruptcy and payment-default
+                    notices{w.domain ? ` · ${w.domain}` : ""}
+                  </small>
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className={s.empty}>
-              Subcontractors you sign with can be watched for the length of the
-              project. Open a candidate and tap Watch.
-            </p>
-          )}
-        </section>
+          </section>
+        )}
       </div>
 
       {openCand && (
@@ -652,7 +562,7 @@ function OutboxRow({
   const d = item.draft;
   const body = draftBody(d);
   return (
-    <li className={`${s.mail} ${d.sent ? s.mailSent : ""}`}>
+    <li className={s.mail}>
       <div className={s.mailTop}>
         <button
           type="button"
@@ -660,32 +570,32 @@ function OutboxRow({
           onClick={() => setOpen((x) => !x)}
           aria-expanded={open}
         >
-          <span className={`${s.tag} ${d.kind === "docs" ? s.tagDocs : ""}`}>
-            {d.kind === "docs"
-              ? "Documents"
-              : d.kind === "rfq"
-                ? "RFQ"
-                : "Request"}
-          </span>
+          <CaretDown weight="bold" className={`${s.caret} ${open ? s.caretUp : ""}`} />
           <span className={s.mailMain}>
-            <strong>{d.name}</strong>
+            <strong>
+              {d.name}
+              <span className={s.kind}>
+                {d.kind === "docs"
+                  ? "Document request"
+                  : d.kind === "rfq"
+                    ? "Quote request"
+                    : "Request"}
+              </span>
+            </strong>
             <small>{d.subject}</small>
           </span>
-          {d.sent ? (
-            <span className={s.sentTag}>
-              <CheckCircle weight="fill" /> Approved
-            </span>
-          ) : (
-            <span className={s.waitTag}>Needs OK</span>
-          )}
         </button>
-        {!d.sent && (
+        {d.sent ? (
+          <span className={s.sentTag}>
+            <CheckCircle weight="fill" /> Approved
+          </span>
+        ) : (
           <a
             className={s.sendBtn}
             href={mailto(d, body)}
             onClick={() => onChange({ ...d, sent: true, editing: false })}
           >
-            <PaperPlaneTilt weight="fill" /> Approve and send
+            Approve and send
           </a>
         )}
       </div>
@@ -699,7 +609,7 @@ function OutboxRow({
             <ul className={s.docList}>
               {d.documents.map((x, i) => (
                 <li key={i}>
-                  <FileText weight="bold" /> {x.en}
+                  {x.en}
                   {x.law && <small> · {x.law}</small>}
                 </li>
               ))}
@@ -713,6 +623,7 @@ function OutboxRow({
                   key={l}
                   type="button"
                   className={d.lang === l ? s.on : ""}
+                  aria-pressed={d.lang === l}
                   onClick={() => onChange({ ...d, lang: l, edited: undefined })}
                 >
                   {l.toUpperCase()}

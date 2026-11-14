@@ -2,6 +2,7 @@
 import type { Ranked, Why } from "@/lib/rationale";
 import type { CompanyReport, Check, Status } from "@/lib/verify";
 import type { Place } from "@/lib/exa";
+import { keyFinding } from "@/components/chat/Bubbles";
 
 export type Verdict = Status;
 
@@ -47,14 +48,45 @@ export function fromRanked(r: Ranked, rank?: number, origin: Cand["origin"] = "r
   };
 }
 
-/** Red: any red finding. Yellow: something to clarify, or a middling fit. Grey: not checked yet. */
+/**
+ * Red: any red finding. Yellow: any yellow public check or reason (a reviews issue or an
+ * ID/website mismatch is surfaced even when the fit is high), or a middling fit. Grey: not checked yet.
+ */
 export function verdict(c: Cand): Verdict {
   if (!c.report || c.status !== "done") return "grey";
-  const checks = c.report.checks.filter((k) => !k.needsDocument).map((k) => k.status);
-  const why = c.why.map((w) => w.status);
-  if (checks.includes("red") || why.includes("red")) return "red";
-  if (why.includes("yellow") || (c.fit != null && c.fit < 60) || (c.fit == null && checks.includes("yellow"))) return "yellow";
+  const st = [...c.report.checks.filter((k) => !k.needsDocument).map((k) => k.status), ...c.why.map((w) => w.status)];
+  if (st.includes("red")) return "red";
+  if (st.includes("yellow") || (c.fit != null && c.fit < 60)) return "yellow";
   return "green";
+}
+
+export type Finding = { status: Status; label: string; text: string; quote?: string; sources: { url: string; quote?: string }[] };
+
+const firstSentence = (t: string) => (t.match(/[^.!?]+[.!?]+/)?.[0] ?? t).trim();
+const tidy = (q: string, n = 160) => {
+  const t = q.replace(/[#*|`>]+/g, " ").replace(/\s+/g, " ").trim();
+  return t.length > n ? `${t.slice(0, n).replace(/\s+\S*$/, "")}…` : t;
+};
+
+/** The one finding that explains the verdict: the chat's key finding, or the public check that made it yellow/red. */
+export function findingOf(c: Cand): Finding | null {
+  if (!c.report || c.status !== "done") return null;
+  const v = verdict(c);
+  const k = keyFinding({ place: c.place, report: c.report, why: c.why, fit: c.fit ?? 0 });
+  if (v === "green" || v === "grey" || (k && k.status === v)) return k;
+  const flag = c.report.checks.find((x) => !x.needsDocument && x.status === v);
+  if (!flag) return k;
+  const ev = flag.evidence.filter((e) => e.url && /^https?:/i.test(e.url));
+  const q = ev.find((e) => e.quote && e.quote.trim().length > 12)?.quote;
+  const detail = flag.detail.replace(/^Found \d+ issue\(s\) in reviews or news\.\s*/, "");
+  const label = flag.label.replace(/^Tilaajavastuu:\s*/i, "");
+  return {
+    status: v,
+    label: v === "red" ? "Red flag" : "Clarify first",
+    text: `${label.charAt(0).toUpperCase()}${label.slice(1)}: ${firstSentence(detail)}`,
+    quote: q ? tidy(q) : undefined,
+    sources: ev.map((e) => ({ url: e.url, quote: e.quote })),
+  };
 }
 
 export const VERDICT_LABEL: Record<Verdict, string> = { green: "Looks clear", yellow: "Clarify first", red: "Red flag", grey: "Checking" };

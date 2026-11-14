@@ -17,7 +17,7 @@ function Fit({ points }: { points: [number, number][] }) {
   useEffect(() => {
     if (!points.length) return;
     if (points.length === 1) map.setView(points[0], 11);
-    else map.fitBounds(L.latLngBounds(points), { padding: [34, 34], maxZoom: 12 });
+    else map.fitBounds(L.latLngBounds(points), { padding: [24, 24], maxZoom: 12 });
     // Only refit when the set of points changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig, map]);
@@ -36,7 +36,7 @@ export default function CaseMap({ site, pins, selected, onSelect }: { site?: { l
   const siteIcon = useMemo(() => L.divIcon({ className: s.leafIcon, html: `<span class="${s.sitePin}"><i></i></span>`, iconSize: [34, 34], iconAnchor: [17, 31] }), []);
   const center: [number, number] = points[0] ?? [60.2, 24.8];
   return (
-    <MapContainer center={center} zoom={10} scrollWheelZoom={false} className={s.leaflet} attributionControl>
+    <MapContainer center={center} zoom={10} scrollWheelZoom={false} zoomControl={false} className={s.leaflet} attributionControl>
       <TileLayer attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
       <Fit points={points} />
       {site && (

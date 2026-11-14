@@ -858,7 +858,7 @@ export default function ChatApp() {
       case "text":
         if (m.role === "user")
           return (
-            <div className={`${s.bubble} ${s.user}`}>
+            <div className={s.user}>
               {m.attachment && (
                 <span className={s.attach}>
                   <Paperclip weight="bold" /> {m.attachment}
@@ -871,7 +871,7 @@ export default function ChatApp() {
         {
           const numbered = !!m.sources?.length && m.sources.every((x) => x.n != null);
           return (
-            <div className={`${s.bubble} ${s.bot} ${m.tone ? s[m.tone] : ""}`}>
+            <div className={`${s.bot} ${m.tone ? s[m.tone] : ""}`}>
               {numbered ? <CitedText text={m.text} sources={m.sources!} /> : <span className={s.text}>{m.text}</span>}
               {m.note && <small className={s.note}>{m.note}</small>}
               {numbered ? (
@@ -891,7 +891,7 @@ export default function ChatApp() {
           );
         }
       case "checking":
-        return <div className={`${s.bubble} ${s.bot}`}><CheckingCard items={m.items} /></div>;
+        return <div className={s.bot}><CheckingCard items={m.items} /></div>;
       case "company":
         return <CompanyCard item={m.item} rank={m.rank} selected={ctx.selected.includes(companyKey(m.item))} onToggle={() => togglePick(companyKey(m.item))} />;
       case "detail":
@@ -906,24 +906,15 @@ export default function ChatApp() {
         return <WatchCard name={m.name} domain={m.domain} monitorId={m.monitorId} mode={m.mode} />;
       case "welcome":
         return (
-          <>
-            <div className={`${s.card} ${s.flagship}`}>
-              <div className={s.flagTop}>
-                <ShieldCheck weight="fill" />
-                <div>
-                  <small>Kilpi for contractors</small>
-                  <strong>{m.text}</strong>
-                </div>
-              </div>
-              <ol className={s.howList}>
-                <li><b>Find</b> subcontractors for your project, pinned on a map with their distance from the site</li>
-                <li><b>Check</b> each one against the tilaajavastuu registers, and what registers can&apos;t show: references, licences, news and reviews. A source for every finding</li>
-                <li><b>Request</b> quotes and the missing tilaajavastuu documents: I draft the RFQ and the document request</li>
-                <li><b>Watch</b> the ones you sign with for the length of the project</li>
-              </ol>
-              <small className={s.muted}>Everything lands in the case file. Nothing is sent without your OK.</small>
-            </div>
-          </>
+          <div className={s.welcome}>
+            <p className={s.welcomeLead}>{m.text}</p>
+            <ol className={s.howList}>
+              <li><b>Find</b> subcontractors near the site.</li>
+              <li><b>Check</b> each against the tilaajavastuu registers, references, licences and news, with a source for every finding.</li>
+              <li><b>Request</b> quotes and missing documents. Nothing is sent without your OK.</li>
+              <li><b>Watch</b> the ones you sign with.</li>
+            </ol>
+          </div>
         );
       case "plan":
         return <PlanCard plan={m.plan} steps={m.steps} evidence={m.evidence} finished={m.finished} failed={m.failed} exaCalls={m.exaCalls} lang={ctx.lang} />;
@@ -950,8 +941,8 @@ export default function ChatApp() {
         <header className={s.header}>
           <span className={s.avatar} aria-hidden><ShieldCheck weight="fill" /></span>
           <div className={s.who}>
-            <strong>Kilpi for contractors</strong>
-            <small>{busy ? "working on it…" : "vet subcontractors before you sign"}</small>
+            <strong>Kilpi</strong>
+            <small>{busy ? "Working on it…" : "Subcontractor vetting"}</small>
           </div>
           <button type="button" className={`${s.headBtn} ${s.caseBtn}`} onClick={() => setSheet(true)} title="Case file" aria-label="Open case file">
             <ClipboardText weight="bold" />
@@ -959,35 +950,31 @@ export default function ChatApp() {
             {caseCount > 0 && <b className={s.caseCount}>{caseCount}</b>}
           </button>
           <Link href="/" className={`${s.headBtn} ${s.iconOnly}`} title="Classic view" aria-label="Classic view"><SquaresFour weight="bold" /></Link>
-          <button type="button" className={s.headBtn} onClick={newChat} disabled={busy} title="New project"><NotePencil weight="bold" /><span>New project</span></button>
+          <button type="button" className={`${s.headBtn} ${s.iconOnly}`} onClick={newChat} disabled={busy} title="New project" aria-label="New project"><NotePencil weight="bold" /></button>
         </header>
         {(ctx.project || ctx.ranked.length > 0 || outbox.length > 0) && (
           <button type="button" className={s.caseStrip} onClick={() => setSheet(true)}>
-            <ClipboardText weight="fill" />
             <span>
-              <b>Case file</b>
               {[
-                ctx.searching ? `${ctx.live?.length ?? 0} checking` : ctx.ranked.length ? `${Math.min(8, ctx.ranked.length)} candidates on the map` : "",
-                outbox.length ? `${outbox.filter((o) => !o.draft.sent).length} drafts to approve` : "",
+                ctx.searching ? `${ctx.live?.length ?? 0} checking` : ctx.ranked.length ? `${Math.min(8, ctx.ranked.length)} candidates` : "",
+                outbox.length ? `${outbox.filter((o) => !o.draft.sent).length} to approve` : "",
                 ctx.watched.length ? `${ctx.watched.length} watched` : "",
               ]
                 .filter(Boolean)
-                .join(" · ") || ctx.project?.scope || "project"}
+                .join(" · ") || ctx.project?.scope || "Project"}
             </span>
-            <em>Open</em>
+            <em>Open case file</em>
           </button>
         )}
 
         <div className={s.scroll} ref={scroller} role="log" aria-live="polite">
           {msgs.map((m, i) => {
             const prev = msgs[i - 1];
-            const showAvatar = m.role === "bot" && prev?.role !== "bot";
             const content = body(m);
             const chips = m.chips && !m.chipsUsed && m.id === lastChipMsg;
             if (!content && !chips) return null;
             return (
               <div key={m.id} className={`${s.row} ${m.role === "user" ? s.rowUser : s.rowBot} ${prev && prev.role !== m.role ? s.gap : ""}`}>
-                {m.role === "bot" && <span className={`${s.mini} ${showAvatar ? "" : s.hidden}`} aria-hidden><ShieldCheck weight="fill" /></span>}
                 <div className={s.col}>
                   {content}
                   {chips && (
@@ -1005,8 +992,7 @@ export default function ChatApp() {
           })}
           {busy && !(msgs[msgs.length - 1]?.kind === "plan" && !(msgs[msgs.length - 1] as { finished?: boolean }).finished) && (
             <div className={`${s.row} ${s.rowBot}`}>
-              <span className={s.mini} aria-hidden><ShieldCheck weight="fill" /></span>
-              <div className={`${s.bubble} ${s.bot} ${s.typing}`} aria-label="Kilpi is typing"><i /><i /><i /></div>
+              <div className={s.typing} aria-label="Kilpi is working"><i /><i /><i /></div>
             </div>
           )}
         </div>
