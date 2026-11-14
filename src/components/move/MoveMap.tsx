@@ -3,7 +3,7 @@
 // The move map. Four layers, one segmented switch (remembered per browser):
 //  · Fit         — each area's postal-code outline filled by fit (pins where no outline came back)
 //  · Drive time  — car-minute contours + reach slider (DriveTimeLayer; GET /api/move/heat: OSRM, no live traffic)
-//  · Noise       — City of Helsinki noise survey 2022, road and street traffic Lden (official WMS)
+//  · Noise       — Helsinki noise survey 2022 (Lden) over Väylävirasto 2022 road + rail maps for the region (official WMS)
 //  · Daily life  — the selected area's pharmacies, shops, cafés, schools, parks, stops + a 500 m circle
 // Listings are price pins on every layer. Only measured data is drawn: no isochrones are invented.
 // Client-only (next/dynamic, ssr: false) because Leaflet touches `window`.
@@ -50,6 +50,12 @@ const NOISE_WMS = "https://kartta.hel.fi/ws/geoserver/avoindata/wms";
 const NOISE_LAYER = "avoindata:Meluselvitys_2022_Helsinki_kadut_ja_maantiet_Lden";
 const NOISE_LEGEND = `${NOISE_WMS}?service=WMS&request=GetLegendGraphic&format=image/png&layer=${NOISE_LAYER}`;
 const NOISE_ATTR = 'Noise: <a href="https://kartta.hel.fi/">City of Helsinki</a> noise survey 2022 (CC BY 4.0)';
+// Rest of the region: Finnish Transport Infrastructure Agency EU noise-directive maps 2022 (state roads
+// + railways, daytime LAeq, CC BY 4.0), drawn under the Helsinki survey.
+const VAYLA_WMS = "https://avoinapi.vaylapilvi.fi/vaylatiedot/ows";
+const VAYLA_LAYERS = "tiestotiedot:melu_paiva_maankad_22,ratatiedot:melu_paiva_rautatiet_22";
+const VAYLA_LEGEND = `${VAYLA_WMS}?service=WMS&request=GetLegendGraphic&format=image/png&layer=tiestotiedot:melu_paiva_maankad_22`;
+const VAYLA_ATTR = 'Noise: <a href="https://vayla.fi/">Väylävirasto</a> noise maps 2022 (CC BY 4.0)';
 const PAD = { paddingTopLeft: [48, 72] as L.PointTuple, paddingBottomRight: [48, 48] as L.PointTuple, maxZoom: 14 };
 const TONE_VAR: Record<Tone, string> = { green: "success", yellow: "caution", red: "destructive", grey: "faint" };
 // SVG paths can't read CSS variables from attributes: the same status colours as globals.css, per theme.
@@ -327,12 +333,23 @@ export default function MoveMap({
   } else if (layer === "noise") {
     legend = (
       <>
-        <span className={x.lgTitle}>Road traffic noise, Lden dB</span>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className={x.lgImg} src={NOISE_LEGEND} alt="Noise classes 40 to 75 dB" />
+        <span className={x.lgTitle}>Traffic noise, dB</span>
+        <span className={x.lgPair}>
+          <span>
+            <small>Helsinki, Lden</small>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className={x.lgImg} src={NOISE_LEGEND} alt="Helsinki noise classes 40 to 75 dB" />
+          </span>
+          <span>
+            <small>Region, day LAeq</small>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className={x.lgImg} src={VAYLA_LEGEND} alt="Regional noise classes 40 to over 75 dB" />
+          </span>
+        </span>
       </>
     );
-    caption = "Streets and roads, Lden (day-evening-night). City of Helsinki noise survey 2022; covers Helsinki only, not Espoo or Vantaa.";
+    caption =
+      "Helsinki: City of Helsinki noise survey 2022, streets and roads, Lden (day-evening-night). Espoo, Vantaa and the commuter belt: Väylävirasto noise maps 2022 for state roads and railways, daytime LAeq; smaller city streets there are not mapped. The two surveys use different measures, so compare within one city.";
   } else if (layer === "daily") {
     legend = kinds.length ? (
       <>
@@ -381,6 +398,16 @@ export default function MoveMap({
       <div className={`${m.box} ${m.vars} ${x.mapBox}`}>
         <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom={false} zoomControl={false} className={m.leaflet} attributionControl>
           <TileLayer key={dark ? "dark" : "light"} attribution={ATTRIBUTION} url={(dark ? TILES.dark : TILES.light).base} maxZoom={17} maxNativeZoom={16} />
+          {layer === "noise" && (
+            <WMSTileLayer
+              key="noise-vayla"
+              url={VAYLA_WMS}
+              params={{ layers: VAYLA_LAYERS, format: "image/png", transparent: true, version: "1.1.1" } as L.WMSParams}
+              opacity={dark ? 0.45 : 0.5}
+              attribution={VAYLA_ATTR}
+              zIndex={4}
+            />
+          )}
           {layer === "noise" && (
             <WMSTileLayer
               key="noise"

@@ -33,16 +33,26 @@ export function areaStems(name: string): string[] {
     .split(/[\s,/–-]+/)
     .map((w) => w.trim())
     .filter((w) => w.length >= 4 && !/^(helsinki|espoo|vantaa|kauniainen|kirkkonummi|kerava|järvenpää|tuusula|sipoo|nurmijärvi|vihti|porvoo|lohja|keskusta|etelä|pohjois|itä|länsi|keskus)$/i.test(w))
-    .map((w) => w.slice(0, Math.max(5, w.length - 2)).toLowerCase());
+    .map((w) => w.slice(0, Math.max(5, w.length - 2)));
+}
+
+/**
+ * Does the text name the area? Whole words only, capitalised as a place name, starting with a stem.
+ * Many area names are also common nouns (Kallio = rock, Mäki = hill): "Kalliota louhitaan" means
+ * "rock is being quarried". The partitive (vowel + -ta/-tä) is the usual form for the noun and
+ * rare for a place, so those words don't count. Ablative/elative (Kalliolta, Kalliosta) still do.
+ */
+export function namesArea(text: string, stems: string[]): boolean {
+  const words = text.match(/\p{Lu}[\p{L}]*/gu) ?? [];
+  return words.some((w) => stems.some((s) => w.startsWith(s[0].toUpperCase() + s.slice(1).toLowerCase())) && !/[aeiouyäö]t[aä]$/i.test(w));
 }
 
 export type NewsItem = Area["news"][number] & { works: boolean; source: Source };
 
 function toItem(r: ExaResult, stems: string[]): NewsItem | null {
   const hay = `${r.title ?? ""} ${(r.highlights ?? []).join(" ")}`;
-  const low = hay.toLowerCase();
-  if (!stems.some((s) => low.includes(s))) return null;
-  const hl = (r.highlights ?? []).find((h) => stems.some((s) => h.toLowerCase().includes(s))) ?? r.highlights?.[0] ?? "";
+  if (!namesArea(hay, stems)) return null;
+  const hl = (r.highlights ?? []).find((h) => namesArea(h, stems)) ?? r.highlights?.[0] ?? "";
   const works = WORKS.test(hay);
   const tone: NewsItem["tone"] = works ? "negative" : POSITIVE.test(hay) ? "positive" : "neutral";
   const date = r.publishedDate?.slice(0, 10);

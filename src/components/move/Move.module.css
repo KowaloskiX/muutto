@@ -490,7 +490,7 @@
 .reachPanel input[type="range"] { width: 100%; height: 4px; margin: 4px 0; border-radius: 999px; background: linear-gradient(to right, var(--accent-deep) var(--p), var(--line-strong) var(--p)); -webkit-appearance: none; appearance: none; cursor: pointer; }
 .reachPanel input[type="range"]::-webkit-slider-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--accent-deep), 0 1px 3px rgb(13 16 22 / .3); -webkit-appearance: none; appearance: none; }
 .reachPanel input[type="range"]::-moz-range-thumb { width: 16px; height: 16px; border: 0; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 1.5px var(--accent-deep); }
-@media (max-width: 720px) { .reachPanel { top: 52px; bottom: auto; left: 12px; right: 12px; width: auto; } }
+@media (max-width: 720px) { .reachPanel { top: 50px; bottom: auto; left: 12px; right: 12px; width: auto; gap: 2px; padding: 6px 10px; font-size: 11px; } .reachPanel small { font-size: 10px; } .reachPanel input[type="range"] { margin: 2px 0; } .playBtn { min-height: 20px; padding: 0 8px; font-size: 10px; } }
 @media (prefers-reduced-motion: reduce) { .capBusy i { animation: none; } }
 
 /* ---- area stats + settling in ---- */
@@ -513,3 +513,6 @@
 .svcActions a { display: inline-flex; align-items: center; gap: 4px; color: var(--ink-soft); text-decoration: none; }
 .svcActions a:hover { color: var(--ink); text-decoration: underline; }
 .svcSrc { color: var(--muted) !important; }
+.lgPair { display: flex; gap: 12px; }
+.lgPair > span { display: flex; flex-direction: column; gap: 2px; }
+.lgPair small { color: var(--muted); font-size: 10px; }

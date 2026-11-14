@@ -99,6 +99,7 @@ async function overpass(c: LatLng): Promise<{ pois: Poi[]; at: number }> {
 const SERVICEMAP = "https://api.hel.fi/servicemap/v2/unit/";
 const SM_SCHOOL = "661,601,662,602"; // Finnish/Swedish basic education grades 1–6 and 7–9
 const SM_DAYCARE = "663,603"; // Finnish/Swedish municipal daycare
+const SM_PHARMACY = "57"; // pharmacies
 const SM_PARK = "389,401,475,733"; // playgrounds, sports parks, playparks, outdoor areas
 const smGate = limiter(4);
 
@@ -153,11 +154,17 @@ export type AmenityResult = { criteria: Criterion[]; places: Place[]; notes: str
 
 export async function measureAmenities(c: LatLng, opts: { hasKids: boolean }): Promise<AmenityResult> {
   const notes: string[] = [];
+  let smPharmacies: Poi[] = [];
   const [osm, schools, daycares] = await Promise.all([
     withTimeout(overpass(c), 9_000, "still loading").catch((e) => (notes.push(`OpenStreetMap Overpass unavailable (${(e as Error).message}); using fallbacks`), null)),
     withTimeout(serviceMap(c, SM_SCHOOL, "school", 2500), 9_000).catch(() => null),
     withTimeout(serviceMap(c, SM_DAYCARE, "daycare", 2000), 9_000).catch(() => null),
-  ]);
+    // Pharmacies are also in the municipal register; OSM misses some (e.g. inside shopping centres).
+    withTimeout(serviceMap(c, SM_PHARMACY, "pharmacy", 1500), 9_000).catch(() => null),
+  ]).then(([o, s, d, ph]) => {
+    smPharmacies = (ph ?? []).map((p) => ({ ...p, sub: "servicemap" }));
+    return [o, s, d] as const;
+  });
   const osmLabel = "OpenStreetMap";
   let pois: Poi[] = osm?.pois ?? [];
   let fallbackLabel: Partial<Record<Poi["kind"], string>> = {};
@@ -187,11 +194,11 @@ export async function measureAmenities(c: LatLng, opts: { hasKids: boolean }): P
   const unknown = (id: Criterion["id"], label: string, what: string): Criterion => ({ id, label, status: "unknown", value: null, detail: `${what}: source unavailable right now.`, sources: [] });
   const haveFor = (k: Poi["kind"]) => (k === "school" || k === "daycare" ? civic.length > 0 || !!osm : !!osm || k in fallbackLabel);
 
-  // Pharmacy
+  // Pharmacy (OSM + municipal register, nearest wins)
   {
-    const p = nearest(pois, "pharmacy");
-    if (p) criteria.push({ id: "pharmacy", label: "Nearest pharmacy", status: band(p.distanceM, 500, 1200), value: fmtM(p.distanceM), detail: `${p.name} is ${fmtM(p.distanceM)} from the area centre (straight line).`, sources: [poiSource(p, labelFor("pharmacy"))] });
-    else if (haveFor("pharmacy")) criteria.push({ id: "pharmacy", label: "Nearest pharmacy", status: osm ? "poor" : "unknown", value: osm ? "> 1.5 km" : null, detail: osm ? "No pharmacy mapped in OpenStreetMap within 1.5 km of the area centre." : "No pharmacy named “apteekki” found within 1.5 km via Photon (Overpass unavailable, so this search is name-based).", sources: [] });
+    const p = nearest([...pois, ...smPharmacies], "pharmacy");
+    if (p) criteria.push({ id: "pharmacy", label: "Nearest pharmacy", status: band(p.distanceM, 500, 1200), value: fmtM(p.distanceM), detail: `${p.name} is ${fmtM(p.distanceM)} from the area centre (straight line).`, sources: [poiSource(p, p.sub === "servicemap" ? "Helsinki region Service Map" : labelFor("pharmacy"))] });
+    else if (haveFor("pharmacy")) criteria.push({ id: "pharmacy", label: "Nearest pharmacy", status: osm ? "poor" : "unknown", value: osm ? "> 1.5 km" : null, detail: osm ? "No pharmacy within 1.5 km of the area centre in OpenStreetMap or the Helsinki region Service Map." : "No pharmacy named “apteekki” found within 1.5 km via Photon (Overpass unavailable, so this search is name-based).", sources: [] });
     else criteria.push(unknown("pharmacy", "Nearest pharmacy", "Pharmacies"));
   }
   // Grocery
