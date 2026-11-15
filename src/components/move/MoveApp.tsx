@@ -687,7 +687,7 @@ export default function MoveApp() {
   }
 
   return (
-    <div className={`${s.stage} ${folded ? s.stageFolded : ""}`}>
+    <div className={`${s.stage} ${folded ? s.stageFolded : ""} ${ready ? "" : s.hydrating}`}>
       <main className={s.phone} aria-label="Chat">
         <button
           type="button"

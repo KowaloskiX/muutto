@@ -1,11 +1,6 @@
-import type { Metadata } from "next";
-import ChatApp from "@/components/chat/ChatApp";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Kilpi for contractors | Vet subcontractors before you sign",
-  description: "Find subcontractors for your construction project in Finland and vet them before you sign: tilaajavastuu registers and documents, references, licences, news and reviews, with a source for every finding. Request quotes and missing documents, and watch them during the project.",
-};
-
+// The contractor chat (Kilpi) was the project before the pivot; the product is now Muutto at /move.
 export default function ChatPage() {
-  return <ChatApp />;
+  redirect("/move");
 }
