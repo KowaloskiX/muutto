@@ -3,7 +3,7 @@ import { researchListing } from "@/lib/move/research";
 import type { Listing, MoveIntent, ResearchEvent } from "@/lib/move/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 // POST { listing: Listing, intent?: MoveIntent } -> NDJSON stream of ResearchEvent
 // (step / finding / error, then one `done` with the full ListingResearch). ≤ 60 s.

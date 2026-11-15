@@ -4,7 +4,7 @@ import { getIso } from "@/lib/move/reach-iso";
 // GET /api/move/iso?lat=&lng=&step=1|5 — road-network car isochrones (see src/lib/move/reach-iso.ts).
 // Usually already computed: /api/move warms them in the background as soon as the workplace is known.
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 120;
 export type { IsoResponse } from "@/lib/move/reach-iso";
 
 export async function GET(req: Request) {
