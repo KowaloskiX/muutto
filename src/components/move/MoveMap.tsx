@@ -244,11 +244,14 @@ function Shapes({ pins, hover, active, dark, onSelect, onHover, outline }: { pin
             positions={pos[p.key] as L.LatLngExpression[][]}
             pathOptions={{
               color: outline ? ink : on ? ink : fill,
-              weight: on ? 2.5 : outline ? 1 : 1.25,
-              opacity: outline ? (on ? 0.7 : 0.25) : on ? 0.9 : 0.7,
-              dashArray: outline ? "3 4" : undefined,
+              // Postal areas are published generalised (straight edges across blocks): draw them softly,
+              // a firm outline only for the area in focus.
+              weight: on ? 2 : outline ? 0.8 : 0.8,
+              opacity: outline ? (on ? 0.6 : 0.2) : on ? 0.85 : 0.35,
+              dashArray: on ? undefined : "2 4",
+              lineJoin: "round",
               fillColor: fill,
-              fillOpacity: outline ? 0 : on ? 0.42 : 0.24,
+              fillOpacity: outline ? 0 : on ? 0.3 : 0.14,
             }}
             eventHandlers={{ click: () => onSelect(p.key), mouseover: () => onHover?.(p.key), mouseout: () => onHover?.(undefined) }}
           >
