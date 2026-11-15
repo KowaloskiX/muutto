@@ -30,6 +30,7 @@ export async function POST(req: Request) {
         "new = a different move (another workplace or city) or unrelated to the previous search.",
       user: `Previous request: ${previous || "(none)"}\n\nFollow-up: ${message}`,
       schema: Out,
+      effort: "low",
     });
     if (r.action === "refine" && !r.query.trim()) return NextResponse.json({ action: "new", reply: r.reply });
     if (r.action === "criterion" && !r.criterion.trim()) return NextResponse.json({ action: "refine", query: `${previous} ${message}`.trim(), reply: r.reply });

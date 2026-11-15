@@ -79,6 +79,7 @@ export default function MoveApp() {
   const [drafts, setDrafts] = useState<Record<string, DraftState>>({});
   const [watch, setWatch] = useState<WatchState | undefined>();
   const [busy, setBusy] = useState(false);
+  const [thinking, setThinking] = useState(false);
   const [input, setInput] = useState("");
   const [ready, setReady] = useState(false);
   const [sheet, setSheet] = useState(false);
@@ -168,7 +169,7 @@ export default function MoveApp() {
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [msgs.length, runTick]);
+  }, [msgs.length, runTick, thinking]);
 
   useEffect(() => {
     if (!drawerOpen) setChatPeek(false);
@@ -674,25 +675,34 @@ export default function MoveApp() {
   // start over. Before any results it is simply a search.
   const send = async (text: string) => {
     const q = text.trim();
-    if (!q || busyRef.current) return;
+    if (!q) return;
+    if (busyRef.current) {
+      push({ id: uid(), role: "bot", kind: "text", text: "Still working on the current search — send it again when the results are in.", tone: "note" });
+      return;
+    }
     const prev = currentRun ? runsRef.current[currentRun] : undefined;
     if (!prev?.finished || !(prev.ranked?.length ?? 0)) return void search(q);
     busyRef.current = true;
     setBusy(true);
     setInput("");
     setMsgs((m) => [...m, { id: uid(), role: "user", text: q }]);
+    setThinking(true);
     let route: { action?: "refine" | "criterion" | "new"; query?: string; criterion?: string; reply?: string } = {};
     try {
-      const res = await fetch("/api/move/followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ previous: prev.query, message: q }) });
+      const res = await fetch("/api/move/followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ previous: prev.query, message: q }), signal: AbortSignal.timeout(15_000) });
       route = res.ok ? await res.json() : {};
     } catch {
-      /* fall back to a fresh search */
+      /* slow or failed: treat it as a change to the previous search */
     }
+    if (!route.action) route = { action: "refine", query: `${prev.query} ${q}` };
     busyRef.current = false;
     setBusy(false);
+    setThinking(false);
     if (route.action === "criterion" && route.criterion) {
       push({ id: uid(), role: "bot", kind: "text", text: route.reply || `Checking “${route.criterion}” in every area.` });
+      setThinking(true);
       await addCriterion(route.criterion, 2);
+      setThinking(false);
       push({ id: uid(), role: "bot", kind: "text", text: `Added “${route.criterion}” as a column in the areas table, with a source for every answer.` });
       return;
     }
@@ -834,6 +844,18 @@ export default function MoveApp() {
               </div>
             );
           })}
+          {thinking && (
+            <div className={`${s.row} ${s.rowBot}`}>
+              <div className={s.thinking}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/media/logo-goat-256.png" alt="" />
+                <span>Pukki is thinking</span>
+                <i />
+                <i />
+                <i />
+              </div>
+            </div>
+          )}
         </div>
 
         <form
