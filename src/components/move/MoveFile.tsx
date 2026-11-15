@@ -3,9 +3,9 @@
 // The move file: the job and constraints, a big map (work, ranked areas, listings), the comparison
 // matrix (areas x criteria, each cell opens the drawer at that criterion), the live listings and
 // the watch. Renders only what /api/move returned.
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import { Check, CircleNotch, Plus, X } from "@phosphor-icons/react";
+import { CircleNotch, Plus, X } from "@phosphor-icons/react";
 import type { Area, CriterionId, Listing } from "@/lib/move/types";
 import { allListings, columnsFor, focusCols, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
 import { MoveDrawer } from "./MoveDrawer";
