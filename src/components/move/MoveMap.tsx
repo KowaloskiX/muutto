@@ -410,7 +410,7 @@ export default function MoveMap({
   return (
     <div className={x.mapWrap} data-tour="map">
       <div className={`${m.box} ${m.vars} ${x.mapBox}`}>
-        <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom={false} zoomControl={false} className={m.leaflet} attributionControl>
+        <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom zoomControl={false} className={m.leaflet} attributionControl>
           <TileLayer key={dark ? "dark" : "light"} attribution={ATTRIBUTION} url={(dark ? TILES.dark : TILES.light).base} maxZoom={17} maxNativeZoom={16} />
           {layer === "noise" && (
             <WMSTileLayer

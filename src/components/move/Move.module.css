@@ -827,3 +827,15 @@
 .cgDetail b { color: var(--ink); font-weight: 500; }
 /* more breathing room in the drawer */
 .drawer > div:last-child > section, .drawer > div:last-child > * > section { padding: 18px !important; margin-bottom: 14px !important; }
+
+/* ---- icons (Minerva-style) ---- */
+.st { display: inline-flex; align-items: center; gap: 8px; }
+.stIcon { flex: none; width: 17px; height: 17px; color: var(--ink); }
+.cgIcon { display: grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 6px; background: var(--surface-strong); color: var(--ink-soft); }
+.cgIcon svg { width: 12px; height: 12px; }
+.cgLabel .cgDot { margin-left: 2px; }
+.pgH { display: flex; align-items: center; gap: 6px; }
+.pgH svg { width: 13px; height: 13px; color: var(--ink-soft); }
+.cgTile { position: relative; }
+.cgLabel { padding-right: 10px; }
+.cgLabel .cgDot { position: absolute; top: 12px; right: 12px; margin: 0; }

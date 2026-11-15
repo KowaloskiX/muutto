@@ -9,13 +9,14 @@ import { withTextFragment } from "@/lib/textFragment";
 import { DASH, eur, fmtDate, host } from "./model";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
+import { ListBullets, ClockCounterClockwise as HistoryIcon, Buildings, ChatsCircle } from "@phosphor-icons/react";
 
 export function ListingFacts({ l }: { l: Listing }) {
   if (!l.facts?.length) return null;
   return (
     <section className={d.section}>
       <h3 className={d.sh}>
-        In the listing <small>as stated on {l.source || host(l.url)}</small>
+        <span className={x.st}><ListBullets weight="bold" aria-hidden className={x.stIcon} />In the listing</span> <small>as stated on {l.source || host(l.url)}</small>
       </h3>
       <dl className={x.factGrid}>
         {l.facts.map((f) => (
@@ -46,7 +47,7 @@ export function ListingHistoryView({ l }: { l: Listing }) {
   return (
     <section className={d.section}>
       <h3 className={d.sh}>
-        History <small>same address &amp; size</small>
+        <span className={x.st}><HistoryIcon weight="bold" aria-hidden className={x.stIcon} />History</span> <small>same address &amp; size</small>
       </h3>
       {h.seen.length ? (
         <ul className={x.histList}>
@@ -127,7 +128,7 @@ export function AreaOutlook({ a }: { a: Area }) {
     <>
       <section className={d.section}>
         <h3 className={d.sh}>
-          Coming next <small>city plans · local news</small>
+          <span className={x.st}><Buildings weight="bold" aria-hidden className={x.stIcon} />Coming next</span> <small>city plans · local news</small>
         </h3>
         {!o ? busy : o.future.length ? (
           <Quotes items={o.future.map((f) => ({ ...f, meta: [host(f.url), f.when && `for ${f.when}`].filter(Boolean).join(" · ") }))} />
@@ -137,7 +138,7 @@ export function AreaOutlook({ a }: { a: Area }) {
       </section>
       <section className={d.section}>
         <h3 className={d.sh}>
-          What residents say <small>forums · opinions</small>
+          <span className={x.st}><ChatsCircle weight="bold" aria-hidden className={x.stIcon} />What residents say</span> <small>forums · opinions</small>
         </h3>
         {!o ? busy : o.voices.length ? <Quotes items={o.voices.map((v) => ({ ...v, meta: v.host }))} /> : <p className={x.noSrc}>{DASH} No recent forum threads naming this area were found.</p>}
       </section>

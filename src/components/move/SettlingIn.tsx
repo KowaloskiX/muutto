@@ -9,6 +9,7 @@ import type { Area, AreaServices, ServiceContact, ServiceGroup } from "@/lib/mov
 import { DASH, host, isHttp, meters } from "./model";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
+import { ChartBar, Lifebuoy } from "@phosphor-icons/react";
 
 const GROUPS: { id: ServiceGroup; label: string }[] = [
   { id: "health", label: "Health" },
@@ -38,7 +39,7 @@ export function AreaStats({ a }: { a: Area }) {
   return (
     <section className={d.section}>
       <h3 className={d.sh}>
-        The area in numbers <small>{s.year ? `Paavo ${s.year}` : "Paavo"}</small>
+        <span className={x.st}><ChartBar weight="bold" aria-hidden className={x.stIcon} />The area in numbers</span> <small>{s.year ? `Paavo ${s.year}` : "Paavo"}</small>
       </h3>
       <dl className={x.statGrid}>
         {items.map(([k, v]) => (
@@ -131,7 +132,7 @@ export function SettlingIn({ a }: { a: Area }) {
   return (
     <section className={d.section}>
       <h3 className={d.sh}>
-        Settling in <small>{data ? `${data.contacts.length} contacts` : ""}</small>
+        <span className={x.st}><Lifebuoy weight="bold" aria-hidden className={x.stIcon} />Settling in</span> <small>{data ? `${data.contacts.length} contacts` : ""}</small>
       </h3>
       {error ? (
         <p className={x.noSrc}>

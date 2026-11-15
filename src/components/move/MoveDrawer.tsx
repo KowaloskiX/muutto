@@ -4,6 +4,7 @@
 // places, local news, listings) or one LISTING (details, live deep research, the viewing request).
 // Only what the API returned is shown; a missing value reads "—" with the reason when we have one.
 import { useEffect, useRef, useState } from "react";
+import { Barbell, Buildings, Bus, Car, ChartBar, ChatsCircle, Coffee, Crane, FirstAidKit, GraduationCap, Lifebuoy, ListBullets, MapPin, Path, ShieldCheck, ShoppingCart, Sparkle, SpeakerHigh, Star, Train, Tree, Wallet, Wind, Baby } from "@phosphor-icons/react";
 import { ArrowLeft, ArrowUpRight, CaretDown, Check, CircleNotch, ClockCounterClockwise, Copy, EnvelopeSimple, Globe, House, Key, ListChecks, MagnifyingGlass, Newspaper, Storefront, WarningCircle, X } from "@phosphor-icons/react";
 import { withTextFragment } from "@/lib/textFragment";
 import type { Area, Commute, Criterion, CriterionId, Listing, ListingResearch, MoveIntent, Source, ViewingDraft } from "@/lib/move/types";
@@ -242,6 +243,20 @@ function Tiles({ items }: { items: { label: string; value: React.ReactNode; sub?
   );
 }
 
+type Ico = React.ComponentType<{ weight?: "regular" | "bold" | "fill"; "aria-hidden"?: boolean; className?: string }>;
+const CRIT_ICON: Record<string, Ico> = { commute: Train, rent: Wallet, traffic: Car, pharmacy: FirstAidKit, grocery: ShoppingCart, cafe: Coffee, school: GraduationCap, park: Tree, transit: Bus, air: Wind, noise: SpeakerHigh, construction: Crane, safety: ShieldCheck };
+const critIcon = (id: string): Ico => CRIT_ICON[id] ?? (/gym|climb|sport|fitness/.test(id) ? Barbell : Star);
+const PLACE_ICON: Record<string, Ico> = { pharmacy: FirstAidKit, grocery: ShoppingCart, cafe: Coffee, school: GraduationCap, daycare: Baby, park: Tree, transit: Bus, custom: Star };
+/** Section title with an icon, Minerva-style. */
+function St({ icon: I, children }: { icon: Ico; children: React.ReactNode }) {
+  return (
+    <span className={x.st}>
+      <I weight="bold" aria-hidden className={x.stIcon} />
+      {children}
+    </span>
+  );
+}
+
 const GROUPS: { label: string; test: (id: CriterionId) => boolean }[] = [
   { label: "Your picks", test: (id) => id.startsWith("custom:") },
   { label: "Cost & commute", test: (id) => ["commute", "rent", "traffic"].includes(id) },
@@ -274,8 +289,9 @@ function CriteriaGrid({ criteria, focus, n }: { criteria: Criterion[]; focus?: C
               {list.map((c) => (
                 <button key={c.id} type="button" className={`${x.cgTile} ${open === c.id ? x.cgOn : ""}`} onClick={() => setOpen(open === c.id ? undefined : c.id)} aria-expanded={open === c.id}>
                   <span className={x.cgLabel}>
-                    <i className={`${x.cgDot} ${x[`cg_${c.status}`]}`} aria-hidden />
+                    <span className={x.cgIcon}>{(() => { const I = critIcon(c.id); return <I aria-hidden />; })()}</span>
                     {c.label}
+                    <i className={`${x.cgDot} ${x[`cg_${c.status}`]}`} aria-hidden />
                   </span>
                   <strong className={c.status === "poor" ? x.cgPoor : c.status === "unknown" ? x.cgUnknown : ""}>{tileValue(c)}</strong>
                   {(c.status === "poor" || c.status === "unknown") && <small>{STATUS_WORD[c.status]}</small>}
@@ -316,7 +332,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
         <>
         {a.why.length > 0 && (
           <section className={d.section}>
-            <h3 className={d.sh}>Why this area</h3>
+            <h3 className={d.sh}><St icon={Sparkle}>Why this area</St></h3>
             <ul className={x.why}>
               {a.why.map((w, i) => (
                 <li key={i}>
@@ -328,7 +344,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
           </section>
         )}
         <section className={d.section}>
-          <h3 className={d.sh}>Commute to work</h3>
+          <h3 className={d.sh}><St icon={Path}>Commute to work</St></h3>
           <CommuteGrid c={a.commute} />
         </section>
         <AreaStats a={a} />
@@ -338,7 +354,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
         <>
         <section className={d.section}>
           <h3 className={d.sh}>
-            Criteria <small>{a.criteria.length} measured</small>
+            <St icon={ListChecks}>Criteria</St> <small>{a.criteria.length} measured</small>
           </h3>
           {a.criteria.length ? (
             <CriteriaGrid criteria={a.criteria} focus={view.focus} n={view.n} />
@@ -352,13 +368,13 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
         <>
         <section className={d.section}>
           <h3 className={d.sh}>
-            Nearby <small>{places.length ? `${places.length} places` : ""}</small>
+            <St icon={MapPin}>Nearby</St> <small>{places.length ? `${places.length} places` : ""}</small>
           </h3>
           {places.length ? (
             <div className={x.places}>
               {kinds.map((k) => (
                 <div key={k} className={x.placeGroup}>
-                  <h4>{k}</h4>
+                  <h4 className={x.pgH}>{(() => { const p0 = places.find((p) => placeGroup(p) === k); const I = PLACE_ICON[p0?.kind ?? "custom"] ?? MapPin; return <I aria-hidden />; })()}{k}</h4>
                   <ul>
                     {places
                       .filter((p) => placeGroup(p) === k)
@@ -400,7 +416,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
         <>
         <section className={d.section}>
           <h3 className={d.sh}>
-            Local news <small>{a.news.length ? `${a.news.length}` : ""}</small>
+            <St icon={Newspaper}>Local news</St> <small>{a.news.length ? `${a.news.length}` : ""}</small>
           </h3>
           {a.news.length ? (
             <ul className={x.news}>
@@ -432,7 +448,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
         <>
         <section className={d.section}>
           <h3 className={d.sh}>
-            Listings <small>{a.listings.length ? `${a.listings.length} live` : ""}</small>
+            <St icon={Key}>Listings</St> <small>{a.listings.length ? `${a.listings.length} live` : ""}</small>
           </h3>
           {a.listings.length ? (
             <ul className={x.listings}>
@@ -1056,12 +1072,12 @@ export function MoveDrawer({
             <ViewingCalendar l={l} area={area} intent={intent} questions={ds?.draft?.questions} />
             <ListingFacts l={l} />
             <section className={d.section}>
-              <h3 className={d.sh}>The listing</h3>
+              <h3 className={d.sh}><St icon={House}>The listing</St></h3>
               {l.title && l.address && <p className={x.listingTitle}>{l.title}</p>}
               <Facts l={l} tenure={tenure} areaName={area?.name} />
             </section>
             <section className={d.section}>
-              <h3 className={d.sh}>Commute to work</h3>
+              <h3 className={d.sh}><St icon={Path}>Commute to work</St></h3>
               <CommuteGrid c={l.commute ?? area?.commute} />
               {!l.commute && area?.commute && <p className={x.noSrc}>Measured from the area centre, not this address.</p>}
             </section>
@@ -1071,14 +1087,14 @@ export function MoveDrawer({
         {listingTab === "research" && (
           <section className={`${d.section} ${x.anchor}`} ref={researchSec}>
             <h3 className={d.sh}>
-              Deep research <small>{rs?.running ? "running" : rs?.research ? "done" : ""}</small>
+              <St icon={MagnifyingGlass}>Deep research</St> <small>{rs?.running ? "running" : rs?.research ? "done" : ""}</small>
             </h3>
             <ResearchView st={rs} onStart={() => onResearch(l)} />
           </section>
         )}
         {listingTab === "viewing" && (
           <section className={`${d.section} ${x.anchor}`} ref={draftSec}>
-            <h3 className={d.sh}>Viewing request</h3>
+            <h3 className={d.sh}><St icon={EnvelopeSimple}>Viewing request</St></h3>
             <DraftView listingUrl={l.url} st={ds} onLang={(lang) => onDraftLang(l.url, lang)} onOpened={() => onDraftOpened(l.url)} onStart={() => onDraft(l)} />
             <ViewingCalendar l={l} area={area} intent={intent} questions={ds?.draft?.questions} />
           </section>
