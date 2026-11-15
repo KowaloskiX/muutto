@@ -839,3 +839,8 @@
 .cgTile { position: relative; }
 .cgLabel { padding-right: 10px; }
 .cgLabel .cgDot { position: absolute; top: 12px; right: 12px; margin: 0; }
+.nbName { max-width: 100%; overflow: hidden; color: var(--muted) !important; text-overflow: ellipsis; white-space: nowrap; }
+.nbList { display: flex; flex-direction: column; margin: 0; padding: 4px 12px; border-radius: 12px; background: var(--page); list-style: none; animation: lcFade .2s ease both; }
+.nbList li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.nbList li:last-child { border-bottom: 0; }
+.nbList li > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -257,6 +257,60 @@ function St({ icon: I, children }: { icon: Ico; children: React.ReactNode }) {
   );
 }
 
+/** One tile per kind of place: the nearest one and its distance; a tile opens the others. */
+function NearbyTiles({ places, kinds, municipality }: { places: Area["places"]; kinds: string[]; municipality: string }) {
+  const [open, setOpen] = useState<string | undefined>();
+  const maps = (name: string) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${name}, ${municipality}`)}`;
+  const src = (u: string) => (/openstreetmap/.test(u) ? "OSM" : /palvelukartta|servicemap/.test(u) ? "City" : /exa\.ai/.test(u) ? "Exa" : host(u));
+  const sel = open ? places.filter((p) => placeGroup(p) === open) : [];
+  return (
+    <div className={x.cg}>
+      <div className={x.cgTiles}>
+        {kinds.map((k) => {
+          const list = places.filter((p) => placeGroup(p) === k);
+          const near = list[0];
+          const I = PLACE_ICON[near?.kind ?? "custom"] ?? MapPin;
+          return (
+            <button key={k} type="button" className={`${x.cgTile} ${open === k ? x.cgOn : ""}`} onClick={() => setOpen(open === k ? undefined : k)} aria-expanded={open === k}>
+              <span className={x.cgLabel}>
+                <span className={x.cgIcon}>
+                  <I aria-hidden />
+                </span>
+                {k}
+              </span>
+              <strong>{meters(near.distanceM) ?? DASH}</strong>
+              <small className={x.nbName}>
+                {near.name}
+                {list.length > 1 ? ` · +${list.length - 1}` : ""}
+              </small>
+            </button>
+          );
+        })}
+      </div>
+      {open && (
+        <ul className={x.nbList}>
+          {sel.map((p, i) => (
+            <li key={`${p.name}-${i}`}>
+              <span>{p.name}</span>
+              <span className={x.placeLinks}>
+                <span className={x.num}>{meters(p.distanceM) ?? DASH}</span>
+                <a href={maps(p.name)} target="_blank" rel="noreferrer" title="Open in Google Maps">
+                  Maps
+                </a>
+                {p.url && isHttp(p.url) && (
+                  <a href={p.url} target="_blank" rel="noreferrer" title="Where this place comes from">
+                    {src(p.url)}
+                  </a>
+                )}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 const GROUPS: { label: string; test: (id: CriterionId) => boolean }[] = [
   { label: "Your picks", test: (id) => id.startsWith("custom:") },
   { label: "Cost & commute", test: (id) => ["commute", "rent", "traffic"].includes(id) },
@@ -370,44 +424,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
           <h3 className={d.sh}>
             <St icon={MapPin}>Nearby</St> <small>{places.length ? `${places.length} places` : ""}</small>
           </h3>
-          {places.length ? (
-            <div className={x.places}>
-              {kinds.map((k) => (
-                <div key={k} className={x.placeGroup}>
-                  <h4 className={x.pgH}>{(() => { const p0 = places.find((p) => placeGroup(p) === k); const I = PLACE_ICON[p0?.kind ?? "custom"] ?? MapPin; return <I aria-hidden />; })()}{k}</h4>
-                  <ul>
-                    {places
-                      .filter((p) => placeGroup(p) === k)
-                      .slice(0, 4)
-                      .map((p, i) => (
-                        <li key={`${p.name}-${i}`}>
-                          {p.url && isHttp(p.url) ? (
-                            <a href={p.url} target="_blank" rel="noreferrer">
-                              {p.name}
-                            </a>
-                          ) : (
-                            <span>{p.name}</span>
-                          )}
-                          <span className={x.placeLinks}>
-                            <span className={x.num}>{meters(p.distanceM) ?? DASH}</span>
-                            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.name}, ${a.municipality}`)}`} target="_blank" rel="noreferrer" title="Open in Google Maps">
-                              Maps
-                            </a>
-                            {p.url && isHttp(p.url) && (
-                              <a href={p.url} target="_blank" rel="noreferrer" title="Where this place comes from">
-                                {/openstreetmap/.test(p.url) ? "OSM" : /palvelukartta|servicemap/.test(p.url) ? "City" : /exa\.ai/.test(p.url) ? "Exa" : host(p.url)}
-                              </a>
-                            )}
-                          </span>
-                        </li>
-                      ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className={x.noSrc}>{DASH} No places were returned for this area.</p>
-          )}
+          {places.length ? <NearbyTiles places={places} kinds={kinds} municipality={a.municipality} /> : null}
         </section>
         <SettlingIn a={a} />
         </>

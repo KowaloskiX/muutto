@@ -251,7 +251,8 @@ function Shapes({ pins, hover, active, dark, onSelect, onHover, outline }: { pin
               dashArray: on ? undefined : "2 4",
               lineJoin: "round",
               fillColor: fill,
-              fillOpacity: outline ? 0 : on ? 0.3 : 0.14,
+              // No resting fill: the generalised coastline would spill colour over the sea.
+              fillOpacity: outline ? 0 : on ? 0.22 : 0,
             }}
             eventHandlers={{ click: () => onSelect(p.key), mouseover: () => onHover?.(p.key), mouseout: () => onHover?.(undefined) }}
           >
