@@ -83,7 +83,7 @@ const metres = (s: string) => {
   return m ? parseFloat(m[1].replace(",", "")) * (m[2] === "km" ? 1000 : 1) : undefined;
 };
 /** Compact cell text for the matrix; the full value stays in the drawer and the tooltip. */
-function compact(id: CriterionId, v: string): { value: string; n?: number } {
+export function compact(id: CriterionId, v: string): { value: string; n?: number } {
   if (id === "rent") {
     const m = v.match(/€[\d,.]+(\/m²)?/);
     return m ? { value: m[0], n: parseFloat(m[0].replace(/[€,]/g, "")) } : { value: v };

@@ -7,12 +7,12 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowUpRight, CaretDown, Check, CircleNotch, ClockCounterClockwise, Copy, EnvelopeSimple, Globe, House, Key, ListChecks, MagnifyingGlass, Newspaper, Storefront, WarningCircle, X } from "@phosphor-icons/react";
 import { withTextFragment } from "@/lib/textFragment";
 import type { Area, Commute, Criterion, CriterionId, Listing, ListingResearch, MoveIntent, Source, ViewingDraft } from "@/lib/move/types";
-import { DASH, eur, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, placeGroup, price, sizeLine } from "./model";
+import { compact, DASH, eur, fmtDate, fitTone, FIT_WORD, host, isHttp, meters, mins, placeGroup, price, sizeLine } from "./model";
 import type { DraftState, ResearchState, View } from "./types";
 import { AreaStats, SettlingIn } from "./SettlingIn";
 import { Gallery } from "./ListingCard";
 import { AreaOutlook, ListingFacts, ListingHistoryView } from "./Insights";
-import { MovingChecklist, ViewingCalendar } from "./Calendar";
+import { ViewingCalendar } from "./Calendar";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
 
@@ -242,6 +242,71 @@ function Tiles({ items }: { items: { label: string; value: React.ReactNode; sub?
   );
 }
 
+const GROUPS: { label: string; test: (id: CriterionId) => boolean }[] = [
+  { label: "Your picks", test: (id) => id.startsWith("custom:") },
+  { label: "Cost & commute", test: (id) => ["commute", "rent", "traffic"].includes(id) },
+  { label: "Daily life", test: (id) => ["pharmacy", "grocery", "cafe", "school", "park", "transit"].includes(id) },
+  { label: "Surroundings", test: (id) => ["air", "noise", "construction", "safety"].includes(id) },
+];
+
+/** Short value for a tile; the full value stays in the detail below. */
+function tileValue(c: Criterion): string {
+  if (c.status === "unknown" || !c.value) return DASH;
+  if (c.id === "commute") return c.value.split(" · ")[0].replace(/\s*transit\s*\(est\.\)/, "").replace(/\s*transit$/, "");
+  if (c.id.startsWith("custom:")) return c.value;
+  return compact(c.id, c.value).value;
+}
+
+/** Criteria as quiet tiles in groups; a tile opens its detail and sources under its group. */
+function CriteriaGrid({ criteria, focus, n }: { criteria: Criterion[]; focus?: CriterionId; n?: number }) {
+  const [open, setOpen] = useState<CriterionId | undefined>(focus);
+  useEffect(() => setOpen(focus), [focus, n]);
+  return (
+    <div className={x.cg}>
+      {GROUPS.map((g) => {
+        const list = criteria.filter((c) => g.test(c.id) && c.status !== "unknown");
+        if (!list.length) return null;
+        const sel = list.find((c) => c.id === open);
+        return (
+          <div key={g.label} className={x.cgGroup}>
+            <h4>{g.label}</h4>
+            <div className={x.cgTiles}>
+              {list.map((c) => (
+                <button key={c.id} type="button" className={`${x.cgTile} ${open === c.id ? x.cgOn : ""}`} onClick={() => setOpen(open === c.id ? undefined : c.id)} aria-expanded={open === c.id}>
+                  <span className={x.cgLabel}>
+                    <i className={`${x.cgDot} ${x[`cg_${c.status}`]}`} aria-hidden />
+                    {c.label}
+                  </span>
+                  <strong className={c.status === "poor" ? x.cgPoor : c.status === "unknown" ? x.cgUnknown : ""}>{tileValue(c)}</strong>
+                  {(c.status === "poor" || c.status === "unknown") && <small>{STATUS_WORD[c.status]}</small>}
+                </button>
+              ))}
+            </div>
+            {sel && (
+              <div className={x.cgDetail}>
+                <p>
+                  <b>{sel.label}:</b> {sel.value ?? DASH}. {sel.detail}
+                </p>
+                <Sources list={sel.sources} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {criteria.some((c) => c.status === "unknown") && (
+        <p className={x.noSrc}>
+          Not measured:{" "}
+          {criteria
+            .filter((c) => c.status === "unknown")
+            .map((c) => c.label)
+            .join(", ")}
+          .
+        </p>
+      )}
+    </div>
+  );
+}
+
 function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a: Area; view: Extract<View, { kind: "area" }>; tab: AreaTab; tenure?: MoveIntent["tenure"]; onListing: (l: Listing) => void; onResearch: (l: Listing) => void; onDraft: (l: Listing) => void }) {
   const places = [...a.places].sort((p, q) => p.distanceM - q.distanceM);
   const kinds = [...new Set(places.map(placeGroup))];
@@ -276,11 +341,7 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
             Criteria <small>{a.criteria.length} measured</small>
           </h3>
           {a.criteria.length ? (
-            <ul className={x.crits}>
-              {a.criteria.map((c) => (
-                <CriterionRow key={c.id} c={c} focused={view.focus === c.id} n={view.focus === c.id ? view.n : undefined} />
-              ))}
-            </ul>
+            <CriteriaGrid criteria={a.criteria} focus={view.focus} n={view.n} />
           ) : (
             <p className={x.noSrc}>No criteria were returned for this area.</p>
           )}
@@ -333,7 +394,6 @@ function AreaView({ a, view, tenure, tab, onListing, onResearch, onDraft }: { a:
           )}
         </section>
         <SettlingIn a={a} />
-        <MovingChecklist a={a} />
         </>
       )}
       {tab === "news" && (
