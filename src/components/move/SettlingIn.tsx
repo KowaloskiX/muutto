@@ -9,7 +9,9 @@ import type { Area, AreaServices, ServiceContact, ServiceGroup } from "@/lib/mov
 import { DASH, host, isHttp, meters } from "./model";
 import d from "@/components/case/Drawer.module.css";
 import x from "./Move.module.css";
-import { ChartBar, Lifebuoy } from "@phosphor-icons/react";
+import { Baby, Bank, ChartBar, FirstAidKit, House, Lifebuoy, Storefront } from "@phosphor-icons/react";
+
+const GROUP_ICON: Record<ServiceGroup, typeof Baby> = { health: FirstAidKit, kids: Baby, everyday: Storefront, official: Bank, landlords: House };
 
 const GROUPS: { id: ServiceGroup; label: string }[] = [
   { id: "health", label: "Health" },
@@ -127,6 +129,7 @@ export function SettlingIn({ a }: { a: Area }) {
     };
   }, [key, a.id, a.center.lat, a.center.lng, a.municipality]);
 
+  const [openG, setOpenG] = useState<ServiceGroup | undefined>();
   const data = st.key === key ? st.data : undefined;
   const error = st.key === key ? st.error : undefined;
   return (
@@ -144,22 +147,37 @@ export function SettlingIn({ a }: { a: Area }) {
         </p>
       ) : (
         <>
-          <div className={x.svcGroups}>
+          <div className={x.cgTiles}>
             {GROUPS.map((g) => {
               const list = data.contacts.filter((c) => c.group === g.id);
               if (!list.length) return null;
+              const I = GROUP_ICON[g.id];
+              const top = list[0];
               return (
-                <div key={g.id} className={x.svcGroup}>
-                  <h4>{g.label}</h4>
-                  <ul>
-                    {list.map((c, i) => (
-                      <Contact key={`${c.kind}-${c.name}-${i}`} c={c} />
-                    ))}
-                  </ul>
-                </div>
+                <button key={g.id} type="button" className={`${x.cgTile} ${openG === g.id ? x.cgOn : ""}`} onClick={() => setOpenG(openG === g.id ? undefined : g.id)} aria-expanded={openG === g.id}>
+                  <span className={x.cgLabel}>
+                    <span className={x.cgIcon}>
+                      <I aria-hidden />
+                    </span>
+                    {g.label}
+                  </span>
+                  <strong className={x.svcTop}>{top.name}</strong>
+                  <small className={x.nbName}>
+                    {[top.distanceM != null ? meters(top.distanceM) : null, list.length > 1 ? `+${list.length - 1} more` : null].filter(Boolean).join(" · ") || "official page"}
+                  </small>
+                </button>
               );
             })}
           </div>
+          {openG && (
+            <ul className={x.svcOpen}>
+              {data.contacts
+                .filter((c) => c.group === openG)
+                .map((c, i) => (
+                  <Contact key={`${c.kind}-${c.name}-${i}`} c={c} />
+                ))}
+            </ul>
+          )}
           {data.unknowns.length > 0 && <p className={x.noSrc}>Not found: {data.unknowns.join(", ")}.</p>}
           {data.sources.length > 0 && <p className={x.statSrc}>From: {data.sources.join(" · ")}</p>}
         </>
