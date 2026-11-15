@@ -8,7 +8,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { configured, testTo, missing } = mailConfig();
-  return NextResponse.json({ configured, testTo, missing });
+  // Public: never show the full inbox address.
+  const masked = testTo?.replace(/^(.)[^@]*(@.*)$/, "$1•••$2");
+  return NextResponse.json({ configured, testTo: masked, missing });
 }
 
 export async function POST(req: Request) {
@@ -17,7 +19,8 @@ export async function POST(req: Request) {
   const body = String(b.body ?? "").trim().slice(0, 8000);
   if (!subject || !body) return NextResponse.json({ error: "Subject and body are required." }, { status: 400 });
   try {
-    return NextResponse.json(await sendTestMail({ intendedTo: b.to, subject, body, listingUrl: b.listingUrl }));
+    const sent = await sendTestMail({ intendedTo: b.to, subject, body, listingUrl: b.listingUrl });
+    return NextResponse.json({ ...sent, testTo: sent.testTo.replace(/^(.)[^@]*(@.*)$/, "$1•••$2") });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }

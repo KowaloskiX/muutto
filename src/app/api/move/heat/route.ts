@@ -4,7 +4,7 @@ import { getHeat, type HeatScale } from "@/lib/move/reach-heat";
 // GET /api/move/heat?lat=&lng=[&scale=region] — car travel time to the workplace on a regular grid
 // (see src/lib/move/reach-heat.ts). Usually already computed: /api/move warms it in the background.
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 60;
 export type { HeatGrid, HeatResponse, HeatScale } from "@/lib/move/reach-heat";
 
 export async function GET(req: Request) {

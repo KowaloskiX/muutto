@@ -24,7 +24,7 @@ import { createWatch, watchRuns } from "@/lib/agent/monitor";
 import { emptyState, type AgentEvent, type AgentState, type ChatMessage } from "@/lib/agent/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 function sanitizeState(s: unknown): AgentState {
   const st = (s ?? {}) as Partial<AgentState>;

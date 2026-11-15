@@ -3,7 +3,7 @@ import { z } from "zod";
 import { compareQuotes } from "@/lib/compare";
 import { QuoteInputError } from "@/lib/quote";
 
-export const maxDuration = 180;
+export const maxDuration = 60;
 
 const Body = z.object({
   quotes: z

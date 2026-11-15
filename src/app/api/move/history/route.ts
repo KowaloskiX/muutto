@@ -7,7 +7,7 @@ import type { ExaTrace } from "@/lib/exa";
 // Earlier appearances of each flat on the portals (Exa), at most 30 listings, 6 at a time.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60;
 
 // Same listing within 30 min: reuse the earlier answer.
 const memo = new Map<string, { at: number; v: ListingHistory | null }>();

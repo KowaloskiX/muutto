@@ -1,7 +1,7 @@
 import { connectVerify } from "@/lib/exa-connect";
 import type { ExaTrace } from "@/lib/exa";
 
-export const maxDuration = 150;
+export const maxDuration = 60;
 
 // POST {name, businessId?, website?} -> ConnectCheck (Exa Agent + Exa Connect partner data)
 export async function POST(req: Request) {

@@ -23,7 +23,7 @@ import type { Area, Commute, Criterion, Listing, MoveEvent } from "@/lib/move/ty
 import { pool, withTimeout } from "@/lib/move/util";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const N_AREAS = 8;
 

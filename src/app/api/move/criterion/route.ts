@@ -6,7 +6,7 @@ import type { ExaTrace } from "@/lib/exa";
 // Measures any user-typed criterion in every area (Exa Places or Exa search + cited judgement).
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as { question?: string; areas?: AskArea[] };

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { verifyCompany } from "@/lib/verify";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 const Body = z.object({
   name: z.string().optional(),

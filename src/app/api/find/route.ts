@@ -15,7 +15,7 @@ import { areaStems, preScore, registryFor, siteFit, tradeProfile, tradeWords, ty
 export type RankedItem = Ranked;
 export type { Why };
 
-export const maxDuration = 300;
+export const maxDuration = 60;
 
 const Intent = z.object({
   kind: z

@@ -8,7 +8,7 @@ import type { ExaTrace } from "@/lib/exa";
 // Nothing is sent here: the user approves each message; sending goes through /api/move/send (test mode).
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const b = (await req.json().catch(() => ({}))) as { listings?: Listing[]; intent?: MoveIntent; profile?: TenantProfile };

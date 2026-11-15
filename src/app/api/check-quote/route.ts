@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { checkQuote, QuoteInputError } from "@/lib/quote";
 
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 const Body = z.object({
   text: z.string().trim().min(1, "Paste the quote text first").min(40, "That is too short to be a quote. Paste the whole offer text (tarjous).").max(20000, "That is too long: paste just the quote (max 20 000 characters)"),

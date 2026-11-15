@@ -5,7 +5,7 @@ import { geocode } from "@/lib/geo";
 // their area's centre, otherwise the listing is skipped rather than pinned in the wrong place.
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 type In = { url: string; address?: string; municipality?: string; center?: { lat: number; lng: number } };
 
