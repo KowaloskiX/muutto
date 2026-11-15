@@ -400,6 +400,40 @@ export default function MoveApp() {
 
   // ---- guided tour (demo): every step acts first, so nobody has to know what to click
   const [tourOn, setTourOn] = useState(false);
+  // First visit: Pukki offers the tour. "Start" runs the first example if there are no results yet,
+  // then opens the tour as soon as the ranking is in.
+  const [tourOffer, setTourOffer] = useState(false);
+  const [tourPending, setTourPending] = useState(false);
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem("muutto-tour-seen")) setTourOffer(true);
+    } catch {
+      /* storage blocked */
+    }
+  }, []);
+  const markSeen = () => {
+    try {
+      localStorage.setItem("muutto-tour-seen", "1");
+    } catch {
+      /* storage blocked */
+    }
+  };
+  const startTour = () => {
+    setTourOffer(false);
+    markSeen();
+    if ((run?.ranked?.length ?? 0) > 0) setTourOn(true);
+    else {
+      setTourPending(true);
+      if (!busy) void search(PROMPTS[0]);
+    }
+  };
+  useEffect(() => {
+    if (tourPending && !busy && (run?.ranked?.length ?? 0) > 0) {
+      setTourPending(false);
+      const id = setTimeout(() => setTourOn(true), 800);
+      return () => clearTimeout(id);
+    }
+  }, [tourPending, busy, run?.ranked?.length]);
   const clickText = (sel: string, text: RegExp) => [...document.querySelectorAll<HTMLElement>(sel)].find((b) => text.test(b.textContent ?? "") || text.test(b.getAttribute("aria-label") ?? ""))?.click();
   const tourSteps = (): TourStep[] => {
     const ranked = run?.ranked ?? [];
@@ -750,6 +784,38 @@ export default function MoveApp() {
       </section>
       {sheet && <button type="button" className={s.sheetScrim} onClick={() => setSheet(false)} aria-label="Close move file" />}
       {tourOn && <Tour steps={tourSteps()} onClose={() => setTourOn(false)} />}
+      {!tourOn && tourOffer && (
+        <div className={s.pukkiOffer} role="dialog" aria-label="Guided tour">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/media/logo-goat-256.png" alt="" />
+          <div>
+            <strong>Hi, I&rsquo;m Pukki</strong>
+            <p>Want a one-minute tour? I&rsquo;ll run an example search and show you around.</p>
+            <div className={s.pukkiBtns}>
+              <button type="button" className={s.pukkiGo} onClick={startTour}>
+                Start the tour
+              </button>
+              <button
+                type="button"
+                className={s.pukkiNo}
+                onClick={() => {
+                  setTourOffer(false);
+                  markSeen();
+                }}
+              >
+                Not now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {!tourOn && !tourOffer && (
+        <button type="button" className={s.pukkiFab} onClick={startTour} disabled={tourPending} title="Guided tour with Pukki">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/media/logo-goat-256.png" alt="" />
+          <span>{tourPending ? "Preparing…" : "Tour"}</span>
+        </button>
+      )}
     </div>
   );
 }
