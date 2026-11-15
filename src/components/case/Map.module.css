@@ -71,3 +71,11 @@
 
 .vars { --site: #0d1016; --site-ink: #fff; --pin-ring: #fff; --ring: rgb(13 16 22 / .45); }
 @media (prefers-color-scheme: dark) { .vars { --site: #f2f1ed; --site-ink: #0d1016; --pin-ring: #0d1016; --ring: rgb(242 241 237 / .45); } }
+
+/* demo motion: area pins pop in, the workplace pulses */
+@keyframes mapPinIn { 0% { opacity: 0; transform: scale(.3); } 70% { transform: scale(1.12); } }
+@keyframes mapPulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--site, #0d1016) 45%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+@media (prefers-reduced-motion: no-preference) {
+  .pin { animation: mapPinIn .5s cubic-bezier(.3, 1.5, .5, 1) both; }
+  .site i { animation: mapPulse 2s ease-out infinite; }
+}

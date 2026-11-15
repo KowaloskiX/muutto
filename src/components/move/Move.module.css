@@ -894,6 +894,7 @@
 .appWho small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .appStatus { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--surface-strong); color: var(--muted); font-size: 11.5px; }
 .appStatus svg { width: 12px; height: 12px; }
+.as_drafting { background: var(--surface-strong); }
 .as_draft { background: color-mix(in srgb, var(--caution) 14%, transparent); color: var(--caution-text); }
 .as_sent { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success-text); }
 .appIntel { padding: 10px 12px; border-radius: 12px; background: var(--page); }
@@ -935,3 +936,34 @@ button.pick:hover { box-shadow: 0 0 0 1px var(--line-strong), 0 6px 18px rgb(13 
 .pickNext .lcPrimary { margin-top: 8px; }
 @media (max-width: 900px) { .picks { grid-template-columns: 1fr; } }
 .pick strong { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
+
+/* ================= demo motion (all off under prefers-reduced-motion) ================= */
+@keyframes mvRise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes mvPop { 0% { opacity: 0; transform: translate(-50%, calc(-100% - 6px)) scale(.4); } 70% { transform: translate(-50%, calc(-100% - 6px)) scale(1.08); } }
+@keyframes mvGrow { from { transform: scaleX(0); } }
+@keyframes mvShimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes mvGlow { 0%, 100% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-deep) 25%, transparent); } 50% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-deep) 45%, transparent), 0 0 0 6px color-mix(in srgb, var(--accent-deep) 8%, transparent); } }
+@media (prefers-reduced-motion: no-preference) {
+  /* areas stream in: each new row rises, its fit bar grows */
+  .mxRow { animation: mvRise .45s var(--ease-out) both; }
+  .fitBar i { transform-origin: left center; animation: mvGrow .8s var(--ease-out) .15s both; }
+  /* top picks arrive one after another; the next step breathes */
+  .pick { animation: mvRise .5s var(--ease-out) both; }
+  .pick:nth-child(2) { animation-delay: .08s; }
+  .pick:nth-child(3) { animation-delay: .16s; }
+  .pickNext { animation: mvRise .5s var(--ease-out) .16s both, mvGlow 2.8s ease-in-out 1s infinite; }
+  /* listing cards, criteria/nearby tiles and applications cascade in */
+  .lc, .cgTile, .appCard { animation: mvRise .45s var(--ease-out) both; }
+  .lc:nth-child(2), .cgTile:nth-child(2), .appCard:nth-child(2) { animation-delay: .05s; }
+  .lc:nth-child(3), .cgTile:nth-child(3), .appCard:nth-child(3) { animation-delay: .1s; }
+  .lc:nth-child(4), .cgTile:nth-child(4), .appCard:nth-child(4) { animation-delay: .15s; }
+  .lc:nth-child(5), .cgTile:nth-child(5), .appCard:nth-child(5) { animation-delay: .2s; }
+  .lc:nth-child(6), .cgTile:nth-child(6) { animation-delay: .25s; }
+  .lc:nth-child(n + 7), .cgTile:nth-child(n + 7) { animation-delay: .3s; }
+  /* price pins pop onto the map as each address resolves */
+  .pricePin { animation: mvPop .45s cubic-bezier(.3, 1.5, .5, 1) both; }
+  /* an application being researched shimmers until its draft arrives */
+  .appCard:has(.as_drafting) { background: linear-gradient(100deg, var(--surface) 30%, var(--page) 50%, var(--surface) 70%); background-size: 200% 100%; animation: mvRise .45s var(--ease-out) both, mvShimmer 1.6s linear infinite; }
+  /* drawer content slides in when it opens or changes tab */
+  .drawer > div:last-child > * { animation: mvRise .35s var(--ease-out) both; }
+}
