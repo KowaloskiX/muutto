@@ -241,6 +241,19 @@ export default function MoveApp() {
       if (!gotDone) throw new Error(runsRef.current[id]?.error ?? "The search ended before a ranking came back.");
       // Prefetch "Coming next / What residents say" for the top areas (off the search's critical path).
       (runsRef.current[id]?.ranked ?? []).slice(0, 4).forEach((ar) => void loadOutlook(ar));
+      // In the background: pin every listing on the map (only each area's top one is located during
+      // the search); pins appear as each address resolves.
+      void (async () => {
+        const ranked = runsRef.current[id]?.ranked ?? [];
+        const todo = ranked.flatMap((ar) => ar.listings.filter((l) => !l.geo && l.address).map((l) => ({ url: l.url, address: l.address, municipality: ar.municipality, center: ar.center })));
+        if (!todo.length) return;
+        const res = await fetch("/api/move/locate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listings: todo }) }).catch(() => null);
+        if (!res?.ok || !res.body) return;
+        for await (const g of ndjson<{ url: string; lat: number; lng: number }>(res)) {
+          const put = (ar: Area): Area => (ar.listings.some((l) => l.url === g.url) ? { ...ar, listings: ar.listings.map((l) => (l.url === g.url ? { ...l, geo: { lat: g.lat, lng: g.lng } } : l)) } : ar);
+          patchRun(id, (st) => ({ ...st, areas: st.areas.map(put), ranked: st.ranked?.map(put) }));
+        }
+      })();
       // In the background: has each shown flat been on the market before? (Exa, ~20 s)
       void (async () => {
         const list = (runsRef.current[id]?.ranked ?? []).flatMap((a) => a.listings).filter((l) => l.address);
