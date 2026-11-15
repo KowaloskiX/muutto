@@ -178,7 +178,7 @@ export default function MoveApp() {
   const isMobile = () => typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
 
   // ---- the area search
-  const search = async (query: string) => {
+  const search = async (query: string, opts: { echo?: boolean } = {}) => {
     const q = query.trim();
     if (!q || busyRef.current) return;
     busyRef.current = true;
@@ -202,7 +202,7 @@ export default function MoveApp() {
     runsRef.current = { ...runsRef.current, [id]: r };
     setRunsState(runsRef.current);
     setCurrentRun(id);
-    setMsgs((prev) => [...prev.map((m) => (m.role === "bot" && m.kind === "text" && m.chips ? { ...m, chipsUsed: true } : m)), { id: uid(), role: "user", text: q }, { id: uid(), role: "bot", kind: "run", runId: id }]);
+    setMsgs((prev) => [...prev.map((m) => (m.role === "bot" && m.kind === "text" && m.chips ? { ...m, chipsUsed: true } : m)), ...(opts.echo === false ? [] : [{ id: uid(), role: "user" as const, text: q }]), { id: uid(), role: "bot", kind: "run", runId: id }]);
     let gotDone = false;
     try {
       const res = await fetch("/api/move", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ query: q }) });
@@ -644,6 +644,36 @@ export default function MoveApp() {
     }
   };
 
+  // A chat message after a finished search is a follow-up: change the search, add a criterion, or
+  // start over. Before any results it is simply a search.
+  const send = async (text: string) => {
+    const q = text.trim();
+    if (!q || busyRef.current) return;
+    const prev = currentRun ? runsRef.current[currentRun] : undefined;
+    if (!prev?.finished || !(prev.ranked?.length ?? 0)) return void search(q);
+    busyRef.current = true;
+    setBusy(true);
+    setInput("");
+    setMsgs((m) => [...m, { id: uid(), role: "user", text: q }]);
+    let route: { action?: "refine" | "criterion" | "new"; query?: string; criterion?: string; reply?: string } = {};
+    try {
+      const res = await fetch("/api/move/followup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ previous: prev.query, message: q }) });
+      route = res.ok ? await res.json() : {};
+    } catch {
+      /* fall back to a fresh search */
+    }
+    busyRef.current = false;
+    setBusy(false);
+    if (route.action === "criterion" && route.criterion) {
+      push({ id: uid(), role: "bot", kind: "text", text: route.reply || `Checking “${route.criterion}” in every area.` });
+      await addCriterion(route.criterion, 2);
+      push({ id: uid(), role: "bot", kind: "text", text: `Added “${route.criterion}” as a column in the areas table, with a source for every answer.` });
+      return;
+    }
+    if (route.reply) push({ id: uid(), role: "bot", kind: "text", text: route.reply });
+    void search(route.action === "refine" && route.query ? route.query : q, { echo: false });
+  };
+
   const newSearch = () => {
     if (busyRef.current) return;
     msgsRef.current = [WELCOME];
@@ -784,19 +814,19 @@ export default function MoveApp() {
           className={s.composer}
           onSubmit={(e) => {
             e.preventDefault();
-            void search(input);
+            void send(input);
           }}
         >
           <textarea
             ref={inputRef}
             value={input}
             rows={1}
-            placeholder="Workplace, budget, what matters…"
+            placeholder={(run?.ranked?.length ?? 0) > 0 ? "Change the search or ask about the areas…" : "Workplace, budget, what matters…"}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                void search(input);
+                void send(input);
               }
             }}
             aria-label="Message"
