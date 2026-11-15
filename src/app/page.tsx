@@ -36,8 +36,8 @@ const STEPS = [
     text: "Rentals and homes for sale found with Exa. Pick one and Muutto looks into the building’s renovations, the landlord’s reviews and any works planned on the street.",
   },
   {
-    title: "A viewing request for your OK, and a watch on your areas",
-    text: "A message to the real contact on the listing is drafted for you to approve. Exa Monitors keep looking and tell you when something new appears.",
+    title: "Pukki applies for you, you approve",
+    text: "For your five best flats Pukki researches each landlord, what they ask of tenants and how to apply, then writes a tailored application in Finnish and English. Nothing is sent until you approve it.",
   },
 ];
 
