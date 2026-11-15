@@ -117,10 +117,32 @@ function Fit({ points }: { points: [number, number][] }) {
   const latest = useRef(points);
   latest.current = points;
   const first = useRef(true);
+  // Once the user zooms or pans, the map stops fitting itself (until a different set of points,
+  // i.e. a new search). It used to snap back on every resize or update.
+  const userMoved = useRef(false);
+  const prevSig = useRef(sig);
   useEffect(() => {
+    const el = map.getContainer();
+    const mark = () => (userMoved.current = true);
+    el.addEventListener("wheel", mark, { passive: true });
+    el.addEventListener("pointerdown", mark);
+    el.addEventListener("touchstart", mark, { passive: true });
+    return () => {
+      el.removeEventListener("wheel", mark);
+      el.removeEventListener("pointerdown", mark);
+      el.removeEventListener("touchstart", mark);
+    };
+  }, [map]);
+  useEffect(() => {
+    const before = new Set(prevSig.current.split(";"));
+    const now = sig.split(";");
+    const shared = now.filter((s) => before.has(s)).length;
+    prevSig.current = sig;
+    if (shared < now.length / 2) userMoved.current = false; // a different search: fit again
+    if (userMoved.current) return;
     // Debounced: areas stream in quickly, and overlapping flights leave the map half-zoomed.
     const animate = !first.current && !reduced();
-    const t = setTimeout(() => fitTo(map, latest.current, animate), first.current ? 0 : 350);
+    const t = setTimeout(() => !userMoved.current && fitTo(map, latest.current, animate), first.current ? 0 : 350);
     first.current = false;
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -131,7 +153,7 @@ function Fit({ points }: { points: [number, number][] }) {
     const ro = new ResizeObserver(() => {
       map.invalidateSize();
       clearTimeout(t);
-      t = setTimeout(() => fitTo(map, latest.current, false), 120);
+      t = setTimeout(() => !userMoved.current && fitTo(map, latest.current, false), 120);
     });
     ro.observe(el);
     return () => {
@@ -443,7 +465,7 @@ export default function MoveMap({
   return (
     <div className={x.mapWrap} data-tour="map">
       <div className={`${m.box} ${m.vars} ${x.mapBox}`}>
-        <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom={false} zoomControl={false} className={m.leaflet} attributionControl>
+        <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom={false} zoomSnap={0.5} zoomDelta={0.5} wheelPxPerZoomLevel={120} wheelDebounceTime={30} zoomControl={false} className={m.leaflet} attributionControl>
           <ScrollGate />
           <TileLayer key={dark ? "dark" : "light"} attribution={ATTRIBUTION} url={(dark ? TILES.dark : TILES.light).base} maxZoom={17} maxNativeZoom={16} />
           {layer === "noise" && (
