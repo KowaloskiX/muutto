@@ -212,10 +212,6 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
     return [...seen.values()];
   }, [areas]);
 
-  useEffect(() => {
-    if (hover) rows.current[hover]?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [hover]);
-
   const empty = !run;
   const drawerOpen = !!view && !!areas.length;
 
