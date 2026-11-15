@@ -89,7 +89,14 @@ const PLACE_STYLE: Record<Place["kind"], { color: string; svg: string }> = {
 const CUSTOM_COLORS = ["#005032", "#b0306a", "#1f6f8b"];
 const placeColor = (p: Pick<Place, "kind" | "criterion">, customOrder: string[]) =>
   p.kind === "custom" ? CUSTOM_COLORS[Math.max(0, customOrder.indexOf(p.criterion ?? "")) % CUSTOM_COLORS.length] : PLACE_STYLE[p.kind].color;
-const placeIcon = (k: Place["kind"], color = PLACE_STYLE[k].color) =>
+const placeIcons = new Map<string, L.DivIcon>();
+const placeIcon = (k: Place["kind"], color = PLACE_STYLE[k].color) => {
+  const key = `${k}|${color}`;
+  let ic = placeIcons.get(key);
+  if (!ic) placeIcons.set(key, (ic = makePlaceIcon(k, color)));
+  return ic;
+};
+const makePlaceIcon = (k: Place["kind"], color: string) =>
   L.divIcon({
     className: m.icon,
     html: `<span class="${x.placeIcon}" style="color:${color}"><svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${PLACE_STYLE[k].svg}</svg></span>`,
@@ -98,6 +105,7 @@ const placeIcon = (k: Place["kind"], color = PLACE_STYLE[k].color) =>
     tooltipAnchor: [0, -10],
   });
 
+const priceIcons = new Map<string, L.DivIcon>();
 const reduced = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 function fitTo(map: L.Map, points: [number, number][], animate: boolean) {
@@ -195,9 +203,27 @@ function positions(g: NonNullable<Area["polygon"]>): L.LatLngExpression[][] | L.
 
 const zOf = (p: AreaPin) => 500 - (p.rank ?? 40) * 10;
 
+/** One handler object per key that never changes identity (react-leaflet rebinds listeners when it does,
+ *  which dropped mouseout events mid-hover); the latest callbacks are read through refs. */
+function useStableHandlers(keys: string[], onSelect: (k: string) => void, onHover?: (k?: string) => void) {
+  const sel = useRef(onSelect);
+  const hov = useRef(onHover);
+  sel.current = onSelect;
+  hov.current = onHover;
+  const cache = useRef<Record<string, L.LeafletEventHandlerFnMap>>({});
+  for (const k of keys)
+    cache.current[k] ??= {
+      click: () => sel.current(k),
+      mouseover: () => hov.current?.(k),
+      mouseout: () => hov.current?.(undefined),
+    };
+  return cache.current;
+}
+
 function Pins({ pins, hover, active, small, onSelect, onHover }: { pins: AreaPin[]; hover?: string; active?: string; small?: boolean; onSelect: (k: string) => void; onHover?: (k?: string) => void }) {
   const refs = useRef<Record<string, L.Marker | null>>({});
   const sig = pins.map((p) => `${p.key}:${p.rank}:${p.tone}:${p.tag}`).join("|") + (small ? "s" : "");
+  const handlers = useStableHandlers(pins.map((p) => p.key), onSelect, onHover);
   const icons = useMemo(() => {
     const out: Record<string, L.DivIcon> = {};
     for (const p of pins)
@@ -220,7 +246,8 @@ function Pins({ pins, hover, active, small, onSelect, onHover }: { pins: AreaPin
       mk.getElement()?.classList.toggle(m.on, on);
       mk.setZIndexOffset(on ? 2000 : zOf(p));
     }
-    if (prev.current && prev.current !== hover) refs.current[prev.current]?.closeTooltip();
+    // Exactly one area tooltip at a time: close every other one (quick mouse moves left several open).
+    for (const [k, mk] of Object.entries(refs.current)) if (k !== hover) mk?.closeTooltip();
     if (hover && hover !== active) refs.current[hover]?.openTooltip();
     prev.current = hover;
   }, [pins, hover, active, icons]);
@@ -236,7 +263,7 @@ function Pins({ pins, hover, active, small, onSelect, onHover }: { pins: AreaPin
           icon={icons[p.key]}
           zIndexOffset={zOf(p)}
           title={p.label}
-          eventHandlers={{ click: () => onSelect(p.key), mouseover: () => onHover?.(p.key), mouseout: () => onHover?.(undefined) }}
+          eventHandlers={handlers[p.key]}
         >
           <Tooltip direction="top" className={m.tip} opacity={1}>
             <b>{p.label}</b>
@@ -253,7 +280,11 @@ function Pins({ pins, hover, active, small, onSelect, onHover }: { pins: AreaPin
 
 function Shapes({ pins, hover, active, dark, onSelect, onHover, outline }: { pins: AreaPin[]; hover?: string; active?: string; dark: boolean; onSelect: (k: string) => void; onHover?: (k?: string) => void; outline?: boolean }) {
   const shaped = pins.filter((p) => p.polygon);
-  const pos = useMemo(() => Object.fromEntries(shaped.map((p) => [p.key, positions(p.polygon!)])), [shaped]);
+  const shapeSig = shaped.map((p) => p.key).join("|");
+  // Positions only change with the set of areas; recomputing them on hover made Leaflet redraw every shape.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const pos = useMemo(() => Object.fromEntries(shaped.map((p) => [p.key, positions(p.polygon!)])), [shapeSig]);
+  const handlers = useStableHandlers(shaped.map((p) => p.key), onSelect, onHover);
   const ink = dark ? "#f2f1ed" : "#0d1016";
   return (
     <>
@@ -276,18 +307,8 @@ function Shapes({ pins, hover, active, dark, onSelect, onHover, outline }: { pin
               // No resting fill: the generalised coastline would spill colour over the sea.
               fillOpacity: outline ? 0 : on ? 0.22 : 0,
             }}
-            eventHandlers={{ click: () => onSelect(p.key), mouseover: () => onHover?.(p.key), mouseout: () => onHover?.(undefined) }}
-          >
-            {!outline && (
-              <Tooltip sticky className={m.tip} opacity={1}>
-                <b>{p.label}</b>
-                <span className={m.tipV}>
-                  <i style={{ background: fill }} />
-                  {p.sub}
-                </span>
-              </Tooltip>
-            )}
-          </Polygon>
+            eventHandlers={handlers[p.key]}
+          />
         );
       })}
     </>
@@ -396,8 +417,16 @@ export default function MoveMap({
   const customOrder = [...new Set(places.filter((p) => p.kind === "custom").map((p) => p.criterion ?? ""))];
   const kinds = [...new Map(places.map((p) => [placeGroup(p), placeColor(p, customOrder)] as const)).entries()];
   const dotIcon = useMemo(() => L.divIcon({ className: m.icon, html: `<span class="${x.dot}"></span>`, iconSize: [10, 10], iconAnchor: [5, 5], tooltipAnchor: [0, -8] }), []);
-  const priceIcon = (d: ListingDot) =>
-    L.divIcon({ className: m.icon, html: `<span class="${x.pricePin}">${d.price ?? "•"}</span>`, iconSize: [0, 0], iconAnchor: [0, 0], tooltipAnchor: [0, -26] });
+  const selListing = useRef(onSelectListing);
+  selListing.current = onSelectListing;
+  const dotH = useRef<Record<string, L.LeafletEventHandlerFnMap>>({});
+  const dotHandlers = (k: string) => (dotH.current[k] ??= { click: () => selListing.current(k) });
+  const priceIcon = (d: ListingDot) => {
+    const key = d.price ?? "•";
+    let ic = priceIcons.get(key);
+    if (!ic) priceIcons.set(key, (ic = L.divIcon({ className: m.icon, html: `<span class="${x.pricePin}">${key}</span>`, iconSize: [0, 0], iconAnchor: [0, 0], tooltipAnchor: [0, -26] })));
+    return ic;
+  };
 
   let legend: React.ReactNode;
   let caption: React.ReactNode = null;
@@ -521,7 +550,7 @@ export default function MoveMap({
             </Marker>
           ))}
           {layer !== "drive" && dots.map((d) => (
-            <Marker key={`${d.key}-${layer === "fit" || layer === "daily" ? "p" : "d"}`} position={[d.lat, d.lng]} icon={layer === "fit" || layer === "daily" ? priceIcon(d) : dotIcon} zIndexOffset={1500} title={d.label} eventHandlers={{ click: () => onSelectListing(d.key) }}>
+            <Marker key={`${d.key}-${layer === "fit" || layer === "daily" ? "p" : "d"}`} position={[d.lat, d.lng]} icon={layer === "fit" || layer === "daily" ? priceIcon(d) : dotIcon} zIndexOffset={1500} title={d.label} eventHandlers={dotHandlers(d.key)}>
               <Tooltip direction="top" className={m.tip} opacity={1}>
                 <b>{d.label}</b>
                 {d.sub && <small>{d.sub}</small>}

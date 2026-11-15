@@ -161,36 +161,41 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
   }, [listings, sort]);
   const work = intent?.work ? { lat: intent.work.lat, lng: intent.work.lng, label: intent.work.label } : undefined;
 
-  const pins: AreaPin[] = areas.map((a, i) => {
-    const t = a.commute?.transitMin;
-    const tone = fitTone(a.fit);
-    return {
-      key: a.id,
-      lat: a.center.lat,
-      lng: a.center.lng,
-      label: a.name,
-      rank: ranked ? i + 1 : undefined,
-      tone,
-      tag: t != null ? `${a.commute?.estimate ? "≈" : ""}${Math.round(t)} min` : undefined,
-      polygon: a.polygon,
-      sub: [
-        `fit ${a.fit}`,
-        t != null ? `${a.commute?.estimate ? "≈" : ""}${mins(t)} transit` : "transit —",
-        (() => {
-          const r = a.criteria.find((c) => c.id === "rent");
-          return r?.value && r.status !== "unknown" ? `rent ${r.value}` : "rent —";
-        })(),
-      ].join(" · "),
-    };
-  });
-  // Candidate areas not measured yet: grey dots so the map fills in as the search runs.
-  if (run && !run.finished)
-    for (const cnd of run.candidates)
-      if (!areas.some((a) => a.id === cnd.id)) pins.push({ key: cnd.id, lat: cnd.center.lat, lng: cnd.center.lng, label: cnd.name, tone: "grey", sub: "Measuring", polygon: cnd.polygon });
-  const shortPrice = (n?: number) => (n == null ? undefined : intent?.tenure === "buy" ? `€${Math.round(n / 1000)}k` : `€${Math.round(n).toLocaleString("en-US")}`);
-  const dots: ListingDot[] = listings.flatMap(({ listing: l, area }) =>
-    l.geo ? [{ key: l.url, lat: l.geo.lat, lng: l.geo.lng, price: shortPrice(l.price), label: price(l, intent?.tenure) ?? l.title, sub: [l.address, sizeLine(l), area.name].filter(Boolean).join(" · ") }] : [],
-  );
+  // Built once per data change, not on hover: the map re-renders on every mouseover otherwise.
+  const { pins, dots } = useMemo(() => {
+    const pins: AreaPin[] = areas.map((a, i) => {
+      const t = a.commute?.transitMin;
+      const tone = fitTone(a.fit);
+      return {
+        key: a.id,
+        lat: a.center.lat,
+        lng: a.center.lng,
+        label: a.name,
+        rank: ranked ? i + 1 : undefined,
+        tone,
+        tag: t != null ? `${a.commute?.estimate ? "≈" : ""}${Math.round(t)} min` : undefined,
+        polygon: a.polygon,
+        sub: [
+          `fit ${a.fit}`,
+          t != null ? `${a.commute?.estimate ? "≈" : ""}${mins(t)} transit` : "transit —",
+          (() => {
+            const r = a.criteria.find((c) => c.id === "rent");
+            return r?.value && r.status !== "unknown" ? `rent ${r.value}` : "rent —";
+          })(),
+        ].join(" · "),
+      };
+    });
+    // Candidate areas not measured yet: grey dots so the map fills in as the search runs.
+    if (run && !run.finished)
+      for (const cnd of run.candidates)
+        if (!areas.some((a) => a.id === cnd.id)) pins.push({ key: cnd.id, lat: cnd.center.lat, lng: cnd.center.lng, label: cnd.name, tone: "grey", sub: "Measuring", polygon: cnd.polygon });
+    const shortPrice = (n?: number) => (n == null ? undefined : intent?.tenure === "buy" ? `€${Math.round(n / 1000)}k` : `€${Math.round(n).toLocaleString("en-US")}`);
+    const dots: ListingDot[] = listings.flatMap(({ listing: l, area }) =>
+      l.geo ? [{ key: l.url, lat: l.geo.lat, lng: l.geo.lng, price: shortPrice(l.price), label: price(l, intent?.tenure) ?? l.title, sub: [l.address, sizeLine(l), area.name].filter(Boolean).join(" · ") }] : [],
+    );
+    return { pins, dots };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [areas, run]);
 
   const openArea = (id: string, focus?: CriterionId) => onView({ kind: "area", id, focus, n: Date.now() });
   const openId = view?.kind === "area" ? view.id : view?.kind === "listing" ? areas.find((a) => a.listings.some((l) => l.url === view.url))?.id : undefined;
