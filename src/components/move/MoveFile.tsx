@@ -10,7 +10,7 @@ import type { Area, CriterionId, Listing } from "@/lib/move/types";
 import { allListings, columnsFor, focusCols, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
 import { MoveDrawer } from "./MoveDrawer";
 import { ListingCard } from "./ListingCard";
-import { Applications } from "./Applications";
+import { Applications, bestFlats } from "./Applications";
 import type { AreaPin, ListingDot } from "./MoveMap";
 import type { DraftState, ResearchState, RunState, View, WatchState } from "./types";
 import c from "@/components/case/Case.module.css";
@@ -46,6 +46,7 @@ type Props = {
   onRemoveCriterion: (id: CriterionId) => void;
   /** Bumped by the chat chip to start "Apply to my 5 best flats". */
   applyStart?: number;
+  onApply?: () => void;
 };
 
 const WEIGHTS = [
@@ -132,7 +133,7 @@ const PROMPTS = [
 ];
 export { PROMPTS };
 
-export default function MoveFile({ run, view, research, drafts, watch, onView, onResearch, onDraft, onDraftLang, onDraftOpened, onWatch, onPrompt, asking, onAddCriterion, onRemoveCriterion, applyStart = 0 }: Props) {
+export default function MoveFile({ run, view, research, drafts, watch, onView, onResearch, onDraft, onDraftLang, onDraftOpened, onWatch, onPrompt, asking, onAddCriterion, onRemoveCriterion, applyStart = 0, onApply }: Props) {
   const [hover, setHover] = useState<string | undefined>();
   const rows = useRef<Record<string, HTMLTableRowElement | null>>({});
 
@@ -294,6 +295,52 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
             {run.failed && run.error && <p className={x.errLine}>{run.error}</p>}
           </div>
         </header>
+
+        {run.ranked && run.ranked.length > 0 && (() => {
+          const top = run.ranked[0];
+          // Best flat = from the best area that has one, within budget, cheapest first.
+          const cap = intent?.budget;
+          const best =
+            run.ranked
+              .map((ar) => ({ area: ar, listing: [...ar.listings].filter((l) => !cap || !l.price || l.price <= cap).sort((a1, b1) => (a1.price ?? 9e9) - (b1.price ?? 9e9))[0] }))
+              .find((x1) => x1.listing) ?? bestFlats(run.ranked, intent)[0];
+          const t = top.commute?.transitMin;
+          const rent = top.criteria.find((cr) => cr.id === "rent")?.value?.match(/€[\d,.]+/)?.[0];
+          return (
+            <section className={x.picks} aria-label="Top picks" data-tour="picks">
+              <button type="button" className={x.pick} onClick={() => openArea(top.id)}>
+                <span className={x.pickKicker}>Best area</span>
+                <strong>{top.name}</strong>
+                <span className={x.pickMeta}>
+                  fit {top.fit}
+                  {t != null ? ` · ${top.commute?.estimate ? "≈" : ""}${mins(t)} transit` : ""}
+                  {rent ? ` · ${rent} typical` : ""}
+                </span>
+              </button>
+              {best && (
+                <button type="button" className={`${x.pick} ${x.pickFlat}`} onClick={() => onView({ kind: "listing", url: best.listing.url, from: best.area.id })}>
+                  {best.listing.photos?.[0] && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={best.listing.photos[0]} alt="" />
+                  )}
+                  <span>
+                    <span className={x.pickKicker}>Best flat</span>
+                    <strong>{price(best.listing, intent?.tenure) ?? "Price not stated"}</strong>
+                    <span className={x.pickMeta}>{[best.listing.address?.split(",")[0], best.area.name].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </button>
+              )}
+              <div className={`${x.pick} ${x.pickNext}`}>
+                <span className={x.pickKicker}>Next step</span>
+                <strong>Let Pukki apply for you</strong>
+                <span className={x.pickMeta}>Researches 5 landlords and writes tailored applications. You approve each one.</span>
+                <button type="button" className={x.lcPrimary} onClick={onApply}>
+                  Apply to my 5 best flats
+                </button>
+              </div>
+            </section>
+          );
+        })()}
 
         {(work || pins.length > 0) && (
           <section className={x.mapSection} aria-label="Map">

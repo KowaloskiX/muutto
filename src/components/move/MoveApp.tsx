@@ -281,9 +281,7 @@ export default function MoveApp() {
           nList ? `${nList} live listing${nList === 1 ? "" : "s"}.` : "No live listings found yet.",
         ].join(" ");
         const chips: Chip[] = [];
-        if (bestListing(ranked)) chips.push({ label: "Research best listing", action: "research_best" });
         chips.unshift({ label: "Apply to my 5 best flats", action: "apply", primary: true });
-        chips.push({ label: "Watch these areas", action: "watch" });
         chips.push({ label: "Take the tour", action: "tour" });
         chips.push({ label: "Open move file", action: "open_file" });
         push({ id: uid(), role: "bot", kind: "text", text, chips });
@@ -909,6 +907,11 @@ export default function MoveApp() {
           asking={asking}
           onAddCriterion={(q, w) => void addCriterion(q, w)}
           applyStart={applyN}
+          onApply={() => {
+            applyStarted.current = true;
+            setApplyN((n) => n + 1);
+            setTimeout(() => document.querySelector('[data-tour="applications"]')?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
+          }}
           onRemoveCriterion={removeCriterion}
         />
       </section>

@@ -920,3 +920,18 @@
 .thinking i:nth-of-type(2) { animation-delay: .15s; }
 .thinking i:nth-of-type(3) { animation-delay: .3s; }
 @keyframes dot { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-2px); } }
+
+/* ---- top picks: the three things that matter ---- */
+.picks { display: grid; grid-template-columns: 1fr 1.2fr 1.2fr; gap: 12px; margin: 4px 0 20px; }
+.pick { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding: 16px; border: 0; border-radius: 16px; background: var(--surface); color: var(--ink); font: inherit; text-align: left; box-shadow: 0 0 0 1px var(--line); cursor: pointer; transition: box-shadow .15s ease, transform .15s ease; }
+button.pick:hover { box-shadow: 0 0 0 1px var(--line-strong), 0 6px 18px rgb(13 16 22 / .06); transform: translateY(-1px); }
+.pick strong { max-width: 100%; overflow: hidden; font-size: 19px; font-weight: 500; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.pickKicker { color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .05em; text-transform: uppercase; }
+.pickMeta { max-width: 100%; color: var(--ink-soft); font-size: 13px; line-height: 1.4; }
+.pickFlat { flex-direction: row; align-items: center; gap: 12px; }
+.pickFlat img { flex: none; width: 72px; height: 72px; border-radius: 12px; object-fit: cover; }
+.pickFlat > span { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pickNext { cursor: default; background: var(--accent-muted); box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-deep) 25%, transparent); }
+.pickNext .lcPrimary { margin-top: 8px; }
+@media (max-width: 900px) { .picks { grid-template-columns: 1fr; } }
+.pick strong { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; line-height: 1.25; }
