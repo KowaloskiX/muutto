@@ -272,6 +272,35 @@ function Shapes({ pins, hover, active, dark, onSelect, onHover, outline }: { pin
   );
 }
 
+/**
+ * The scroll wheel scrolls the page until the map is clicked; then it zooms the map until the pointer
+ * leaves it. A small hint says so. Dragging and the +/- buttons always work.
+ */
+function ScrollGate() {
+  const map = useMap();
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    const el = map.getContainer();
+    const enable = () => {
+      map.scrollWheelZoom.enable();
+      setOn(true);
+    };
+    const disable = () => {
+      map.scrollWheelZoom.disable();
+      setOn(false);
+    };
+    map.on("click", enable);
+    map.on("dragstart", enable);
+    el.addEventListener("mouseleave", disable);
+    return () => {
+      map.off("click", enable);
+      map.off("dragstart", enable);
+      el.removeEventListener("mouseleave", disable);
+    };
+  }, [map]);
+  return on ? null : <div className={x.scrollHint}>Click the map to zoom with scroll</div>;
+}
+
 export default function MoveMap({
   work,
   pins,
@@ -414,7 +443,8 @@ export default function MoveMap({
   return (
     <div className={x.mapWrap} data-tour="map">
       <div className={`${m.box} ${m.vars} ${x.mapBox}`}>
-        <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom zoomControl={false} className={m.leaflet} attributionControl>
+        <MapContainer center={center} zoom={11} maxZoom={17} scrollWheelZoom={false} zoomControl={false} className={m.leaflet} attributionControl>
+          <ScrollGate />
           <TileLayer key={dark ? "dark" : "light"} attribution={ATTRIBUTION} url={(dark ? TILES.dark : TILES.light).base} maxZoom={17} maxNativeZoom={16} />
           {layer === "noise" && (
             <WMSTileLayer

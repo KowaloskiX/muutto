@@ -87,6 +87,10 @@ export default function MoveApp() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const researchRef = useRef<Record<string, ResearchState>>({});
   researchRef.current = research;
+  // In-flight guards that must not wait for a re-render (double clicks, tour + chip at once).
+  const busyRef = useRef(false);
+  const draftBusy = useRef(new Set<string>());
+  const askingRef = useRef(false);
 
   const setMsgs = useCallback((fn: (m: Msg[]) => Msg[]) => {
     msgsRef.current = fn(msgsRef.current);
@@ -130,19 +134,41 @@ export default function MoveApp() {
     }
     setReady(true);
   }, []);
+  // Saved ~1 s after things settle and never mid-stream (it used to serialise everything on every
+  // streamed event). Only the last 3 searches are kept; if the quota is hit, older ones are dropped.
   useEffect(() => {
-    if (!ready) return;
-    try {
-      localStorage.setItem(STORE, JSON.stringify({ msgs, runs, currentRun, research, drafts, watch }));
-    } catch {
-      /* quota or blocked */
-    }
-  }, [ready, msgs, runs, currentRun, research, drafts, watch]);
+    if (!ready || busy) return;
+    const id = setTimeout(() => {
+      const keep = Object.values(runs)
+        .sort((a, b) => b.startedAt - a.startedAt)
+        .slice(0, 3)
+        .map((r) => r.id);
+      const live = new Set(keep);
+      const save = (n: number) => {
+        const ids = keep.slice(0, n);
+        const rs = Object.fromEntries(ids.map((k) => [k, runs[k]]));
+        const ms = msgs.filter((m) => m.role !== "bot" || m.kind !== "run" || ids.includes(m.runId));
+        localStorage.setItem(STORE, JSON.stringify({ msgs: ms, runs: rs, currentRun: currentRun && live.has(currentRun) ? currentRun : ids[0], research, drafts, watch }));
+      };
+      for (let n = keep.length; n >= 0; n--) {
+        try {
+          save(n);
+          return;
+        } catch {
+          /* quota: try with fewer searches */
+        }
+      }
+    }, 1000);
+    return () => clearTimeout(id);
+  }, [ready, busy, msgs, runs, currentRun, research, drafts, watch]);
 
+  // Follow the chat on new messages (and while a search streams), not on background updates
+  // like listing history or an added criterion.
+  const runTick = busy && currentRun ? runs[currentRun]?.areas.length : undefined;
   useEffect(() => {
     const el = scroller.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [msgs, runs]);
+  }, [msgs.length, runTick]);
 
   useEffect(() => {
     if (!drawerOpen) setChatPeek(false);
@@ -154,7 +180,8 @@ export default function MoveApp() {
   // ---- the area search
   const search = async (query: string) => {
     const q = query.trim();
-    if (!q || busy) return;
+    if (!q || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setInput("");
     setView(undefined);
@@ -255,6 +282,7 @@ export default function MoveApp() {
       });
       push({ id: uid(), role: "bot", kind: "text", text: `The search stopped: ${message}`, tone: "error", chips: [{ label: "Try again", action: "retry", payload: q, primary: true }] });
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -271,7 +299,8 @@ export default function MoveApp() {
     const id = currentRun;
     const r = id ? runsRef.current[id] : undefined;
     const list = r ? (r.ranked ?? r.areas) : [];
-    if (!r || !id || !list.length) return;
+    if (!r || !id || !list.length || askingRef.current) return;
+    askingRef.current = true;
     setAsking({ question });
     try {
       const res = await fetch("/api/move/criterion", {
@@ -297,6 +326,8 @@ export default function MoveApp() {
       setAsking(undefined);
     } catch (e) {
       setAsking({ question, error: (e as Error).message });
+    } finally {
+      askingRef.current = false;
     }
   };
   const removeCriterion = (cid: CriterionId) => {
@@ -315,6 +346,7 @@ export default function MoveApp() {
     if (cur?.running || cur?.research) return;
     const intent = run?.intent;
     if (!intent) return;
+    researchRef.current = { ...researchRef.current, [l.url]: { running: true, steps: [], findings: [] } };
     setResearch((p) => ({ ...p, [l.url]: { running: true, steps: [], findings: [] } }));
     const upd = (fn: (st: ResearchState) => ResearchState) => setResearch((p) => (p[l.url] ? { ...p, [l.url]: fn(p[l.url]) } : p));
     try {
@@ -339,7 +371,8 @@ export default function MoveApp() {
   // ---- viewing request draft
   const runDraft = async (l: Listing) => {
     const intent = run?.intent;
-    if (!intent || drafts[l.url]?.loading) return;
+    if (!intent || draftBusy.current.has(l.url)) return;
+    draftBusy.current.add(l.url);
     setDrafts((p) => ({ ...p, [l.url]: { loading: true, lang: p[l.url]?.lang ?? "fi" } }));
     try {
       const res = await fetch("/api/move/draft", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listing: l, intent, research: researchRef.current[l.url]?.research }) });
@@ -349,6 +382,8 @@ export default function MoveApp() {
       setDrafts((p) => ({ ...p, [l.url]: { loading: false, draft, lang: p[l.url]?.lang ?? "fi" } }));
     } catch (err) {
       setDrafts((p) => ({ ...p, [l.url]: { loading: false, error: err instanceof Error ? err.message : String(err), lang: p[l.url]?.lang ?? "fi" } }));
+    } finally {
+      draftBusy.current.delete(l.url);
     }
   };
 
@@ -424,9 +459,12 @@ export default function MoveApp() {
     if ((run?.ranked?.length ?? 0) > 0) setTourOn(true);
     else {
       setTourPending(true);
-      if (!busy) void search(PROMPTS[0]);
+      if (!busyRef.current) void search(PROMPTS[0]);
     }
   };
+  useEffect(() => {
+    if (tourPending && !busy && run?.finished && !(run.ranked?.length ?? 0)) setTourPending(false);
+  }, [tourPending, busy, run?.finished, run?.ranked?.length]);
   useEffect(() => {
     if (tourPending && !busy && (run?.ranked?.length ?? 0) > 0) {
       setTourPending(false);
@@ -594,7 +632,7 @@ export default function MoveApp() {
   };
 
   const newSearch = () => {
-    if (busy) return;
+    if (busyRef.current) return;
     msgsRef.current = [WELCOME];
     setMsgsState(msgsRef.current);
     runsRef.current = {};
