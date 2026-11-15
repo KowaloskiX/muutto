@@ -871,3 +871,46 @@
 @media (hover: none) { .scrollHint { display: none; } }
 /* until the saved state is read, keep the page still instead of flashing the empty welcome */
 .hydrating { visibility: hidden; }
+
+/* ---- applications outbox ---- */
+.apps { display: flex; flex-direction: column; gap: 14px; margin: 8px 0 40px; scroll-margin-top: 16px; }
+.appsHead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.appsHead h2 { margin: 0; font-size: 22px; font-weight: 400; letter-spacing: -.01em; }
+.appsHead p { max-width: 520px; margin: 4px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.45; }
+.appsActions { display: flex; flex-wrap: wrap; gap: 8px; }
+.appsActions button { display: inline-flex; align-items: center; gap: 6px; }
+.appsActions svg { width: 15px; height: 15px; }
+.profile { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 14px; padding: 14px; border-radius: 14px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.profile label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.profile input:not([type=checkbox]) { height: 34px; padding: 0 10px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--page); color: var(--ink); font: inherit; font-size: 13px; }
+.profile .profileCheck { flex-direction: row; align-items: center; gap: 8px; color: var(--ink-soft); font-size: 13px; }
+.appList { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; margin: 0; padding: 0; list-style: none; }
+.appCard { display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 16px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.appTop { display: flex; align-items: center; gap: 12px; }
+.appTop img, .appNoImg { flex: none; width: 56px; height: 56px; border-radius: 10px; object-fit: cover; background: var(--surface-strong); }
+.appWho { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.appTitle { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; font-size: 15px; font-weight: 500; text-align: left; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.appTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.appWho small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.appStatus { display: inline-flex; flex: none; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; background: var(--surface-strong); color: var(--muted); font-size: 11.5px; }
+.appStatus svg { width: 12px; height: 12px; }
+.as_draft { background: color-mix(in srgb, var(--caution) 14%, transparent); color: var(--caution-text); }
+.as_sent { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success-text); }
+.appIntel { padding: 10px 12px; border-radius: 12px; background: var(--page); }
+.appIntel h4 { margin: 0 0 6px; color: var(--muted); font-size: 11px; font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.appIntel ul { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.appIntel li { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; color: var(--ink-soft); font-size: 13px; line-height: 1.4; }
+.appIntel li a { display: inline-flex; flex: none; align-items: center; gap: 3px; color: var(--muted); font-size: 11px; }
+.appIntel li a svg { width: 9px; height: 9px; }
+.appMsg { display: flex; flex-direction: column; gap: 8px; }
+.appMsgTop { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; }
+.appMsgTop > span:first-child { display: inline-flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.appMsgTop svg { width: 13px; height: 13px; flex: none; }
+.appMsg strong { font-size: 13.5px; font-weight: 500; }
+.appMsg pre { max-height: 220px; margin: 0; padding: 10px 12px; overflow: auto; border-radius: 10px; background: var(--page); color: var(--ink-soft); font: inherit; font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+.appCover { display: flex; flex-direction: column; gap: 2px; margin: 0; color: var(--muted); font-size: 12px; }
+.appMissing { color: var(--caution-text); }
+.appBtns { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.appBtns button { display: inline-flex; align-items: center; gap: 6px; }
+.appBtns svg { width: 14px; height: 14px; }
+@media (max-width: 720px) { .appList { grid-template-columns: 1fr; } }

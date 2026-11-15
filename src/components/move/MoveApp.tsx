@@ -279,8 +279,9 @@ export default function MoveApp() {
           nList ? `${nList} live listing${nList === 1 ? "" : "s"}.` : "No live listings found yet.",
         ].join(" ");
         const chips: Chip[] = [];
-        if (bestListing(ranked)) chips.push({ label: "Research best listing", action: "research_best", primary: true });
-        chips.push({ label: "Watch these areas", action: "watch", primary: !chips.length });
+        if (bestListing(ranked)) chips.push({ label: "Research best listing", action: "research_best" });
+        chips.unshift({ label: "Apply to my 5 best flats", action: "apply", primary: true });
+        chips.push({ label: "Watch these areas", action: "watch" });
         chips.push({ label: "Take the tour", action: "tour" });
         chips.push({ label: "Open move file", action: "open_file" });
         push({ id: uid(), role: "bot", kind: "text", text, chips });
@@ -448,6 +449,7 @@ export default function MoveApp() {
 
   // ---- guided tour (demo): every step acts first, so nobody has to know what to click
   const [tourOn, setTourOn] = useState(false);
+  const [applyN, setApplyN] = useState(0);
   // First visit: Pukki offers the tour. "Start" runs the first example if there are no results yet,
   // then opens the tour as soon as the ranking is in.
   const [tourOffer, setTourOffer] = useState(false);
@@ -626,6 +628,12 @@ export default function MoveApp() {
     }
     if (c.action === "open_file") {
       setSheet(true);
+      return;
+    }
+    if (c.action === "apply") {
+      setApplyN((n) => n + 1);
+      if (isMobile()) setSheet(true);
+      setTimeout(() => document.querySelector('[data-tour="applications"]')?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);
       return;
     }
     if (c.action === "tour") {
@@ -860,6 +868,7 @@ export default function MoveApp() {
           onPrompt={(t) => void search(t)}
           asking={asking}
           onAddCriterion={(q, w) => void addCriterion(q, w)}
+          applyStart={applyN}
           onRemoveCriterion={removeCriterion}
         />
       </section>

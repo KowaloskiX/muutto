@@ -10,6 +10,7 @@ import type { Area, CriterionId, Listing } from "@/lib/move/types";
 import { allListings, columnsFor, focusCols, DASH, fitTone, fmtDate, host, mins, price, sizeLine } from "./model";
 import { MoveDrawer } from "./MoveDrawer";
 import { ListingCard } from "./ListingCard";
+import { Applications } from "./Applications";
 import type { AreaPin, ListingDot } from "./MoveMap";
 import type { DraftState, ResearchState, RunState, View, WatchState } from "./types";
 import c from "@/components/case/Case.module.css";
@@ -43,6 +44,8 @@ type Props = {
   asking?: { question: string; error?: string };
   onAddCriterion: (question: string, weight: number) => void;
   onRemoveCriterion: (id: CriterionId) => void;
+  /** Bumped by the chat chip to start "Apply to my 5 best flats". */
+  applyStart?: number;
 };
 
 const WEIGHTS = [
@@ -129,7 +132,7 @@ const PROMPTS = [
 ];
 export { PROMPTS };
 
-export default function MoveFile({ run, view, research, drafts, watch, onView, onResearch, onDraft, onDraftLang, onDraftOpened, onWatch, onPrompt, asking, onAddCriterion, onRemoveCriterion }: Props) {
+export default function MoveFile({ run, view, research, drafts, watch, onView, onResearch, onDraft, onDraftLang, onDraftOpened, onWatch, onPrompt, asking, onAddCriterion, onRemoveCriterion, applyStart = 0 }: Props) {
   const [hover, setHover] = useState<string | undefined>();
   const rows = useRef<Record<string, HTMLTableRowElement | null>>({});
 
@@ -452,6 +455,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
           )}
         </section>
 
+        {run?.ranked && run.ranked.length > 0 && <Applications ranked={run.ranked} intent={run.intent} start={applyStart} onOpen={(l, a) => onView({ kind: "listing", url: l.url, from: a.id })} />}
         <section className={c.section} aria-labelledby="move-listings" data-tour="listings">
           <div className={c.secHead}>
             <h2 id="move-listings">Listings</h2>

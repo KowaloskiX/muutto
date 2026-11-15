@@ -279,3 +279,30 @@ export type AreaServices = {
   fetchedAt: string;
   cached?: boolean;
 };
+
+/** What we know about the person applying; filled by the user, never guessed. */
+export type TenantProfile = { name?: string; email?: string; phone?: string; employer?: string; startDate?: string; household?: string; pets?: "none" | "yes"; smoking?: "no" | "yes"; creditOk?: boolean; income?: string };
+
+/** The landlord or agency behind a listing, researched with Exa. Every requirement carries its quote. */
+export type LandlordIntel = {
+  name: string;
+  kind: "agency" | "company" | "private" | "unknown";
+  website?: string;
+  requirements: { what: string; quote: string; url: string }[];
+  apply?: { how: string; url?: string; quote?: string };
+  reviews: { quote: string; url: string; date?: string; tone: "positive" | "negative" | "neutral" }[];
+  checkedAt: string;
+};
+
+export type Application = {
+  listingUrl: string;
+  intel?: LandlordIntel;
+  to?: string;
+  formUrl?: string;
+  subject: string;
+  bodyFi: string;
+  bodyEn: string;
+  /** Requirements the message answers, and what the profile is missing for them. */
+  addressed: string[];
+  missing: string[];
+};

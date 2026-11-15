@@ -24,7 +24,7 @@ export type RunState = {
   tookMs?: number;
 };
 
-export type Chip = { label: string; action: "research_best" | "watch" | "retry" | "open_file" | "tour"; payload?: string; primary?: boolean };
+export type Chip = { label: string; action: "research_best" | "watch" | "retry" | "open_file" | "tour" | "apply"; payload?: string; primary?: boolean };
 
 export type Msg =
   | { id: string; role: "user"; text: string }
