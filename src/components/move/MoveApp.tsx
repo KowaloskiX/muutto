@@ -184,6 +184,7 @@ export default function MoveApp() {
     busyRef.current = true;
     setBusy(true);
     setInput("");
+    applyStarted.current = false;
     setView(undefined);
     setWatch(undefined);
     const id = uid();
@@ -450,6 +451,7 @@ export default function MoveApp() {
   // ---- guided tour (demo): every step acts first, so nobody has to know what to click
   const [tourOn, setTourOn] = useState(false);
   const [applyN, setApplyN] = useState(0);
+  const applyStarted = useRef(false);
   // First visit: Pukki offers the tour. "Start" runs the first example if there are no results yet,
   // then opens the tour as soon as the ranking is in.
   const [tourOffer, setTourOffer] = useState(false);
@@ -609,6 +611,21 @@ export default function MoveApp() {
         },
       );
     steps.push({
+      target: '[data-tour="applications"]',
+      title: "Pukki applies for you",
+      body: "For your five best flats I research each landlord (what they ask of tenants, how to apply), then write a tailored application in Finnish and English. Nothing leaves without your approval; in this demo it goes to your own inbox.",
+      sources: ["Exa Search (landlord pages)", "OpenAI (writing)", "Resend (test mode)"],
+      before: async () => {
+        openView(undefined);
+        file();
+        if (!applyStarted.current) {
+          applyStarted.current = true;
+          setApplyN((n) => n + 1);
+        }
+        await sleep(400);
+      },
+    });
+    steps.push({
       target: '[data-tour="chips"]',
       title: "And it keeps watching",
       body: "Watch these areas creates an Exa Monitor that checks the portals every day and brings new listings back here.",
@@ -631,6 +648,7 @@ export default function MoveApp() {
       return;
     }
     if (c.action === "apply") {
+      applyStarted.current = true;
       setApplyN((n) => n + 1);
       if (isMobile()) setSheet(true);
       setTimeout(() => document.querySelector('[data-tour="applications"]')?.scrollIntoView({ behavior: "smooth", block: "start" }), 200);

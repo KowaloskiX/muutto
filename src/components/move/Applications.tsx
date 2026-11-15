@@ -84,7 +84,7 @@ export function Applications({ ranked, intent, start, onOpen }: { ranked: Area[]
   };
   // The chat chip / tour asks for it: start once per request.
   useEffect(() => {
-    if (start) void prepare();
+    if (start && !cards.length) void prepare();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start]);
 

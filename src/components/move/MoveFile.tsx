@@ -455,7 +455,7 @@ export default function MoveFile({ run, view, research, drafts, watch, onView, o
           )}
         </section>
 
-        {run?.ranked && run.ranked.length > 0 && <Applications ranked={run.ranked} intent={run.intent} start={applyStart} onOpen={(l, a) => onView({ kind: "listing", url: l.url, from: a.id })} />}
+        {run?.ranked && run.ranked.length > 0 && <Applications key={run.id} ranked={run.ranked} intent={run.intent} start={applyStart} onOpen={(l, a) => onView({ kind: "listing", url: l.url, from: a.id })} />}
         <section className={c.section} aria-labelledby="move-listings" data-tour="listings">
           <div className={c.secHead}>
             <h2 id="move-listings">Listings</h2>
